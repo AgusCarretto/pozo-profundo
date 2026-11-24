@@ -14,6 +14,11 @@ const ICON_FILES: Dictionary = {
 }
 
 
+## El icono de la fila del pico.
+static func pick_icon() -> Texture2D:
+	return load(SPRITE_DIR + "pick.png") as Texture2D
+
+
 ## La textura del icono del generador `id`, o null si no tiene.
 static func icon(id: String) -> Texture2D:
 	if not ICON_FILES.has(id):

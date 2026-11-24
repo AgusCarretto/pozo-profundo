@@ -15,7 +15,9 @@ const ADVANCE_SECONDS: float = 3600.0
 ## Tope para no llegar a infinito apretando "Oro" muchas veces.
 const MAX_DEBUG_GOLD: float = 1.0e100
 ## El botón DBG va justo debajo del HUD, a la izquierda de la mina: no tapa el oro ni el multiplicador.
-const TOGGLE_POSITION: Vector2 = Vector2(8.0, 268.0)
+## Se acomoda solo según el alto del HUD (_follow_hud); esta es la posición si no hay HUD.
+const TOGGLE_POSITION: Vector2 = Vector2(8.0, 300.0)
+const HUD_GAP: float = 8.0
 ## Alto de los botones (px de diseño): 96 = 48 px en un celular de 360 px de ancho, igual que el juego.
 const BUTTON_HEIGHT: float = 96.0
 
@@ -53,10 +55,11 @@ func _ready() -> void:
 	add_child(toggle_button)
 
 	body = PanelContainer.new()
-	body.position = TOGGLE_POSITION + Vector2(0, BUTTON_HEIGHT + 8.0)
+	body.position = TOGGLE_POSITION + Vector2(0, BUTTON_HEIGHT + HUD_GAP)
 	body.custom_minimum_size = Vector2(460, 0)
 	body.visible = false
 	add_child(body)
+	_follow_hud()
 
 	var margin: MarginContainer = MarginContainer.new()
 	for side: String in ["left", "top", "right", "bottom"]:
@@ -116,6 +119,21 @@ func _refresh_raw_bonus() -> void:
 		NumberFormat.format_percent(Economy.loot_bonus_effective()),
 		NumberFormat.format_percent(Economy.loot_bonus_cap()),
 	]
+
+
+## Se queda debajo del HUD de la escena (`%HudPanel` del padre), aunque cambie de alto.
+func _follow_hud() -> void:
+	var hud: Control = get_parent().get_node_or_null("%HudPanel") as Control
+	if hud == null:
+		return
+	hud.resized.connect(_place_below.bind(hud))
+	_place_below.call_deferred(hud)
+
+
+func _place_below(hud: Control) -> void:
+	var top: float = hud.get_global_rect().end.y + HUD_GAP
+	toggle_button.position.y = top
+	body.position.y = top + BUTTON_HEIGHT + HUD_GAP
 
 
 func _on_toggle_pressed() -> void:

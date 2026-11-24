@@ -8,6 +8,7 @@ extends Control
 ## Ancho del cartel y alto mínimo de sus botones (px de diseño).
 const PANEL_WIDTH: float = 620.0
 const BUTTON_HEIGHT: float = 96.0
+const DEFAULT_CONFIRM_STYLE: StringName = &"ButtonNeutral"
 
 var title_label: Label
 var body_label: Label
@@ -56,20 +57,24 @@ func _init() -> void:
 	buttons.add_theme_constant_override("separation", 14)
 	box.add_child(buttons)
 
-	cancel_button = _make_button(&"ButtonGrey")
+	cancel_button = _make_button(&"ButtonNeutral")
 	cancel_button.pressed.connect(close)
 	buttons.add_child(cancel_button)
 
-	confirm_button = _make_button(&"ButtonGreen")
+	confirm_button = _make_button(DEFAULT_CONFIRM_STYLE)
 	confirm_button.pressed.connect(_on_confirm_pressed)
 	buttons.add_child(confirm_button)
 
 
 ## Abre el cartel. Con `cancel_text` vacío es solo un aviso (un único botón).
 ## `on_confirm` se llama al apretar el botón de confirmar, ya con el cartel cerrado.
-func open(title: String, body: String, confirm_text: String, cancel_text: String = "", on_confirm: Callable = Callable()) -> void:
+## `confirm_style` es la variación de botón del tema para confirmar: neutra por defecto; el rojo es solo
+## del prestigio (ver ui/theme.tres).
+func open(title: String, body: String, confirm_text: String, cancel_text: String = "", on_confirm: Callable = Callable(),
+		confirm_style: StringName = DEFAULT_CONFIRM_STYLE) -> void:
 	title_label.text = title
 	body_label.text = body
+	confirm_button.theme_type_variation = confirm_style
 	confirm_button.text = confirm_text
 	cancel_button.text = cancel_text
 	cancel_button.visible = cancel_text != ""

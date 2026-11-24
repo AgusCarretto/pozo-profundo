@@ -53,6 +53,8 @@ func _initialize() -> void:
 	always_chest["loot"]["chance_per_hit"] = 1.0
 	await _mount_scene(packed, always_chest)
 	await _test_chest_message()
+	await _mount_scene(packed, _real_balance())
+	await _test_last_loot_follows_the_state()
 	_scene.queue_free()
 	await process_frame
 	_economy.reset()
@@ -92,6 +94,8 @@ func _set_run_gold(run_gold: float) -> void:
 
 
 func _button(node_name: String) -> Button:
+	if node_name == "PickButton": # el pico es una fila de la lista (%PickRow): su botón es el único de la fila
+		return _scene.get_node("%PickRow").find_children("*", "Button", true, false)[0] as Button
 	return _scene.get_node("%" + node_name) as Button
 
 
@@ -456,3 +460,41 @@ func _test_chest_message() -> void:
 		summed += _economy.loot_table()[rarity]["bonus"]
 	_check_near(_economy.loot_bonus, summed, "la suma coincide con los bonus de cada cofre")
 	_check(_economy.loot_bonus > 0.0, "y es mayor que 0 (%s)" % str(_economy.loot_bonus))
+
+
+## El aviso del último cofre se deriva del estado, no solo de la señal del cofre: antes decía "Todavía no
+## salió ningún cofre" aunque hubiera bonus (al cargar una partida guardada) y, al revés, seguía mostrando
+## un cofre viejo cuando el bonus ya había vuelto a 0 (al volver a la superficie).
+func _test_last_loot_follows_the_state() -> void:
+	_section("El aviso del último cofre refleja el estado real")
+	await _set_gold(0.0)
+	var label: Label = _label("LastLootLabel")
+	_check(label.text.contains("Todavía no salió ningún cofre"), "sin bonus dice que todavía no salió ninguno (%s)" % label.text)
+	# una partida guardada con bonus (el cofre salió en una sesión anterior)
+	_economy.from_dict({ "loot_bonus": 0.3 })
+	await process_frame
+	_check_near(_economy.loot_bonus, 0.3, "se cargó una partida con +30% de bonus bruto")
+	_check(not label.text.contains("Todavía no salió"), "con bonus ya no dice 'Todavía no salió ningún cofre' (%s)" % label.text)
+	_check(label.text.contains("cofres"), "dice de dónde viene el bonus (%s)" % label.text)
+	# un cofre nuevo pisa el aviso con su rareza
+	_economy.drop_loot(2)
+	await process_frame
+	_check(label.text.contains("Épico"), "un cofre nuevo muestra su rareza (%s)" % label.text)
+	_check(label.has_theme_color_override("font_color"), "y su color")
+	# al volver a la superficie el bonus es 0 y el aviso también
+	_economy.run_gold = 41000.0
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	_check(_economy.prestige() > 0, "se vuelve a la superficie")
+	await process_frame
+	_check_eq(_economy.loot_bonus, 0.0, "el bonus vuelve a 0")
+	_check(label.text.contains("Todavía no salió ningún cofre"), "y el aviso vuelve a decir que todavía no salió ninguno (%s)" % label.text)
+	_check(not label.has_theme_color_override("font_color"), "sin el color del cofre viejo")
+	# lo mismo al reiniciar la partida
+	_economy.drop_loot(3)
+	await process_frame
+	_check(label.text.contains("Legendario"), "un legendario: lo muestra (%s)" % label.text)
+	_economy.reset()
+	await process_frame
+	_check(label.text.contains("Todavía no salió ningún cofre") and _economy.loot_bonus == 0.0, "al reiniciar, el aviso se limpia (%s)" % label.text)
+	_economy.reset()

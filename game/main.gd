@@ -12,6 +12,7 @@ const GeneratorRow := preload("res://game/generator_row.gd")
 const Modal := preload("res://game/modal.gd")
 const MineView := preload("res://game/mine_view.gd")
 const NumberFormat := preload("res://core/number_format.gd")
+const PickRow := preload("res://game/pick_row.gd")
 
 ## Color de cada rareza de cofre, por id del balance. Es presentación, no balance.
 const RARITY_COLORS: Dictionary = {
@@ -40,10 +41,15 @@ var _rows: Array[GeneratorRow] = []
 ## Se marca cuando Economy cambia; la pantalla se refresca una vez por frame, no por señal.
 var _dirty: bool = true
 var _modal: Modal
+var _pick_row: PickRow
 var _shown_runes: int = -1
+## El último cofre que salió en esta partida ({rarity, bonus}); vacío si todavía no salió ninguno (o si el
+## bonus volvió a 0). El aviso del botín se arma con esto y con el bonus real: ver _refresh_last_loot().
+var _last_chest: Dictionary = {}
 
 @onready var _gold_label: Label = %GoldLabel
 @onready var _rate_label: Label = %RateLabel
+@onready var _hit_label: Label = %HitLabel
 @onready var _mult_label: Label = %MultLabel
 @onready var _depth_label: Label = %DepthLabel
 @onready var _next_biome_label: Label = %NextBiomeLabel
@@ -59,7 +65,7 @@ var _shown_runes: int = -1
 @onready var _odds_row: HBoxContainer = %OddsRow
 @onready var _last_loot_label: Label = %LastLootLabel
 @onready var _loot_bonus_label: Label = %LootBonusLabel
-@onready var _pick_button: Button = %PickButton
+@onready var _pick_holder: VBoxContainer = %PickRow
 @onready var _relics_label: Label = %RelicsLabel
 @onready var _relics_row: HBoxContainer = %RelicsRow
 @onready var _relics_hint: Label = %RelicsHint
@@ -73,6 +79,11 @@ func _ready() -> void:
 		_generator_list.add_child(row)
 		row.setup(index)
 		_rows.append(row)
+
+	# El pico es la primera fila de la lista, con el mismo formato que los generadores.
+	_pick_row = PickRow.new()
+	_pick_holder.add_child(_pick_row)
+	_pick_row.setup()
 
 	var group: ButtonGroup = ButtonGroup.new()
 	var mode_buttons: Dictionary = {
@@ -96,9 +107,7 @@ func _ready() -> void:
 
 	# Reaccionan al apretar (no al soltar): un clicker tiene que responder al toque.
 	_tap_button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
-	_pick_button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
 	_tap_button.button_down.connect(_on_tap)
-	_pick_button.pressed.connect(_on_pick_pressed)
 	_prestige_button.pressed.connect(_on_prestige_pressed)
 
 	_build_loot_panel()
@@ -135,10 +144,6 @@ func _on_tap() -> void:
 	Economy.hit()
 
 
-func _on_pick_pressed() -> void:
-	Economy.upgrade_pick()
-
-
 func _on_mode_toggled(pressed: bool, mode: int) -> void:
 	if pressed:
 		_mode = mode
@@ -158,18 +163,15 @@ func _show_page(tab: int) -> void:
 func _refresh() -> void:
 	_dirty = false
 	_gold_label.text = NumberFormat.format_number(Economy.gold)
-	_rate_label.text = "Golpe %s · %s oro/s" % [
-		NumberFormat.format_number(Economy.hit_value()),
-		NumberFormat.format_number(Economy.gold_per_second()),
-	]
+	_rate_label.text = "%s oro/s" % NumberFormat.format_number(Economy.gold_per_second())
+	_hit_label.text = "Golpe %s" % NumberFormat.format_number(Economy.hit_value())
 	_mult_label.text = "×%.2f" % Economy.multiplier
 	_refresh_depth()
 	_refresh_mine()
 	# Se muestra el bonus efectivo (el que de verdad multiplica el oro); el bruto solo va en el panel de debug.
 	_loot_bonus_label.text = "Bonus de botín: +%s" % NumberFormat.format_percent(Economy.loot_bonus_effective())
-	var cost: float = Economy.pick_cost()
-	_pick_button.text = "Mejorar pico (nivel %d)\nCosto: %s" % [Economy.pick_level, NumberFormat.format_cost(cost)]
-	_pick_button.disabled = cost > Economy.gold
+	_pick_row.refresh()
+	_refresh_last_loot()
 	_refresh_prestige()
 	for row: GeneratorRow in _rows:
 		row.refresh(_mode)
@@ -238,7 +240,6 @@ func _build_loot_panel() -> void:
 		NumberFormat.format_percent(Economy.loot_chance_per_hit()),
 		NumberFormat.format_percent(Economy.loot_chance_per_second()),
 	]
-	_last_loot_label.text = "Todavía no salió ningún cofre"
 	var chest: Texture2D = load(CHEST_ICON) as Texture2D
 	for rarity: Dictionary in table:
 		var color: Color = _rarity_color(rarity["id"])
@@ -265,9 +266,29 @@ func _on_loot_dropped(rarity: int, bonus: float) -> void:
 	var table: Array[Dictionary] = Economy.loot_table()
 	if rarity < 0 or rarity >= table.size():
 		return
-	var entry: Dictionary = table[rarity]
-	_last_loot_label.text = "¡Cofre %s! +%s de bonus" % [entry["name"], NumberFormat.format_percent(bonus)]
-	_last_loot_label.add_theme_color_override("font_color", _rarity_color(entry["id"]))
+	_last_chest = { "rarity": rarity, "bonus": bonus }
+	_refresh_last_loot() # ya mismo: no hace falta esperar al próximo refresco
+
+
+## El aviso del último cofre sale del estado, no solo de la señal del cofre: sin bonus dice que todavía no
+## salió ninguno (también tras volver a la superficie o reiniciar); con bonus muestra el último cofre de esta
+## sesión y, si el bonus viene de una partida guardada (no hay cofre que mostrar), lo dice.
+func _refresh_last_loot() -> void:
+	var table: Array[Dictionary] = Economy.loot_table()
+	if table.is_empty():
+		return
+	if Economy.loot_bonus <= 0.0:
+		_last_chest = {}
+		_last_loot_label.text = "Todavía no salió ningún cofre"
+		_last_loot_label.remove_theme_color_override("font_color")
+	elif _last_chest.is_empty() or int(_last_chest["rarity"]) >= table.size():
+		_last_chest = {}
+		_last_loot_label.text = "Tu bonus viene de cofres que ya encontraste"
+		_last_loot_label.remove_theme_color_override("font_color")
+	else:
+		var entry: Dictionary = table[int(_last_chest["rarity"])]
+		_last_loot_label.text = "¡Cofre %s! +%s de bonus" % [entry["name"], NumberFormat.format_percent(_last_chest["bonus"])]
+		_last_loot_label.add_theme_color_override("font_color", _rarity_color(entry["id"]))
 
 
 func _rarity_color(id: String) -> Color:
@@ -330,7 +351,7 @@ func _on_prestige_pressed() -> void:
 		NumberFormat.format_percent(gain * Economy.relic_bonus()),
 		Economy.relic_multiplier_for(Economy.relics + gain),
 	]
-	_modal.open("¿Volver a la superficie?", body, "Sí, volver", "Seguir cavando", _confirm_prestige)
+	_modal.open("¿Volver a la superficie?", body, "Sí, volver", "Seguir cavando", _confirm_prestige, &"ButtonRed")
 
 
 func _confirm_prestige() -> void:

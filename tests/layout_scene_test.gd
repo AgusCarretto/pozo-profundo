@@ -35,10 +35,13 @@ func _initialize() -> void:
 	await _test_tabs(packed)
 	await _test_hud(packed)
 	await _test_text_is_not_cut(packed)
+	await _test_debug_toggle_below_the_hud(packed)
 	await _test_overlays_draw_on_top(packed)
 	await _test_mine_view(packed)
 	await _test_relics_page(packed)
 	await _test_theme(packed)
+	await _test_pick_row(packed)
+	await _test_button_roles(packed)
 	await _test_no_loot_hides_the_loot_tab(packed)
 	_economy.load_balance(_real_balance())
 	_economy.reset()
@@ -105,6 +108,16 @@ func _inside_scroll(control: Control, scene: Control) -> bool:
 	return false
 
 
+## El botón de mejorar el pico (vive en una fila de la lista, `%PickRow`).
+func _pick_button(scene: Control) -> Button:
+	return _node(scene, "PickRow").find_children("*", "Button", true, false)[0] as Button
+
+
+## El botón de compra de la fila `index` de la lista de generadores.
+func _buy_button(scene: Control, index: int) -> Button:
+	return _node(scene, "GeneratorList").get_child(index).find_children("*", "Button", true, false)[0] as Button
+
+
 func _visible_count(sprites: Array) -> int:
 	var count: int = 0
 	for sprite: TextureRect in sprites:
@@ -133,7 +146,7 @@ func _test_vertical_layout(packed: PackedScene) -> void:
 			_check_near(part.size.x, DESIGN_WIDTH, "[%s] %s ocupa todo el ancho" % [label, part.name], 1e-4)
 		_check(hud.size.y <= phone.y * 0.25, "[%s] el HUD no pasa del 25%% del alto (%d de %d)" % [label, int(hud.size.y), int(phone.y)])
 		_check(mine.size.y >= 380.0, "[%s] la mina tiene lugar para la roca y la cuadrilla (%d px)" % [label, int(mine.size.y)])
-		_check(bottom.size.y >= 520.0, "[%s] el panel de abajo tiene lugar para pestañas y lista (%d px)" % [label, int(bottom.size.y)])
+		_check(bottom.size.y >= 460.0, "[%s] el panel de abajo tiene lugar para pestañas y lista (%d px)" % [label, int(bottom.size.y)])
 		# nada visible se sale del ancho de la pantalla (lo que está dentro de un scroll se recorta: no cuenta)
 		var overflowing: Array[String] = []
 		for node: Node in scene.find_children("*", "Control", true, false):
@@ -147,8 +160,13 @@ func _test_vertical_layout(packed: PackedScene) -> void:
 		var tap: Control = _node(scene, "TapButton")
 		var rock: Control = _node(scene, "Rock")
 		_check(tap.get_global_rect().encloses(rock.get_global_rect()), "[%s] la zona de toque cubre toda la roca" % label)
-		_check(rock.size.x >= 192.0 and rock.size.x <= 288.0, "[%s] la roca es grande (%d px)" % [label, int(rock.size.x)])
+		# Antes la roca medía 224 px a escala de diseño (208 en pantalla): ahora de 1,5 a 2 veces eso.
+		_check(rock.size.x >= 312.0 and rock.size.x <= 448.0, "[%s] la roca es 1,5 a 2 veces más grande que antes (%d px; antes ~208)" % [label, int(rock.size.x)])
 		_check(mine.get_global_rect().encloses(rock.get_global_rect()), "[%s] y entra entera en la mina" % label)
+		var rock_center: Vector2 = rock.get_global_rect().get_center()
+		var mine_center: Vector2 = mine.get_global_rect().get_center()
+		_check(absf(rock_center.x - mine_center.x) <= 1.0, "[%s] la roca está centrada en horizontal" % label)
+		_check(rock_center.y > mine_center.y and rock_center.y <= mine_center.y + 0.15 * mine.size.y, "[%s] y un poco más abajo del centro (%d px bajo el centro de %d)" % [label, int(rock_center.y - mine_center.y), int(mine.size.y)])
 		await _free_host(scene)
 
 
@@ -205,7 +223,7 @@ func _test_tabs(packed: PackedScene) -> void:
 	_check_near(tab_crew.size.x, tab_loot.size.x, "las pestañas miden lo mismo", 0.02)
 	_check(tab_crew.button_pressed and not tab_loot.button_pressed and not tab_relics.button_pressed, "arranca en Cuadrilla")
 	_check(crew.visible and not loot.visible and not relics.visible, "y solo se ve la lista de la cuadrilla")
-	_check(_node(scene, "GeneratorList").is_visible_in_tree() and _node(scene, "PickButton").is_visible_in_tree(), "con el pico y los generadores a la vista")
+	_check(_node(scene, "GeneratorList").is_visible_in_tree() and _pick_button(scene).is_visible_in_tree(), "con el pico y los generadores a la vista")
 	tab_loot.button_pressed = true
 	await process_frame
 	_check(loot.visible and not crew.visible and not relics.visible, "Botín muestra solo el botín")
@@ -231,7 +249,25 @@ func _test_hud(packed: PackedScene) -> void:
 	await process_frame
 	_check((_node(scene, "CoinIcon") as TextureRect).texture != null, "el oro lleva su moneda")
 	_check_eq(_label_in(scene, "GoldLabel").text, "0", "oro: 0")
-	_check(_label_in(scene, "RateLabel").text.contains("oro/s"), "oro/s (%s)" % _label_in(scene, "RateLabel").text)
+	_check_eq(_label_in(scene, "RateLabel").text, "0 oro/s", "oro/s: 0 oro/s (%s)" % _label_in(scene, "RateLabel").text)
+	# el oro por segundo es un dato principal: grande y justo debajo del oro
+	var gold_label: Label = _label_in(scene, "GoldLabel")
+	var rate_label: Label = _label_in(scene, "RateLabel")
+	var depth_label: Label = _label_in(scene, "DepthLabel")
+	var rate_size: int = rate_label.get_theme_font_size("font_size")
+	_check(rate_size >= 38, "el oro/s se lee grande (%d px de diseño)" % rate_size)
+	_check(rate_size > depth_label.get_theme_font_size("font_size"), "y más grande que la profundidad")
+	_check(rate_label.global_position.y >= gold_label.global_position.y + gold_label.size.y - 1.0, "está debajo del oro")
+	_check(rate_label.global_position.y + rate_label.size.y <= depth_label.global_position.y + 1.0, "y arriba de la profundidad")
+	var hit_label: Label = _label_in(scene, "HitLabel")
+	_check(hit_label.text.begins_with("Golpe"), "el golpe pasó a ser un dato chico aparte (%s)" % hit_label.text)
+	_check(hit_label.get_theme_font_size("font_size") < rate_size, "más chico que el oro/s")
+	_economy.owned[0] = 10
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	_check_eq(rate_label.text, "10 oro/s", "con 10 mineros: 10 oro/s (%s)" % rate_label.text)
+	_economy.reset()
+	await process_frame
 	_check_eq(_label_in(scene, "MultLabel").text, "×1.00", "multiplicador ×1.00 al empezar")
 	var bar: ProgressBar = _node(scene, "DepthBar") as ProgressBar
 	_check_near(bar.max_value, 1.0, "la barra va de 0 a 1", 1e-9)
@@ -270,6 +306,19 @@ func _test_hud(packed: PackedScene) -> void:
 
 ## El texto más largo posible no se corta: el ancho del texto entra en el de su etiqueta. (Las cajas
 ## no alcanzan: una etiqueta con clip_text se ve "bien" por fuera aunque se coma el final del texto.)
+## El botón del panel de debug no tapa el HUD (si el HUD cambia de alto, se acomoda solo debajo).
+func _test_debug_toggle_below_the_hud(packed: PackedScene) -> void:
+	_section("El botón DBG queda debajo del HUD")
+	for phone: Vector2 in PHONE_SIZES:
+		var scene: Control = await _mount_host(packed, phone)
+		var label: String = "%dx%d" % [int(phone.x), int(phone.y)]
+		var hud: Control = _node(scene, "HudPanel")
+		var toggle: Button = scene.get_node("DebugPanel").toggle_button
+		_check(toggle.global_position.y >= hud.global_position.y + hud.size.y, "[%s] el botón DBG está debajo del HUD (%d >= %d)" % [label, int(toggle.global_position.y), int(hud.global_position.y + hud.size.y)])
+		_check(toggle.global_position.y + toggle.size.y <= _node(scene, "MineView").get_global_rect().end.y, "[%s] y dentro de la mina" % label)
+		await _free_host(scene)
+
+
 func _test_text_is_not_cut(packed: PackedScene) -> void:
 	_section("Ningún texto se corta, ni en el peor caso")
 	# Un estado por bioma (el nombre más largo es Cristal) y uno con profundidad de 4 cifras, con montos y
@@ -366,6 +415,26 @@ func _test_overlays_draw_on_top(packed: PackedScene) -> void:
 			sorted_by_depth = false
 	_check(sorted_by_depth, "la roca y la cuadrilla van ordenadas por profundidad (la base más baja, al final) (%s)" % str(bottoms))
 	_check(_node(scene, "HintLabel").get_index() > _node(scene, "Rock").get_index(), "y el cartel de ayuda va después de todos los sprites")
+	# la viñeta oscura de los bordes: encima de los sprites, debajo del cartel de ayuda, y no come toques
+	var vignette: TextureRect = _node(scene, "Vignette") as TextureRect
+	_check(vignette != null, "hay una viñeta en la mina")
+	if vignette != null:
+		var last_sprite: int = 0
+		for child: Node in mine.get_children():
+			if child is TextureRect and child != vignette:
+				last_sprite = maxi(last_sprite, child.get_index())
+		_check(vignette.get_index() > last_sprite, "la viñeta se dibuja encima de los sprites (oscurece también a los de los bordes)")
+		_check(vignette.get_index() < _node(scene, "HintLabel").get_index(), "y debajo del cartel de ayuda")
+		_check_eq(vignette.mouse_filter, Control.MOUSE_FILTER_IGNORE, "la viñeta no come toques")
+		_check(vignette.position.is_zero_approx() and vignette.size.is_equal_approx(mine.size), "cubre toda la mina (%s)" % str(vignette.size))
+		var gradient_texture: GradientTexture2D = vignette.texture as GradientTexture2D
+		_check(gradient_texture != null and gradient_texture.fill == GradientTexture2D.FILL_RADIAL, "es un degradé radial: oscuro en los bordes")
+		if gradient_texture != null:
+			var edge: float = gradient_texture.gradient.sample(1.0).a
+			var middle: float = gradient_texture.gradient.sample(0.35).a
+			_check(gradient_texture.gradient.sample(0.0).a <= 0.02 and middle <= 0.05, "el centro queda limpio (alfa %.2f a 35%%)" % middle)
+			_check(edge >= 0.6, "y los bordes bien oscuros (alfa %.2f)" % edge)
+			_check(gradient_texture.gradient.sample(0.7).a > middle and gradient_texture.gradient.sample(0.7).a < edge, "con transición gradual (%.2f a 70%%)" % gradient_texture.gradient.sample(0.7).a)
 	_economy.reset()
 	await _free_host(scene)
 
@@ -446,7 +515,7 @@ func _test_mine_view(packed: PackedScene) -> void:
 	for sprite: TextureRect in miners:
 		textures[sprite.texture.resource_path] = true
 	_check_eq(textures.size(), 8, "los 8 mineros usan 8 sprites distintos (variaciones de color)")
-	# nadie se pisa con la roca ni se sale de la mina
+	# nadie queda encima de la roca (ni un píxel de su cuadro) ni se sale de la mina, y entre sí casi no se pisan
 	var mine_rect: Rect2 = mine.get_global_rect()
 	var out_of_mine: Array[String] = []
 	var on_rock: Array[String] = []
@@ -456,10 +525,55 @@ func _test_mine_view(packed: PackedScene) -> void:
 	for sprite: TextureRect in crew:
 		if not mine_rect.encloses(sprite.get_global_rect()):
 			out_of_mine.append("%s %s" % [sprite.name, str(sprite.get_global_rect())])
-		if sprite.get_global_rect().intersection(rock_rect).get_area() > sprite.get_global_rect().get_area() * 0.2:
+		if sprite.get_global_rect().intersects(rock_rect):
 			on_rock.append(sprite.name)
 	_check(out_of_mine.is_empty(), "toda la cuadrilla entra en la mina (%s)" % str(out_of_mine))
-	_check(on_rock.is_empty(), "y nadie tapa la roca (%s)" % str(on_rock))
+	_check(on_rock.is_empty(), "y ninguno está encima de la roca (%s)" % str(on_rock))
+	var stacked: Array[String] = []
+	for i: int in range(crew.size()):
+		for j: int in range(i):
+			var overlap: float = crew[i].get_global_rect().intersection(crew[j].get_global_rect()).get_area()
+			var smaller: float = minf(crew[i].get_global_rect().get_area(), crew[j].get_global_rect().get_area())
+			if overlap > smaller * 0.1:
+				stacked.append("%s/%s" % [crew[i].name, crew[j].name])
+	_check(stacked.is_empty(), "y casi no se pisan entre sí (%s)" % str(stacked))
+	# cada uno mira hacia la roca: los de los costados, hacia el costado; los de arriba, hacia abajo
+	var wrong_gaze: Array[String] = []
+	for sprite: TextureRect in miners:
+		var to_rock: Vector2 = rock_rect.get_center() - sprite.get_global_rect().get_center()
+		var gaze: String = "down" if (absf(to_rock.y) >= absf(to_rock.x) and to_rock.y > 0.0) else ("right" if to_rock.x > 0.0 else "left")
+		var path: String = sprite.texture.resource_path
+		if not path.ends_with("_%s.png" % gaze):
+			wrong_gaze.append("%s mira a '%s' y debería mirar '%s'" % [sprite.name, path.get_file(), gaze])
+	_check(wrong_gaze.is_empty(), "cada minero mira hacia la roca (%s)" % str(wrong_gaze))
+	var gazes: Dictionary = {}
+	for sprite: TextureRect in miners:
+		gazes[sprite.texture.resource_path.get_file().trim_suffix(".png").split("_")[2]] = true
+	_check_eq(gazes.keys().size(), 3, "y las tres miradas aparecen: izquierda, derecha y abajo (%s)" % str(gazes.keys()))
+	# parados en el piso: una sombra elíptica bajo la roca y bajo cada sprite
+	var shadows: Array = mine.shadow_ellipses()
+	var casters: Array[TextureRect] = [rock]
+	casters.append_array(crew)
+	var visible_casters: Array[TextureRect] = []
+	for caster: TextureRect in casters:
+		if caster.visible:
+			visible_casters.append(caster)
+	_check_eq(shadows.size(), visible_casters.size(), "hay una sombra por cada sprite que se ve: roca, mineros, taladro y gólem (%d)" % shadows.size())
+	var bad_shadows: Array[String] = []
+	var shadowed: Dictionary = {}
+	for shadow: Dictionary in shadows:
+		var caster: TextureRect = shadow["sprite"]
+		shadowed[caster] = true
+		var rect: Rect2 = Rect2(caster.position, caster.size)
+		var center: Vector2 = shadow["center"]
+		var radius: Vector2 = shadow["radius"]
+		var min_width: float = 0.42 if caster == rock else 0.3
+		if absf(center.x - rect.get_center().x) > 1.0 or center.y < rect.position.y + 0.8 * rect.size.y or center.y > rect.end.y + 0.12 * rect.size.y:
+			bad_shadows.append("%s: sombra fuera de los pies (%s)" % [caster.name, str(center)])
+		if radius.x < min_width * rect.size.x or radius.y > radius.x * 0.5 or radius.y < radius.x * 0.12:
+			bad_shadows.append("%s: no es una elipse chata y ancha (%s)" % [caster.name, str(radius)])
+	_check(bad_shadows.is_empty(), "cada sombra es una elipse ancha y chata a los pies del sprite (%s)" % str(bad_shadows))
+	_check_eq(shadowed.keys().size(), visible_casters.size(), "y no se repite ni falta ninguna")
 	# tocar a un minero no cuenta como golpe: solo la roca
 	for sprite: TextureRect in crew:
 		_check_eq(sprite.mouse_filter, Control.MOUSE_FILTER_IGNORE, "%s no come toques (pasan a la roca)" % sprite.name)
@@ -499,19 +613,162 @@ func _test_theme(packed: PackedScene) -> void:
 	_check(scene.theme != null and scene.theme.resource_path == "res://ui/theme.tres", "la escena usa res://ui/theme.tres")
 	var font: Font = _label_in(scene, "GoldLabel").get_theme_font("font")
 	_check(font is FontVariation and (font as FontVariation).base_font.resource_path.ends_with("PixelifySans.ttf"), "las etiquetas usan Pixelify Sans")
-	var button_font: Font = (_node(scene, "PickButton") as Button).get_theme_font("font")
+	var button_font: Font = _pick_button(scene).get_theme_font("font")
 	_check(button_font is FontVariation and (button_font as FontVariation).base_font.resource_path.ends_with("PixelifySans.ttf"), "los botones también")
-	var expectations: Dictionary = { "PickButton": "/yellow/", "PrestigeButton": "/red/", "TabCrewButton": "/grey/", "Mode1Button": "/grey/" }
-	for node_name: String in expectations:
-		var style: StyleBox = (_node(scene, node_name) as Button).get_theme_stylebox("normal")
-		_check(style is StyleBoxTexture and (style as StyleBoxTexture).texture.resource_path.contains("ui_pack" + expectations[node_name]), "%s usa un botón del UI Pack (%s)" % [node_name, expectations[node_name]])
-	# el apretado es el plano (sin profundidad) y el deshabilitado, gris
-	var pressed: StyleBox = (_node(scene, "PickButton") as Button).get_theme_stylebox("pressed")
+	# los botones de acción usan el UI Pack: apretado = el botón plano (sin profundidad); deshabilitado = gris
+	var pressed: StyleBox = _pick_button(scene).get_theme_stylebox("pressed")
 	_check(pressed is StyleBoxTexture and (pressed as StyleBoxTexture).texture.resource_path.ends_with("button_rectangle_flat.png"), "apretado: el botón plano, sin profundidad")
-	var disabled: StyleBox = (_node(scene, "PickButton") as Button).get_theme_stylebox("disabled")
+	var disabled: StyleBox = _pick_button(scene).get_theme_stylebox("disabled")
 	_check(disabled is StyleBoxTexture and (disabled as StyleBoxTexture).texture.resource_path.contains("/grey/"), "deshabilitado: gris")
 	_check((_node(scene, "TabCrewButton") as Button).toggle_mode, "las pestañas son de selección (toggle)")
 	await _free_host(scene)
+
+
+## El pico es una fila más de la lista, con el mismo formato que los generadores (icono, nombre y nivel,
+## dato de golpe y botón de compra).
+func _test_pick_row(packed: PackedScene) -> void:
+	_section("El pico es una fila de la lista, igual que los generadores")
+	var scene: Control = await _mount_host(packed, PHONE_SIZES[0])
+	_economy.reset()
+	_economy.gold = 60.0
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	var holder: Control = _node(scene, "PickRow")
+	_check_eq(holder.get_child_count(), 1, "la fila del pico está en la lista")
+	var pick_row: Control = holder.get_child(0) as Control
+	var first_generator: Control = _node(scene, "GeneratorList").get_child(0) as Control
+	var pick_button: Button = _pick_button(scene)
+	var buy_button: Button = _buy_button(scene, 0)
+	_check(pick_row.global_position.y < first_generator.global_position.y, "va arriba de los generadores")
+	_check(holder.get_parent() == _node(scene, "GeneratorList").get_parent(), "en el mismo scroll")
+	_check_near(pick_row.size.x, first_generator.size.x, "mide lo mismo de ancho", 0.01)
+	_check_near(pick_row.size.y, first_generator.size.y, "y de alto (%d y %d)" % [int(pick_row.size.y), int(first_generator.size.y)], 0.05)
+	_check_eq(pick_row.theme_type_variation, first_generator.theme_type_variation, "con el mismo panel (%s)" % str(pick_row.theme_type_variation))
+	_check_eq(pick_button.theme_type_variation, buy_button.theme_type_variation, "y el mismo botón (%s)" % str(pick_button.theme_type_variation))
+	_check_near(pick_button.size.x, buy_button.size.x, "del mismo tamaño (%d y %d de ancho)" % [int(pick_button.size.x), int(buy_button.size.x)], 0.01)
+	_check_near(pick_button.size.y, buy_button.size.y, "y de alto", 0.01)
+	var icons: Array[Node] = pick_row.find_children("*", "TextureRect", true, false)
+	_check(icons.size() == 1 and (icons[0] as TextureRect).texture != null, "tiene su icono")
+	if icons.size() == 1:
+		_check((icons[0] as TextureRect).texture.resource_path.ends_with("pick.png"), "el pico (pick.png)")
+		_check_near((icons[0] as TextureRect).size.x, ((first_generator.find_children("*", "TextureRect", true, false)[0]) as TextureRect).size.x, "del mismo tamaño que el de los generadores", 0.01)
+	var labels: Array[Node] = pick_row.find_children("*", "Label", true, false)
+	_check_eq(labels.size(), 2, "con un nombre y un dato, como los generadores")
+	if labels.size() == 2:
+		_check((labels[0] as Label).text.contains("Pico") and (labels[0] as Label).text.contains("0"), "nombre y nivel (%s)" % (labels[0] as Label).text)
+		_check((labels[1] as Label).text.contains("Golpe") and (labels[1] as Label).text.contains("1"), "y lo que pega (%s)" % (labels[1] as Label).text)
+	_check(pick_button.text.contains("Mejorar") and pick_button.text.contains("50"), "el botón dice Mejorar y el costo (%s)" % pick_button.text.replace("\n", " | "))
+	_check(not pick_button.disabled, "con 60 de oro se puede (cuesta 50)")
+	pick_button.pressed.emit()
+	await process_frame
+	_check_eq(_economy.pick_level, 1, "apretarlo mejora el pico")
+	_check((labels[0] as Label).text.contains("1"), "y la fila muestra el nivel nuevo (%s)" % (labels[0] as Label).text)
+	_check(pick_button.disabled, "ya no alcanza para el siguiente (cuesta 300)")
+	_economy.reset()
+	await _free_host(scene)
+
+
+## El color de un botón tiene un único significado: verde = se puede comprar, gris = no alcanza,
+## amarillo = solo la pestaña activa, rojo = solo el prestigio; los selectores son neutros.
+func _test_button_roles(packed: PackedScene) -> void:
+	_section("Colores de los botones: un rol por color")
+	var scene: Control = await _mount_host(packed, PHONE_SIZES[0])
+	_economy.reset()
+	_economy.gold = 20.0 # alcanza el Minero (15), no el Taladro (120) ni el pico (50)
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	var buy_first: Button = _buy_button(scene, 0)
+	var buy_second: Button = _buy_button(scene, 1)
+	_check(not buy_first.disabled and _style_name(buy_first) == "green", "lo que se puede comprar es verde (%s)" % _style_name(buy_first))
+	_check(buy_second.disabled and _style_name(buy_second) == "grey", "lo que no alcanza es gris (%s)" % _style_name(buy_second))
+	_check(_pick_button(scene).disabled and _style_name(_pick_button(scene)) == "grey", "el pico sin oro suficiente es gris (%s)" % _style_name(_pick_button(scene)))
+	_check(_node(scene, "PrestigeButton").disabled and _style_name(_node(scene, "PrestigeButton") as Button) == "grey", "y el prestigio todavía no disponible también")
+	_economy.gold = 60.0
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	_check(not _pick_button(scene).disabled and _style_name(_pick_button(scene)) == "green", "con oro para el pico, el pico es verde (no amarillo) (%s)" % _style_name(_pick_button(scene)))
+	_economy.run_gold = 41000.0 # 300 m: se puede volver a la superficie
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	_check(not _node(scene, "PrestigeButton").disabled and _style_name(_node(scene, "PrestigeButton") as Button) == "red", "el prestigio disponible es rojo (%s)" % _style_name(_node(scene, "PrestigeButton") as Button))
+
+	# en toda la escena: ningún botón habilitado es gris, ningún deshabilitado deja de serlo; sin azules
+	var buttons: Array[Button] = _game_buttons(scene)
+	var by_style: Dictionary = {}
+	var grey_enabled: Array[String] = []
+	var blue: Array[String] = []
+	for button: Button in buttons:
+		var style: String = _style_name(button)
+		by_style[style] = by_style.get(style, []) + [button]
+		if style == "blue":
+			blue.append(str(button.name))
+		if style == "grey" and not button.disabled:
+			grey_enabled.append(str(button.name))
+	_check(blue.is_empty(), "no queda ningún botón azul (%s)" % str(blue))
+	_check(grey_enabled.is_empty(), "ningún botón habilitado es gris: gris quiere decir que no alcanza (%s)" % str(grey_enabled))
+	var yellow_names: Array[String] = []
+	for button: Button in by_style.get("yellow", []):
+		yellow_names.append(str(button.name))
+	_check_eq(yellow_names, ["TabCrewButton"] as Array[String], "amarillo es solo la pestaña activa (%s)" % str(yellow_names))
+	var red_names: Array[String] = []
+	for button: Button in by_style.get("red", []):
+		red_names.append(str(button.name))
+	_check_eq(red_names, ["PrestigeButton"] as Array[String], "y rojo solo el prestigio (%s)" % str(red_names))
+	(_node(scene, "TabRelicsButton") as Button).button_pressed = true
+	await process_frame
+	yellow_names.clear()
+	for button: Button in _game_buttons(scene):
+		if _style_name(button) == "yellow":
+			yellow_names.append(str(button.name))
+	_check_eq(yellow_names, ["TabRelicsButton"] as Array[String], "al cambiar de pestaña el amarillo se muda con ella (%s)" % str(yellow_names))
+
+	# los selectores de modo y las pestañas inactivas son neutros (un estilo plano, sin color de rol)
+	for mode_name: String in ["Mode1Button", "Mode10Button", "ModeMaxButton"]:
+		var mode: Button = _node(scene, mode_name) as Button
+		_check_eq(_style_name(mode), "flat", "%s es neutro, sin color de rol (%s)" % [mode_name, _style_name(mode)])
+	var selected: StyleBox = (_node(scene, "Mode1Button") as Button).get_theme_stylebox("pressed")
+	var unselected: StyleBox = (_node(scene, "Mode1Button") as Button).get_theme_stylebox("normal")
+	_check(selected is StyleBoxFlat and unselected is StyleBoxFlat and (selected as StyleBoxFlat).bg_color != (unselected as StyleBoxFlat).bg_color, "pero el seleccionado se distingue del resto (otro relleno)")
+	_check_eq(_style_name(_node(scene, "TabCrewButton") as Button), "flat", "una pestaña inactiva también es neutra")
+
+	# los botones del cartel: el prestigio es rojo; un aviso cualquiera es neutro
+	var modal: Control = scene.get_node("Modal")
+	_node(scene, "PrestigeButton").pressed.emit()
+	await process_frame
+	_check(modal.visible and _style_name(modal.confirm_button) == "red", "confirmar el prestigio es rojo (%s)" % _style_name(modal.confirm_button))
+	_check_eq(_style_name(modal.cancel_button), "flat", "y cancelar es neutro")
+	modal.close()
+	modal.open("Aviso", "Cuerpo", "¡A seguir!")
+	await process_frame
+	_check_eq(_style_name(modal.confirm_button), "flat", "un aviso común se cierra con un botón neutro (%s)" % _style_name(modal.confirm_button))
+	modal.close()
+	_economy.reset()
+	await _free_host(scene)
+
+
+## Los botones del juego (sin el panel de debug ni la roca), estén visibles o no.
+func _game_buttons(scene: Control) -> Array[Button]:
+	var buttons: Array[Button] = []
+	var debug_panel: Node = scene.get_node_or_null("DebugPanel")
+	for node: Node in scene.find_children("*", "Button", true, false):
+		if node.name == "TapButton" or (debug_panel != null and debug_panel.is_ancestor_of(node)):
+			continue
+		if scene.get_node("Modal").is_ancestor_of(node):
+			continue
+		buttons.append(node as Button)
+	return buttons
+
+
+## "yellow", "green", "red" o "grey" si el botón se dibuja ahora con un botón del UI Pack de ese color
+## (según su estado); "flat" si usa un estilo plano sin textura. El estado: deshabilitado, apretado
+## (si es de selección y está marcado) o normal.
+func _style_name(button: Button) -> String:
+	var state: String = "disabled" if button.disabled else ("pressed" if button.toggle_mode and button.button_pressed else "normal")
+	var style: StyleBox = button.get_theme_stylebox(state)
+	if style is StyleBoxTexture and (style as StyleBoxTexture).texture != null:
+		var parts: PackedStringArray = (style as StyleBoxTexture).texture.resource_path.split("/")
+		return parts[parts.size() - 2]
+	return "flat"
 
 
 func _test_no_loot_hides_the_loot_tab(packed: PackedScene) -> void:

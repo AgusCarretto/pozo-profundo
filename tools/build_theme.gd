@@ -23,6 +23,10 @@ const MARGIN_SIDE: int = 18
 const MARGIN_TOP: int = 18
 const MARGIN_BOTTOM: int = 24
 
+## Relleno y borde de los botones neutros (selector de modo, pestañas inactivas, cancelar).
+const NEUTRAL_FILL: Color = Color(0.2353, 0.2706, 0.3765)
+const NEUTRAL_BORDER: Color = Color(0.3216, 0.3765, 0.4863)
+
 var _theme: Theme = Theme.new()
 var _font: FontVariation
 var _font_bold: FontVariation
@@ -68,6 +72,7 @@ func _build_labels() -> void:
 	_label_variation("GoldLabel", 80, Palette.YELLOW, 8)
 	_label_variation("HudLabel", 32, Palette.FROST, 4)
 	_label_variation("HudMutedLabel", 28, Palette.STEEL_PALE, 0)
+	_label_variation("RateLabel", 42, Palette.SAND_LIGHT, 5)
 	_label_variation("BarLabel", 24, Palette.WHITE, 5) # texto sobre la barra de profundidad
 	_label_variation("MultLabel", 38, Palette.GOLD, 5)
 	_label_variation("MutedLabel", 26, Palette.STEEL_PALE, 0)
@@ -87,50 +92,73 @@ func _label_variation(type_name: String, size: int, color: Color, outline: int) 
 
 # --- Botones ---------------------------------------------------------------------------------
 
+## Cada color de botón tiene un único significado:
+##   verde (ButtonGreen) = se puede comprar; gris = no alcanza (es el estilo "deshabilitado" de todos);
+##   amarillo = solo la pestaña activa (TabButton marcada); rojo (ButtonRed) = solo el prestigio.
+## Lo demás es neutro (un estilo plano oscuro, ButtonNeutral): selector ×1/×10/Máx, pestañas inactivas,
+## cancelar y los avisos.
 func _build_buttons() -> void:
 	_theme.set_font("font", "Button", _font_bold)
 	_theme.set_font_size("font_size", "Button", 30)
-	# Botón base = gris (los que no eligen variación, como los del panel de debug).
-	_button_style("Button", "grey", Palette.OUTLINE, false)
-	# De acción: se apretan y suben solos.
-	_button_style("ButtonGreen", "green", Palette.WHITE, true)
-	_button_style("ButtonYellow", "yellow", Palette.OUTLINE, false)
-	_button_style("ButtonRed", "red", Palette.WHITE, true)
-	_button_style("ButtonBlue", "blue", Palette.WHITE, true)
-	_button_style("ButtonGrey", "grey", Palette.OUTLINE, false)
-	# De selección (toggle): apagado = gris oscuro, prendido = el color.
-	_toggle_style("TabButton", "yellow", Palette.OUTLINE)
-	_toggle_style("ModeButton", "blue", Palette.WHITE)
-	for type_name: String in ["ButtonGreen", "ButtonYellow", "ButtonRed", "ButtonBlue", "ButtonGrey", "TabButton", "ModeButton"]:
+	# Botón base = neutro (los que no eligen variación, como los del panel de debug).
+	_neutral_style("Button")
+	_action_style("ButtonGreen", "green")
+	_action_style("ButtonRed", "red")
+	_neutral_style("ButtonNeutral")
+	_neutral_style("ModeButton") # selector: el marcado es el "apretado" (más claro, con borde)
+	_tab_style("TabButton")
+	for type_name: String in ["ButtonGreen", "ButtonRed", "ButtonNeutral", "ModeButton", "TabButton"]:
 		_theme.set_type_variation(type_name, "Button")
 		_theme.set_font("font", type_name, _font_bold)
 
 
-func _button_style(type_name: String, color: String, text_color: Color, outlined: bool) -> void:
+## Botón de acción con el UI Pack: reposo con profundidad, apretado plano. Deshabilitado = gris (no alcanza).
+func _action_style(type_name: String, color: String) -> void:
 	var raised: StyleBoxTexture = _texture_style(color, true, Color.WHITE)
 	var pressed: StyleBoxTexture = _texture_style(color, false, Color(0.9, 0.9, 0.9))
 	pressed.content_margin_top += 4.0 # el texto "se hunde" al apretar
 	var hover: StyleBoxTexture = _texture_style(color, true, Color(1.08, 1.08, 1.08))
-	_set_button_states(type_name, raised, hover, pressed, pressed, text_color, outlined)
+	_set_button_states(type_name, raised, hover, pressed, pressed, Palette.WHITE, 5)
 
 
-func _toggle_style(type_name: String, color: String, on_text_color: Color) -> void:
-	var off: StyleBoxTexture = _texture_style("grey", true, Color(0.5, 0.52, 0.66))
-	var off_hover: StyleBoxTexture = _texture_style("grey", true, Color(0.62, 0.64, 0.78))
-	var on: StyleBoxTexture = _texture_style(color, false, Color.WHITE)
-	on.content_margin_top += 4.0
-	_set_button_states(type_name, off, off_hover, on, on, on_text_color, false)
-	# texto del estado apagado: claro, para que se lea sobre el gris oscuro
-	_theme.set_color("font_color", type_name, Palette.FROST)
+## Botón neutro: plano y oscuro, sin color de rol. Apretado/marcado = más claro y con borde.
+func _neutral_style(type_name: String) -> void:
+	var normal: StyleBoxFlat = _neutral_box(NEUTRAL_FILL, NEUTRAL_BORDER)
+	var hover: StyleBoxFlat = _neutral_box(NEUTRAL_FILL.lightened(0.12), NEUTRAL_BORDER)
+	var pressed: StyleBoxFlat = _neutral_box(Palette.SLATE_LIGHT, Palette.STEEL_LIGHT)
+	_set_button_states(type_name, normal, hover, pressed, pressed, Palette.FROST, 0)
+	_theme.set_color("font_pressed_color", type_name, Palette.WHITE)
+	_theme.set_color("font_hover_pressed_color", type_name, Palette.WHITE)
+
+
+## Pestaña: inactiva = neutra; la activa (marcada) = amarilla. Es el único lugar donde va el amarillo.
+func _tab_style(type_name: String) -> void:
+	var normal: StyleBoxFlat = _neutral_box(NEUTRAL_FILL, NEUTRAL_BORDER)
+	var hover: StyleBoxFlat = _neutral_box(NEUTRAL_FILL.lightened(0.12), NEUTRAL_BORDER)
+	var active: StyleBoxTexture = _texture_style("yellow", false, Color.WHITE)
+	active.content_margin_top += 4.0
+	_set_button_states(type_name, normal, hover, active, active, Palette.FROST, 0)
 	_theme.set_color("font_hover_color", type_name, Palette.WHITE)
-	_theme.set_color("font_outline_color", type_name, Palette.OUTLINE)
-	_theme.set_constant("outline_size", type_name, 4)
-	_theme.set_color("font_pressed_color", type_name, on_text_color)
-	_theme.set_color("font_hover_pressed_color", type_name, on_text_color)
+	# sobre el amarillo, texto oscuro
+	_theme.set_color("font_pressed_color", type_name, Palette.OUTLINE)
+	_theme.set_color("font_hover_pressed_color", type_name, Palette.OUTLINE)
+
+
+func _neutral_box(fill: Color, border: Color) -> StyleBoxFlat:
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = fill
+	style.border_color = border
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(14)
+	style.content_margin_left = 20.0
+	style.content_margin_right = 20.0
+	style.content_margin_top = 8.0
+	style.content_margin_bottom = 8.0
+	return style
 
 
 func _set_button_states(type_name: String, normal: StyleBox, hover: StyleBox, pressed: StyleBox, hover_pressed: StyleBox,
-		text_color: Color, outlined: bool) -> void:
+		text_color: Color, outline: int) -> void:
 	var disabled: StyleBoxTexture = _texture_style("grey", true, Color(0.62, 0.62, 0.7))
 	_theme.set_stylebox("normal", type_name, normal)
 	_theme.set_stylebox("hover", type_name, hover)
@@ -142,7 +170,7 @@ func _set_button_states(type_name: String, normal: StyleBox, hover: StyleBox, pr
 		_theme.set_color(key, type_name, text_color)
 	_theme.set_color("font_disabled_color", type_name, Palette.SLATE)
 	_theme.set_color("font_outline_color", type_name, Palette.OUTLINE)
-	_theme.set_constant("outline_size", type_name, 5 if outlined else 0)
+	_theme.set_constant("outline_size", type_name, outline)
 	_theme.set_constant("h_separation", type_name, 12)
 
 

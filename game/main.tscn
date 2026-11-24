@@ -8,6 +8,18 @@
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_tap"]
 
+[sub_resource type="Gradient" id="Gradient_vignette"]
+offsets = PackedFloat32Array(0, 0.6, 0.9, 1)
+colors = PackedColorArray(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.28, 0, 0, 0, 0.65)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_vignette"]
+gradient = SubResource("Gradient_vignette")
+width = 256
+height = 256
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
 [node name="Main" type="Control"]
 layout_mode = 3
 anchors_preset = 15
@@ -94,11 +106,25 @@ theme_type_variation = &"MultLabel"
 text = "×1.00"
 horizontal_alignment = 1
 
-[node name="RateLabel" type="Label" parent="Layout/HudPanel/HudBox"]
+[node name="RateRow" type="HBoxContainer" parent="Layout/HudPanel/HudBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="RateLabel" type="Label" parent="Layout/HudPanel/HudBox/RateRow"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"RateLabel"
+text = "0 oro/s"
+clip_text = true
+
+[node name="HitLabel" type="Label" parent="Layout/HudPanel/HudBox/RateRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 8
 theme_type_variation = &"HudMutedLabel"
-text = "Golpe 1 · 0 oro/s"
+text = "Golpe 1"
+horizontal_alignment = 2
 
 [node name="DepthLabel" type="Label" parent="Layout/HudPanel/HudBox"]
 unique_name_in_owner = true
@@ -132,9 +158,10 @@ vertical_alignment = 1
 unique_name_in_owner = true
 texture_filter = 1
 clip_contents = true
-custom_minimum_size = Vector2(0, 400)
+custom_minimum_size = Vector2(0, 420)
 layout_mode = 2
 size_flags_vertical = 3
+size_flags_stretch_ratio = 1.6
 mouse_filter = 2
 script = ExtResource("3_mine")
 
@@ -160,6 +187,19 @@ theme_override_styles/disabled = SubResource("StyleBoxEmpty_tap")
 theme_override_styles/focus = SubResource("StyleBoxEmpty_tap")
 flat = true
 
+[node name="Vignette" type="TextureRect" parent="Layout/MineView"]
+unique_name_in_owner = true
+texture_filter = 2
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = SubResource("GradientTexture2D_vignette")
+expand_mode = 1
+
 [node name="HintLabel" type="Label" parent="Layout/MineView"]
 unique_name_in_owner = true
 layout_mode = 1
@@ -179,7 +219,7 @@ vertical_alignment = 1
 
 [node name="BottomPanel" type="PanelContainer" parent="Layout"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 560)
+custom_minimum_size = Vector2(0, 480)
 layout_mode = 2
 size_flags_vertical = 3
 theme_type_variation = &"BottomPanel"
@@ -277,13 +317,10 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 10
 
-[node name="PickButton" type="Button" parent="Layout/BottomPanel/BottomBox/Pages/CrewPage/Scroll/ScrollBox"]
+[node name="PickRow" type="VBoxContainer" parent="Layout/BottomPanel/BottomBox/Pages/CrewPage/Scroll/ScrollBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 112)
 layout_mode = 2
-focus_mode = 0
-theme_type_variation = &"ButtonYellow"
-text = "Mejorar pico"
+size_flags_horizontal = 3
 
 [node name="GeneratorList" type="VBoxContainer" parent="Layout/BottomPanel/BottomBox/Pages/CrewPage/Scroll/ScrollBox"]
 unique_name_in_owner = true
@@ -375,3 +412,4 @@ layout_mode = 2
 focus_mode = 0
 theme_type_variation = &"ButtonRed"
 text = "Volver a la superficie"
+disabled = true
