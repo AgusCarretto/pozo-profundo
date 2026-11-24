@@ -118,7 +118,8 @@ func _refresh() -> void:
 		NumberFormat.format_number(Economy.gold_per_second()),
 	]
 	_refresh_depth()
-	_loot_bonus_label.text = "Bonus de botín: +%s" % NumberFormat.format_percent(Economy.loot_bonus)
+	# Se muestra el bonus efectivo (el que de verdad multiplica el oro); el bruto solo va en el panel de debug.
+	_loot_bonus_label.text = "Bonus de botín: +%s" % NumberFormat.format_percent(Economy.loot_bonus_effective())
 	var cost: float = Economy.pick_cost()
 	_pick_button.text = "Mejorar pico (nivel %d)\nCosto: %s" % [Economy.pick_level, NumberFormat.format_cost(cost)]
 	_pick_button.disabled = cost > Economy.gold

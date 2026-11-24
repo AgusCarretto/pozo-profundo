@@ -29,8 +29,9 @@
 		]
 	},
 	"loot": {
-		"chance_per_hit": 0.04,
-		"chance_per_second": 0.02,
+		"chance_per_hit": 0.015,
+		"chance_per_second": 0.005,
+		"bonus_cap": 3.0,
 		"rarities": [
 			{ "id": "common", "name": "Común", "weight": 70, "bonus": 0.01 },
 			{ "id": "rare", "name": "Raro", "weight": 22, "bonus": 0.04 },

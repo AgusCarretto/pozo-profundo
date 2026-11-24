@@ -337,6 +337,7 @@ func _test_debug_panel_only_in_debug_builds() -> void:
 	_check(_scene.has_node("DebugPanel"), "la escena principal trae el panel en este build")
 	var scene_panel: Control = _scene.get_node("DebugPanel")
 	_check_eq(scene_panel.chest_buttons.size(), 0, "sin botín en el balance, no hay botones de cofre")
+	_check_eq(scene_panel.raw_bonus_label, null, "ni el dato del bonus bruto")
 	_check(not scene_panel.body.visible, "arranca cerrado: no tapa la pantalla")
 
 
@@ -370,6 +371,9 @@ func _test_debug_panel_tools() -> void:
 	_modal().confirm_button.pressed.emit()
 
 	await _set_gold(0.0)
+	_check(panel.raw_bonus_label != null, "el panel tiene el dato del bonus de botín bruto")
+	if panel.raw_bonus_label != null:
+		_check(panel.raw_bonus_label.text.contains("+0%"), "arranca en +0%% (%s)" % panel.raw_bonus_label.text)
 	_check_eq(panel.chest_buttons.size(), 4, "un botón de cofre por rareza (4)")
 	var table: Array[Dictionary] = _economy.loot_table()
 	var expected_bonus: float = 0.0
@@ -381,7 +385,14 @@ func _test_debug_panel_tools() -> void:
 		_check_near(_economy.loot_bonus, expected_bonus, "forzar %s suma su bonus (+%s)" % [table[index]["name"], NumberFormat.format_percent(table[index]["bonus"])])
 	_check_eq(_economy.gold, 0.0, "los cofres forzados no dan oro")
 	await process_frame
-	_check_eq(_label("LootBonusLabel").text, "Bonus de botín: +80%", "el bonus total en pantalla suma los cuatro (+80%%) (%s)" % _label("LootBonusLabel").text)
+	_check_near(_economy.loot_bonus, 0.80, "los cuatro cofres suman +80% de bonus bruto")
+	_check_eq(_label("LootBonusLabel").text, "Bonus de botín: +70.2%", "en pantalla se ve el EFECTIVO (+70.2%%), no el bruto (%s)" % _label("LootBonusLabel").text)
+	_check(not _label("LootBonusLabel").text.contains("80"), "y el bruto no aparece en la pantalla del jugador")
+	if panel.raw_bonus_label != null:
+		var raw_text: String = panel.raw_bonus_label.text
+		_check(raw_text.contains("+80%"), "el panel de debug muestra el bruto (+80%%) (%s)" % raw_text)
+		_check(raw_text.contains("70.2%"), "junto al efectivo (%s)" % raw_text)
+		_check(raw_text.contains("300%"), "y el techo (%s)" % raw_text)
 	_check(_label("LastLootLabel").text.contains("Legendario"), "y el último cofre es el Legendario (%s)" % _label("LastLootLabel").text)
 	_economy.reset()
 
@@ -390,8 +401,8 @@ func _test_loot_odds_are_visible() -> void:
 	_section("Probabilidades del botín visibles")
 	_check((_scene.get_node("%LootBox") as Control).visible, "el panel de cofres se muestra")
 	var info: String = _label("LootInfoLabel").text
-	_check(info.contains("4%") and info.contains("golpe"), "dice 4%% por golpe (%s)" % info)
-	_check(info.contains("2%") and info.contains("segundo"), "y 2%% por segundo con cuadrilla")
+	_check(info.contains("1.5%") and info.contains("golpe"), "dice 1.5%% por golpe (%s)" % info)
+	_check(info.contains("0.5%") and info.contains("segundo"), "y 0.5%% por segundo con cuadrilla (%s)" % info)
 	var texts: Array[String] = []
 	for child: Node in _scene.get_node("%OddsRow").get_children():
 		texts.append((child as Label).text.replace("\n", " "))
@@ -432,13 +443,13 @@ func _test_chest_message() -> void:
 		_check(not text.contains("oro"), "no habla de oro: el cofre no da oro (%s)" % text)
 	_check_eq(_economy.gold, 1.0, "el golpe sumó 1 de oro y el cofre ninguno")
 	await process_frame
-	var expected_bonus: String = "Bonus de botín: +%s" % NumberFormat.format_percent(_economy.loot_bonus)
-	_check_eq(_label("LootBonusLabel").text, expected_bonus, "el bonus total se actualiza (%s)" % _label("LootBonusLabel").text)
+	var expected_bonus: String = "Bonus de botín: +%s" % NumberFormat.format_percent(_economy.loot_bonus_effective())
+	_check_eq(_label("LootBonusLabel").text, expected_bonus, "el bonus total (efectivo) se actualiza (%s)" % _label("LootBonusLabel").text)
 	_button("TapButton").button_down.emit()
 	_button("TapButton").button_down.emit()
 	await process_frame
 	_check_eq(seen.size(), 3, "3 golpes, 3 cofres")
-	expected_bonus = "Bonus de botín: +%s" % NumberFormat.format_percent(_economy.loot_bonus)
+	expected_bonus = "Bonus de botín: +%s" % NumberFormat.format_percent(_economy.loot_bonus_effective())
 	_check_eq(_label("LootBonusLabel").text, expected_bonus, "y acumula los 3 cofres (%s)" % _label("LootBonusLabel").text)
 	var summed: float = 0.0
 	for rarity: int in seen:

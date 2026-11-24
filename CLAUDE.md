@@ -35,11 +35,12 @@ CREDITS.md     # licencia y autor de CADA asset de terceros (obligatorio)
 - Pico: golpe = `2^nivel * mult + 3% del oro/s`; costo = `50 * 6^nivel`
 - Profundidad: `25 * log2(1 + oroDeEstaPartida / 10)` metros; bioma nuevo cada 150 m; multiplicador de bioma `1.5^índice`
   - `oroDeEstaPartida` es el oro *ganado* en la partida (gastar no te hace retroceder). Pasado Abismo se queda en Abismo.
-- Botín: 4% por golpe, 2%/s pasivo si hay cuadrilla. Rarezas: Común 70% (+1%), Raro 22% (+4%), Épico 7% (+15%), Legendario 1% (+60%) de bonus de oro. Las probabilidades se muestran en el juego.
-  - El cofre no da oro en el momento: su bonus se *suma* a un bonus de botín acumulable de la partida (Común +1%, Raro +4%, Épico +15%, Legendario +60%), que multiplica el oro. Se muestra en pantalla ("Bonus de botín: +27%") y se reinicia al volver a la superficie.
+- Botín: 1,5% por golpe, 0,5%/s pasivo si hay cuadrilla. Rarezas: Común 70% (+1%), Raro 22% (+4%), Épico 7% (+15%), Legendario 1% (+60%) de bonus de oro. Las probabilidades se muestran en el juego.
+  - El cofre no da oro en el momento: su bonus se *suma* a un bonus de botín **bruto** acumulable de la partida (Común +1%, Raro +4%, Épico +15%, Legendario +60%). Lo que multiplica el oro es el **efectivo**, con rendimientos decrecientes: `efectivo = cap × (1 − e^(−bruto / cap))`, con `cap = 3` (`loot.bonus_cap` en balance.json): techo de +300%, que nunca se alcanza. Con poco bruto rinde casi 1 a 1 (+10% bruto → +9,8%); +100% bruto → +85%; +300% bruto → +190%.
+  - En pantalla se muestra el efectivo ("Bonus de botín: +27%"); el bruto solo va en el panel de debug. Se guarda el bruto y se reinicia al volver a la superficie. Sin sección `loot` en el balance no hay botín (efectivo 0).
 - Reliquias: desde 300 m, `floor(((prof - 200) / 50)^1.3)`; cada una +25% de oro permanente.
   - Suman (`1 + 0.25 * reliquias`). Volver a la superficie pide confirmación y reinicia oro, cuadrilla, pico, profundidad y bonus de botín; las reliquias se conservan.
-- Multiplicador final de oro: `bioma × (1 + botín) × (1 + 0.25 × reliquias)`.
+- Multiplicador final de oro: `bioma × (1 + botín efectivo) × (1 + 0.25 × reliquias)`.
 - Progreso offline: hasta 8 horas.
   - Acredita la producción de hoy (bioma y reliquias actuales) por el tiempo fuera, sin sortear cofres. Avisa al volver si estuviste fuera 60 s o más; un hueco largo entre frames en la sesión (pestaña web o app en segundo plano) cuenta igual.
 
@@ -51,7 +52,7 @@ Cambio de bioma: transición de paleta, cartel, música que cambia.
 Números grandes con sufijos (K, M, B, T...).
 
 ## Panel de debug
-Solo existe en builds de debug (`OS.is_debug_build()`): el export release (el default de `tools/export_web.ps1`) no lo crea; con `-DebugBuild` sí. Botón DBG arriba a la izquierda, con: **Oro ×1000** (multiplica por 1000 el oro que tenés, desde 0 deja 1.000; cuenta como oro ganado, así sube la profundidad), **Adelantar 1 h** (mismo cálculo que el progreso offline, con su aviso) y **forzar un cofre** de cada rareza. Con tres pulsaciones de Oro ×1000 llegás a Abismo y con dos ya se puede volver a la superficie. Código en `game/debug_panel.gd`.
+Solo existe en builds de debug (`OS.is_debug_build()`): el export release (el default de `tools/export_web.ps1`) no lo crea; con `-DebugBuild` sí. Botón DBG arriba a la izquierda, con: **Oro ×1000** (multiplica por 1000 el oro que tenés, desde 0 deja 1.000; cuenta como oro ganado, así sube la profundidad), **Adelantar 1 h** (mismo cálculo que el progreso offline, con su aviso), **forzar un cofre** de cada rareza, y una línea con el bonus de botín bruto, el efectivo y el techo. Con tres pulsaciones de Oro ×1000 llegás a Abismo y con dos ya se puede volver a la superficie. Código en `game/debug_panel.gd`.
 
 ## Reglas para Claude
 - Antes de cambios grandes, proponé el plan en pocas líneas y esperá el OK.

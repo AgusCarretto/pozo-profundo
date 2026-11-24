@@ -12,7 +12,7 @@ signal hit_landed(amount: float)
 signal generator_bought(index: int, count: int)
 signal pick_upgraded(level: int)
 ## Cayó un cofre de la rareza `rarity` (índice de loot_table()) y sumó `bonus` (0.04 = +4%)
-## al bonus de botín de la partida.
+## al bonus BRUTO de botín de la partida (el efectivo sube menos: rendimientos decrecientes).
 signal loot_dropped(rarity: int, bonus: float)
 ## Volviste a la superficie y ganaste `relics_gained` reliquias.
 signal prestiged(relics_gained: int)
@@ -42,8 +42,9 @@ var pick_level: int = 0
 ## Oro ganado en la partida actual (producción, golpes y botín). No baja al gastar:
 ## de él sale la profundidad, y por eso un gasto nunca te hace retroceder de bioma.
 var run_gold: float = 0.0
-## Bonus de botín acumulado en la partida (0.27 = +27%): cada cofre suma el suyo. Se reinicia
-## al volver a la superficie.
+## Bonus de botín BRUTO acumulado en la partida (0.27 = +27%): cada cofre suma el suyo. Se
+## reinicia al volver a la superficie. Lo que de verdad multiplica el oro es el efectivo
+## (loot_bonus_effective()), que rinde cada vez menos y tiene techo; el jugador ve ese.
 var loot_bonus: float = 0.0
 ## Reliquias acumuladas: sobreviven al prestigio y dan oro permanente.
 var relics: int = 0
@@ -52,7 +53,7 @@ var pending_offline_report: Dictionary = {}
 ## Azar del botín. Los tests le fijan la semilla para repetir una tirada.
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
-## Multiplicador global de oro: bioma x (1 + botín) x (1 + 0.25 x reliquias).
+## Multiplicador global de oro: bioma x (1 + botín efectivo) x (1 + 0.25 x reliquias).
 ## Se calcula en cada lectura; no se asigna.
 var multiplier: float:
 	get:
@@ -73,6 +74,8 @@ var _biome_meters_each: float = 0.0
 var _biome_growth: float = 1.0
 var _loot_hit_chance: float = 0.0
 var _loot_second_chance: float = 0.0
+## Techo del bonus de botín efectivo (3 = +300%). 0 = sin botín.
+var _loot_bonus_cap: float = 0.0
 ## Rarezas de los cofres: {id, name, weight, bonus}. Vacía = no hay botín.
 var _rarities: Array[Dictionary] = []
 var _rarity_weights: Array[float] = []
@@ -185,12 +188,14 @@ func load_balance(balance: Dictionary) -> bool:
 	_rarity_weights = []
 	_loot_hit_chance = 0.0
 	_loot_second_chance = 0.0
+	_loot_bonus_cap = 0.0
 	if not (parsed_loot as Dictionary).is_empty():
 		_rarities.assign(parsed_loot["rarities"])
 		for rarity: Dictionary in _rarities:
 			_rarity_weights.append(rarity["weight"])
 		_loot_hit_chance = parsed_loot["chance_per_hit"]
 		_loot_second_chance = parsed_loot["chance_per_second"]
+		_loot_bonus_cap = parsed_loot["bonus_cap"]
 	reset()
 	return true
 
@@ -266,13 +271,24 @@ func loot_table() -> Array[Dictionary]:
 	return table
 
 
-## Multiplicador de oro del botín acumulado en la partida: 1 + loot_bonus.
+## Techo del bonus de botín efectivo (3 = +300%). 0 si el balance no tiene botín.
+func loot_bonus_cap() -> float:
+	return _loot_bonus_cap
+
+
+## Bonus de botín EFECTIVO (0.27 = +27%): el bruto acumulado con rendimientos decrecientes,
+## cap * (1 - e^(-bruto / cap)). Es el que multiplica el oro y el que se le muestra al jugador.
+func loot_bonus_effective() -> float:
+	return EconomyMath.loot_bonus_effective(loot_bonus, _loot_bonus_cap)
+
+
+## Multiplicador de oro del botín acumulado en la partida: 1 + bonus efectivo.
 func loot_multiplier() -> float:
-	return 1.0 + loot_bonus
+	return 1.0 + loot_bonus_effective()
 
 
-## Suelta un cofre de la rareza `rarity` (índice de loot_table()): su bonus se suma al bonus de
-## botín de la partida. No da oro. Un índice inexistente no hace nada. Lo usan el sorteo y las
+## Suelta un cofre de la rareza `rarity` (índice de loot_table()): su bonus se suma al bonus
+## bruto de botín de la partida (el efectivo sube menos: ver loot_bonus_effective()). No da oro. Un índice inexistente no hace nada. Lo usan el sorteo y las
 ## herramientas de debug.
 func drop_loot(rarity: int) -> void:
 	if rarity < 0 or rarity >= _rarities.size():
@@ -411,7 +427,7 @@ func tick(delta: float) -> void:
 	if rate <= 0.0:
 		return
 	_earn(rate * delta)
-	# 2% por segundo: en un tick de `delta` segundos la chance es 1 - (1 - 2%)^delta,
+	# La chance por segundo es p: en un tick de `delta` segundos la chance es 1 - (1 - p)^delta,
 	# así un frame lento no tira menos cofres que varios rápidos.
 	_roll_loot(1.0 - pow(1.0 - _loot_second_chance, delta))
 	gold_changed.emit(gold)
@@ -627,10 +643,10 @@ func _read_biomes(balance: Dictionary) -> Variant:
 	return numbers
 
 
-## Lee la sección opcional "loot": {chance_per_hit, chance_per_second, rarities: [{id, name, weight, bonus}]}.
+## Lee la sección opcional "loot": {chance_per_hit, chance_per_second, bonus_cap, rarities: [{id, name, weight, bonus}]}.
 ## Mismo contrato que _read_numbers: {} si no está, null si es inválida.
 func _read_loot(balance: Dictionary) -> Variant:
-	var numbers: Variant = _read_numbers(balance, "loot", [], ["chance_per_hit", "chance_per_second"])
+	var numbers: Variant = _read_numbers(balance, "loot", ["bonus_cap"], ["chance_per_hit", "chance_per_second"])
 	if numbers == null or (numbers as Dictionary).is_empty():
 		return numbers
 	for key: String in ["chance_per_hit", "chance_per_second"]:

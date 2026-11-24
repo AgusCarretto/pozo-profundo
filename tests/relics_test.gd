@@ -48,8 +48,13 @@ func _make(balance: Dictionary = TestBalance.make(["loot"])) -> EconomyScript:
 
 
 ## Deja una partida "armada" para ver qué se pierde y qué se conserva al volver a la superficie.
+## Lleva la sección de botín (sin ella el bonus de botín no cuenta) pero con los cofres apagados:
+## el bonus se fija a mano y el azar no lo mueve.
 func _loaded_run(run_gold: float) -> EconomyScript:
-	var e: EconomyScript = _make()
+	var balance: Dictionary = TestBalance.make()
+	balance["loot"]["chance_per_hit"] = 0.0
+	balance["loot"]["chance_per_second"] = 0.0
+	var e: EconomyScript = _make(balance)
 	e.run_gold = run_gold
 	e.gold = 5000.0
 	e.owned[0] = 3
@@ -133,7 +138,8 @@ func _test_prestige_resets_the_run_and_keeps_relics() -> void:
 	_section("Volver a la superficie")
 	var e: EconomyScript = _loaded_run(GOLD_AT_300M)
 	_check_eq(e.biome_name(e.biome_index()), "Cristal", "se parte desde Cristal")
-	_check_near(e.multiplier, 2.25 * 1.5, "antes de subir: Cristal x2.25 por botín +50% x1.5 = x3.375")
+	# El botín es +50% BRUTO: efectivo 3 x (1 - e^(-0.5 / 3)) = +46.06%, o sea x1.4606.
+	_check_near(e.multiplier, 2.25 * (1.0 + 3.0 * (1.0 - exp(-0.5 / 3.0))), "antes de subir: Cristal x2.25 por botín +50% bruto (x1.4606) = x3.286")
 	_check_eq(e.prestige(), 2, "prestige() devuelve las reliquias ganadas (2)")
 	_check_eq(e.relics, 2, "ahora hay 2 reliquias")
 	_check_eq(e.loot_bonus, 0.0, "el bonus de botín se reinicia con la partida")
