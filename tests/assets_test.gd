@@ -46,6 +46,7 @@ func _initialize() -> void:
 	_test_floor_is_seen_from_above()
 	_test_background_is_low_contrast()
 	_test_rock_chips()
+	_test_orbit_runes()
 	_test_tiny_dungeon_tiles()
 	_test_ui_pack_and_font()
 	_test_credits()
@@ -380,6 +381,43 @@ func _test_rock_chips() -> void:
 			if sheets[i] != null and sheets[j] != null and _same_pixels(sheets[i], sheets[j]):
 				distinct = false
 	_check(distinct, "las astillas de cada bioma son de su color (todas distintas)")
+
+
+## Runas que orbitan la roca (excavadora rúnica): una hoja de 16x16 por bioma con 4 glifos de 8x8, pintados
+## con los colores de runa del bioma (rune y rune_light de BiomePalette) y el contorno.
+func _test_orbit_runes() -> void:
+	_section("Runas que orbitan, del color de cada bioma")
+	var pairs: Dictionary = {}
+	for id: String in BiomePalette.IDS:
+		var colors: Dictionary = BiomePalette.of(id)
+		_check(colors.has("rune") and colors.has("rune_light"), "'%s' tiene colores de runa" % id)
+		if not (colors.has("rune") and colors.has("rune_light")):
+			continue
+		pairs["%s|%s" % [colors["rune"].to_html(), colors["rune_light"].to_html()]] = true
+		var img: Image = _load_image(GENERATED_DIR + "runes_%s.png" % id)
+		if img == null:
+			_check(false, "existe runes_%s.png" % id)
+			continue
+		_check_eq(img.get_size(), Vector2i(16, 16), "runes_%s es una hoja de 16x16" % id)
+		var allowed: Array[Color] = [colors["rune"], colors["rune_light"], Palette.OUTLINE]
+		var foreign: int = 0
+		var strokes: Array[int] = [0, 0, 0, 0]
+		var shades: int = 0
+		for y: int in range(16):
+			for x: int in range(16):
+				var pixel: Color = img.get_pixel(x, y)
+				if pixel.a == 0.0:
+					continue
+				if not allowed.has(pixel) or pixel.a < 1.0:
+					foreign += 1
+				if pixel == colors["rune_light"]:
+					strokes[(x / 8) + 2 * (y / 8)] += 1
+				if pixel == colors["rune"]:
+					shades += 1
+		_check_eq(foreign, 0, "runes_%s usa solo los colores de runa del bioma y el contorno" % id)
+		_check(strokes.all(func(count: int) -> bool: return count >= 5), "runes_%s tiene un glifo en cada cuarto (%s)" % [id, str(strokes)])
+		_check(shades > 0, "runes_%s tiene dos tonos" % id)
+	_check_eq(pairs.size(), BiomePalette.IDS.size(), "cada bioma tiene runas de otro color")
 
 
 func _test_tiny_dungeon_tiles() -> void:

@@ -87,6 +87,22 @@ const BLAST_SIZE: float = 220.0
 const BLAST_TIME: float = 0.35
 const BLAST_COLOR: Color = Color(1.0, 0.68, 0.2)
 
+## Excavadoras rúnicas: una runa por excavadora (hasta ORBIT_RUNES_MAX) orbita la roca, con un aura suave del
+## color de runa del bioma. La órbita es una elipse chata (la mina se ve desde arriba en perspectiva): las runas de
+## atrás se ven más chicas y apagadas, las de adelante enteras.
+const ORBIT_RUNES_MAX: int = 6
+## Lo que vive en la capa de efectos pero es parte de la escena (las runas): clear_effects no lo saca.
+const PERSISTENT_META: StringName = &"persistent"
+const ORBIT_SCALE: int = 7
+const ORBIT_SPEED: float = 0.7
+## Radios de la órbita como parte del tamaño de la roca (horizontal, vertical).
+const ORBIT_RADIUS: Vector2 = Vector2(0.62, 0.3)
+const ORBIT_BOB: float = 5.0
+const ORBIT_BACK_SCALE: float = 0.75
+const ORBIT_BACK_ALPHA: float = 0.5
+const ORBIT_GLOW_SIZE: float = 2.6
+const ORBIT_GLOW_ALPHA: float = 0.75
+
 ## Mineros picando: cada uno tiene un pico (pick.png, a escala PICK_SCALE) en la mano del lado de la roca
 ## y lo usa en loop: lo levanta despacio, lo baja de golpe y vuelve. Cada minero tiene su fase y un período
 ## apenas distinto: nunca pican todos juntos.
@@ -160,6 +176,9 @@ var _next_chip: int = 0
 var _dynamite_count: int = 0
 var _excavator_count: int = 0
 var _dynamite_clock: float = 0.0
+## Las runas que orbitan (fijas: se muestran las que hagan falta) y sus auras.
+var _orbit_runes: Array[TextureRect] = []
+var _orbit_glows: Array[TextureRect] = []
 ## El pico de cada minero y para qué lado lo usa (1 = la roca está a su derecha, -1 = a su izquierda).
 var _picks: Array[TextureRect] = []
 var _pick_sides: Array[float] = []
@@ -198,6 +217,8 @@ func _ready() -> void:
 	for index: int in range(GEM_EMITTERS):
 		_gem_emitters.append(_make_emitter("Gems%d" % index, gem_texture, false))
 	_apply_particle_amounts()
+	for index: int in range(ORBIT_RUNES_MAX):
+		_make_orbit_rune(index)
 	show_biome(DEFAULT_BIOME)
 	_layout()
 
@@ -252,7 +273,7 @@ func _apply_shake() -> void:
 ## escena (volver a la superficie) o una captura limpia.
 func clear_effects() -> void:
 	for child: Node in _fx.get_children():
-		if not (child is CPUParticles2D):
+		if not (child is CPUParticles2D) and not child.has_meta(PERSISTENT_META):
 			child.queue_free()
 	_dynamite_clock = 0.0
 	for emitter: CPUParticles2D in _chip_emitters + _gem_emitters:
@@ -444,6 +465,7 @@ func _process(delta: float) -> void:
 	else:
 		_dynamite_clock = 0.0
 	var now: float = Time.get_ticks_msec() / 1000.0
+	_move_orbit_runes(now)
 	for index: int in range(_picks.size()):
 		if not miner_sprites[index].visible:
 			continue
@@ -451,6 +473,61 @@ func _process(delta: float) -> void:
 		var period: float = SWING_PERIOD * (1.0 + 0.08 * float(index % 3 - 1))
 		var progress: float = fposmod(now / period + index * 0.618, 1.0)
 		_picks[index].rotation = pick_angle(progress) * _pick_sides[index]
+
+
+## Una runa de la órbita: un glifo de la hoja runes_<bioma>.png (cuarto index % 4) con un aura detrás.
+func _make_orbit_rune(index: int) -> void:
+	var rune: TextureRect = TextureRect.new()
+	rune.name = "OrbitRune%d" % index
+	var atlas: AtlasTexture = AtlasTexture.new()
+	atlas.region = Rect2((index % 2) * 8, ((index / 2) % 2) * 8, 8, 8)
+	rune.texture = atlas
+	rune.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	rune.stretch_mode = TextureRect.STRETCH_SCALE
+	rune.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rune.visible = false
+	rune.set_meta(PERSISTENT_META, true)
+	var glow: TextureRect = TextureRect.new()
+	glow.name = "Aura"
+	glow.texture = GLOW_TEXTURE
+	glow.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	glow.stretch_mode = TextureRect.STRETCH_SCALE
+	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	glow.show_behind_parent = true
+	var additive: CanvasItemMaterial = CanvasItemMaterial.new()
+	additive.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	glow.material = additive
+	rune.add_child(glow)
+	_fx.add_child(rune)
+	_orbit_runes.append(rune)
+	_orbit_glows.append(glow)
+
+
+## Muestra una runa por excavadora (hasta el tope), repartidas en la órbita y girando.
+func _move_orbit_runes(now: float) -> void:
+	var shown: int = mini(_excavator_count, _orbit_runes.size())
+	var rock_rect: Rect2 = Rect2(_base_positions.get(_rock, _rock.position), _rock.size)
+	var pixel: float = maxf(roundf(ORBIT_SCALE * _unit), 1.0)
+	var rune_size: Vector2 = Vector2(8.0, 8.0) * pixel
+	for index: int in range(_orbit_runes.size()):
+		var rune: TextureRect = _orbit_runes[index]
+		rune.visible = index < shown
+		if not rune.visible:
+			continue
+		var angle: float = now * ORBIT_SPEED + index * TAU / shown
+		var center: Vector2 = rock_rect.get_center() + Vector2(cos(angle), sin(angle)) * rock_rect.size * ORBIT_RADIUS
+		center.y += sin(now * 3.0 + index) * ORBIT_BOB * _unit
+		# adelante (abajo en la elipse) = entera; atrás (arriba) = más chica y apagada
+		var front: float = (sin(angle) + 1.0) * 0.5
+		rune.size = rune_size
+		rune.pivot_offset = rune_size * 0.5
+		rune.scale = Vector2.ONE * lerpf(ORBIT_BACK_SCALE, 1.0, front)
+		rune.modulate.a = lerpf(ORBIT_BACK_ALPHA, 1.0, front)
+		rune.position = (center - rune_size * 0.5).round()
+		var glow: TextureRect = _orbit_glows[index]
+		glow.size = rune_size * ORBIT_GLOW_SIZE
+		glow.position = (rune_size - glow.size) * 0.5
 
 
 ## Ángulo del pico (radianes, positivo = hacia la roca) en el momento `progress` (0 a 1) de un golpe.
@@ -482,6 +559,11 @@ func show_biome(id: String) -> void:
 	var chips: Texture2D = load(SPRITE_DIR + "chips_%s.png" % known) as Texture2D
 	for emitter: CPUParticles2D in _chip_emitters:
 		emitter.texture = chips
+	var runes: Texture2D = load(SPRITE_DIR + "runes_%s.png" % known) as Texture2D
+	var rune_color: Color = BiomePalette.of(known)["rune"]
+	for index: int in range(_orbit_runes.size()):
+		(_orbit_runes[index].texture as AtlasTexture).atlas = runes
+		_orbit_glows[index].modulate = Color(rune_color, ORBIT_GLOW_ALPHA)
 	queue_redraw()
 
 

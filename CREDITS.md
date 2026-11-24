@@ -13,7 +13,7 @@ Cada fila dice dónde vive el asset con una ruta entre comillas invertidas; `tes
 | Interface Sounds 1.0 (clicks, cristales y avisos) | Kenney | CC0 1.0 | https://kenney.nl/assets/interface-sounds | `assets/audio/interface_sounds/` (solo los usados): pestañas, modos, carteles, cofres, prestigio y bioma nuevo |
 | RPG Audio (monedas) | Kenney | CC0 1.0 | https://kenney.nl/assets/rpg-audio | `assets/audio/rpg_audio/` (solo los usados): compra de la cuadrilla |
 | Game Icons (íconos blancos 2x) | Kenney | CC0 1.0 | https://kenney.nl/assets/game-icons | `assets/ui/game_icons/` (solo los usados): silencio (parlante encendido y tachado) y opciones (engranaje) del HUD |
-| Particle Pack 1.1 (brillos) | Kenney | CC0 1.0 | https://kenney.nl/assets/particle-pack | `assets/particles/particle_pack/` (solo los brillos usados, sin tocar): destello de la dinamita. Las astillas y gemas son propias (pixel art) |
+| Particle Pack 1.1 (brillos) | Kenney | CC0 1.0 | https://kenney.nl/assets/particle-pack | `assets/particles/particle_pack/` (solo los brillos usados, sin tocar): destello de la dinamita y aura de las runas. Las astillas y gemas son propias (pixel art) |
 
 
 ## Motor
@@ -23,4 +23,4 @@ Cada fila dice dónde vive el asset con una ruta entre comillas invertidas; `tes
 ## Assets propios
 
 - `icon.svg` — ícono del proyecto, creado para Pozo Profundo.
-- `assets/sprites/generated/` — sprites de 16×16 dibujados por código con la paleta de Tiny Dungeon (`game/palette.gd`) por `tools/generate_sprites.gd`: roca, fondo y astillas de cada bioma, taladro, gólem, dinamita, runas, moneda, pico y gema. Los mineros de ese mismo directorio son personajes de Tiny Dungeon recoloreados por el mismo script.
+- `assets/sprites/generated/` — sprites de 16×16 dibujados por código con la paleta de Tiny Dungeon (`game/palette.gd`) por `tools/generate_sprites.gd`: roca, fondo, astillas y runas que orbitan de cada bioma, taladro, gólem, dinamita, runas, moneda, pico y gema. Los mineros de ese mismo directorio son personajes de Tiny Dungeon recoloreados por el mismo script.

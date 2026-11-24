@@ -9,6 +9,7 @@ func _run_tests() -> void:
 	await _test_crew_pops_in()
 	await _test_miners_swing()
 	await _test_dynamite()
+	await _test_orbit_runes()
 
 
 func _test_buttons_bounce() -> void:
@@ -191,10 +192,10 @@ func _test_dynamite() -> void:
 		_check(glow.material is CanvasItemMaterial and (glow.material as CanvasItemMaterial).blend_mode == CanvasItemMaterial.BLEND_MODE_ADD, "y suma luz (mezcla aditiva)")
 		_check_eq(glow.mouse_filter, Control.MOUSE_FILTER_IGNORE, "y no come toques")
 
-	# Que se apague el destello de la última explosión antes de mirar con reducir efectos.
-	await _wait(0.6)
+	# Se prende reducir efectos y se espera a que se apague cualquier destello de antes (dura BLAST_TIME):
+	# un cartucho con la mecha ya prendida puede explotar justo en el cambio.
 	_settings.reduce_effects = true
-	await process_frame
+	await _wait(0.6)
 	points.clear()
 	var glow_with_reduce: bool = false
 	deadline = Time.get_ticks_msec() + 3000
@@ -211,3 +212,73 @@ func _test_dynamite() -> void:
 	_economy.reset()
 	_economy.gold_changed.emit(_economy.gold)
 	await _wait(0.8)
+
+
+func _orbit_runes() -> Array[TextureRect]:
+	var runes: Array[TextureRect] = []
+	for child: Node in _fx().get_children():
+		if child is TextureRect and str(child.name).begins_with("OrbitRune") and (child as TextureRect).visible:
+			runes.append(child as TextureRect)
+	return runes
+
+
+func _test_orbit_runes() -> void:
+	_section("Excavadoras rúnicas: runas que orbitan la roca")
+	const BiomePalette := preload("res://game/biome_palette.gd")
+	var mine: Control = _mine()
+	_economy.reset()
+	_economy.gold_changed.emit(_economy.gold)
+	await _wait(0.1)
+	_check_eq(_orbit_runes().size(), 0, "sin excavadoras no hay runas")
+	_economy.owned[4] = 3
+	_economy.gold_changed.emit(_economy.gold)
+	await _wait(0.1)
+	var runes: Array[TextureRect] = _orbit_runes()
+	_check_eq(runes.size(), 3, "con 3 excavadoras orbitan 3 runas")
+	if runes.size() != 3:
+		return
+	var atlas: AtlasTexture = runes[0].texture as AtlasTexture
+	_check(atlas != null and atlas.atlas.resource_path.ends_with("runes_earth.png"), "son glifos de la hoja de runas de Tierra")
+	_check_eq(runes[0].mouse_filter, Control.MOUSE_FILTER_IGNORE, "no comen toques")
+	var rock_rect: Rect2 = _rock().get_rect()
+	var first: Array[Vector2] = []
+	var near: bool = true
+	for rune: TextureRect in runes:
+		var center: Vector2 = rune.position + rune.size * 0.5
+		first.append(center)
+		var relative: Vector2 = (center - rock_rect.get_center()) / rock_rect.size
+		if relative.length() < 0.2 or relative.length() > 0.75:
+			near = false
+	_check(near, "giran pegadas a la roca (%s)" % str(first))
+	_check(first[0].distance_to(first[1]) > rock_rect.size.x * 0.2 and first[1].distance_to(first[2]) > rock_rect.size.x * 0.2, "repartidas alrededor, no amontonadas")
+	await _wait(0.4)
+	var moved: int = 0
+	for index: int in range(runes.size()):
+		if (runes[index].position + runes[index].size * 0.5).distance_to(first[index]) > 2.0:
+			moved += 1
+	_check_eq(moved, 3, "y se mueven: orbitan")
+	var glows: Array[Node] = runes[0].find_children("*", "TextureRect", true, false)
+	_check(not glows.is_empty(), "cada runa tiene un aura")
+	if not glows.is_empty():
+		var glow: TextureRect = glows[0] as TextureRect
+		_check(glow.texture.resource_path.ends_with("circle_05.png") and glow.material is CanvasItemMaterial and (glow.material as CanvasItemMaterial).blend_mode == CanvasItemMaterial.BLEND_MODE_ADD, "un brillo suave que suma luz")
+		# Las excavadoras producen mucho: en la espera la mina puede haber bajado a Roca. Se compara con el bioma
+		# que se está mostrando.
+		var rune_color: Color = BiomePalette.of(str(mine.get("biome_id")))["rune"]
+		_check(Color(glow.modulate, 1.0).is_equal_approx(Color(rune_color, 1.0)), "del color de las runas del bioma (%s, esperado %s)" % [glow.modulate.to_html(), rune_color.to_html()])
+		mine.call("show_biome", "crystal")
+		_check((runes[0].texture as AtlasTexture).atlas.resource_path.ends_with("runes_crystal.png"), "en Cristal las runas son las de Cristal")
+		_check(Color(glow.modulate, 1.0).is_equal_approx(Color(BiomePalette.of("crystal")["rune"], 1.0)), "y el aura cambia de color")
+		mine.call("show_biome", "earth")
+	mine.call("clear_effects")
+	await process_frame
+	_check_eq(_orbit_runes().size(), 3, "limpiar los efectos no se lleva las runas (son parte de la escena)")
+	_economy.owned[4] = 500
+	_economy.gold_changed.emit(_economy.gold)
+	await _wait(0.1)
+	var cap: int = int(mine.get_script().get_script_constant_map().get("ORBIT_RUNES_MAX", 0))
+	_check(cap >= 3 and cap <= 8, "hay un tope de runas (%d)" % cap)
+	_check_eq(_orbit_runes().size(), cap, "con muchas excavadoras orbitan %d, no más" % cap)
+	_economy.reset()
+	_economy.gold_changed.emit(_economy.gold)
+	await _wait(0.1)

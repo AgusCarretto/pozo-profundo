@@ -44,6 +44,7 @@ func _initialize() -> void:
 		_save(_rock(id), "rock_%s.png" % id)
 		_save(_background(id), "bg_%s.png" % id)
 		_save(_chips(id), "chips_%s.png" % id)
+		_save(_orbit_runes(id), "runes_%s.png" % id)
 	_save(_drill(), "drill.png")
 	_save(_golem(), "golem.png")
 	_save(_dynamite(), "dynamite.png")
@@ -502,6 +503,33 @@ func _chips(id: String) -> Image:
 	for index: int in range(CHIPS.size()):
 		var origin: Vector2i = Vector2i((index % 2) * 8 + 2, (index / 2) * 8 + 2)
 		var rows: Array = CHIPS[index]
+		for y: int in range(rows.size()):
+			for x: int in range(str(rows[y]).length()):
+				var key: String = str(rows[y])[x]
+				if keys.has(key):
+					img.set_pixel(origin.x + x, origin.y + y, keys[key])
+	_outline(img)
+	return img
+
+
+## Runas que orbitan la roca (excavadora rúnica): 4 glifos de 5x5 en una hoja de 16x16 (uno por cuarto de 8x8),
+## trazo en rune_light y sombra en rune (los colores de runa del bioma), con contorno. La escena usa cada cuarto
+## como un dibujo (AtlasTexture).
+const RUNE_GLYPHS: Array = [
+	["WV...", "WWV..", "WVWV.", "WWV..", "WV..."],
+	["..W..", ".WWW.", "WVWVW", "..W..", "..WV."],
+	["W...W", "VW.WV", "..W..", "VW.WV", "W...W"],
+	["..W..", ".WVW.", "WV.VW", ".WVW.", "..W.."],
+]
+
+
+func _orbit_runes(id: String) -> Image:
+	var colors: Dictionary = BiomePalette.of(id)
+	var keys: Dictionary = { "W": colors["rune_light"], "V": colors["rune"] }
+	var img: Image = _blank()
+	for index: int in range(RUNE_GLYPHS.size()):
+		var origin: Vector2i = Vector2i((index % 2) * 8 + 1, (index / 2) * 8 + 1)
+		var rows: Array = RUNE_GLYPHS[index]
 		for y: int in range(rows.size()):
 			for x: int in range(str(rows[y]).length()):
 				var key: String = str(rows[y])[x]

@@ -11,36 +11,42 @@ const Palette := preload("res://game/palette.gd")
 ##   rock_light / rock / rock_dark: las tres sombras de la roca; vein / vein_light: las vetas.
 ##   bg / bg_dark / bg_light / bg_spark: el fondo de la mina (base, motas oscuras, motas claras, destellos).
 ##   accent: el color de la barra de profundidad y otros detalles de la UI.
+##   rune / rune_light: las runas que orbitan la roca (excavadora rúnica) y su aura; un par distinto por bioma.
 const BY_ID: Dictionary = {
 	"earth": {
 		"rock_light": Palette.ORANGE, "rock": Palette.TERRA, "rock_dark": Palette.MAROON,
 		"vein": Palette.GOLD, "vein_light": Palette.YELLOW,
 		"bg": Palette.MAROON, "bg_dark": Palette.OUTLINE, "bg_light": Palette.TERRA, "bg_spark": Palette.ORANGE,
 		"accent": Palette.GOLD,
+		"rune": Palette.GOLD, "rune_light": Palette.YELLOW,
 	},
 	"rock": {
 		"rock_light": Palette.STEEL_LIGHT, "rock": Palette.STEEL, "rock_dark": Palette.SLATE,
 		"vein": Palette.TERRA, "vein_light": Palette.CLAY,
 		"bg": Palette.SLATE, "bg_dark": Palette.NAVY, "bg_light": Palette.SLATE_LIGHT, "bg_spark": Palette.STEEL,
 		"accent": Palette.STEEL, # no más claro: el texto blanco de la barra de profundidad tiene que leerse encima
+		"rune": Palette.STEEL_LIGHT, "rune_light": Palette.WHITE,
 	},
 	"crystal": {
 		"rock_light": Palette.STEEL, "rock": Palette.SLATE_LIGHT, "rock_dark": Palette.SLATE,
 		"vein": Palette.BLUE, "vein_light": Palette.CYAN,
 		"bg": Palette.NAVY, "bg_dark": Palette.OUTLINE, "bg_light": Palette.SLATE, "bg_spark": Palette.BLUE,
 		"accent": Palette.CYAN,
+		"rune": Palette.CYAN, "rune_light": Palette.WHITE,
 	},
 	"magma": {
 		"rock_light": Palette.RED, "rock": Palette.MAROON, "rock_dark": Palette.OUTLINE,
 		"vein": Palette.GOLD, "vein_light": Palette.YELLOW,
 		"bg": Palette.OUTLINE, "bg_dark": Palette.NAVY, "bg_light": Palette.MAROON, "bg_spark": Palette.RED,
 		"accent": Palette.RED,
+		"rune": Palette.RED, "rune_light": Palette.SALMON,
 	},
 	"abyss": {
 		"rock_light": Palette.PINK, "rock": Palette.PURPLE, "rock_dark": Palette.OUTLINE,
 		"vein": Palette.MINT, "vein_light": Palette.AQUA,
 		"bg": Palette.NAVY, "bg_dark": Palette.OUTLINE, "bg_light": Palette.PURPLE, "bg_spark": Palette.PURPLE,
 		"accent": Palette.PINK,
+		"rune": Palette.PINK, "rune_light": Palette.AQUA,
 	},
 }
 

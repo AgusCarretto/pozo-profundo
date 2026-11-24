@@ -97,7 +97,10 @@ func _emitting(emitters: Array[CPUParticles2D]) -> int:
 
 
 func _glows() -> Array[Node]:
-	return _fx().find_children("*", "TextureRect", true, false).filter(func(node: Node) -> bool:
+	# Solo los hijos directos de la capa: las auras de las runas (también circle_05) van dentro de cada runa.
+	return _fx().get_children().filter(func(node: Node) -> bool:
+		if not (node is TextureRect):
+			return false
 		return (node as TextureRect).texture != null and (node as TextureRect).texture.resource_path.ends_with("circle_05.png") and not node.is_queued_for_deletion())
 
 
