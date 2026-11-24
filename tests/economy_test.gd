@@ -35,6 +35,8 @@ func _initialize() -> void:
 	_test_from_dict_tolerates_garbage()
 	_test_load_balance_validation()
 	_test_real_balance_file()
+	_test_tick_realtime()
+	await _test_slow_frames_still_credit_real_time()
 	for node: Node in _nodes:
 		node.free()
 	_finish()
@@ -282,6 +284,45 @@ func _test_load_balance_validation() -> void:
 	_check_eq(e.load_balance(three), true, "un balance válido con 3 generadores carga")
 	_check_eq(e.generator_count(), 3, "ahora hay 3")
 	_check_eq(e.gold, 0.0, "cargar un balance reinicia el estado")
+
+
+func _test_tick_realtime() -> void:
+	_section("Producción según el reloj real (tick_realtime)")
+	var e: EconomyScript = _make()
+	e.owned[0] = 10 # 10 oro/s
+	e.tick_realtime(1000000)
+	_check_eq(e.gold, 0.0, "la primera llamada solo fija la referencia (no acredita el tiempo desde que arrancó el motor)")
+	e.tick_realtime(3500000)
+	_check_near(e.gold, 25.0, "2.5 s * 10 oro/s = 25")
+	e.tick_realtime(3000000)
+	_check_near(e.gold, 25.0, "un reloj que retrocede no suma ni resta")
+	e.tick_realtime(4000000)
+	_check_near(e.gold, 35.0, "y después de retroceder, la referencia es la nueva: 1 s más = +10")
+	e.tick_realtime(4000000)
+	_check_near(e.gold, 35.0, "dos llamadas con el mismo instante no suman nada")
+
+
+## Godot recorta el delta de _process a ~0.13 s por frame. A pocos fps (celulares lentos,
+## pestañas web en segundo plano) la cuadrilla produciría una fracción de lo que debe.
+## Este test usa el autoload real y un frame de ~600 ms.
+func _test_slow_frames_still_credit_real_time() -> void:
+	_section("Frames lentos acreditan el tiempo real")
+	var live: Node = root.get_node_or_null("Economy")
+	_check(live != null, "existe el autoload Economy")
+	if live == null:
+		return
+	# En modo --script los autoloads recién corren _ready() después del primer frame.
+	await process_frame
+	live.reset()
+	live.owned[0] = 10 # 10 Mineros = 10 oro/s con el balance real
+	await process_frame
+	var gold_before: float = live.gold
+	OS.delay_msec(600) # el frame siguiente tarda ~600 ms
+	await process_frame
+	await process_frame
+	var gained: float = live.gold - gold_before
+	_check(gained >= 5.0, "600 ms de frame lento acreditan ~6 de oro, no ~1.3 (ganó %.2f)" % gained)
+	live.reset()
 
 
 func _test_real_balance_file() -> void:

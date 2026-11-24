@@ -33,6 +33,8 @@ var multiplier: float = 1.0
 ## Motivo por el que se rechazó el último balance ("" si cargó bien).
 var last_error: String = ""
 
+## Instante (µs) del último tick de _process; 0 = todavía sin referencia.
+var _last_tick_usec: int = 0
 var _generators: Array[Dictionary] = []
 var _cost_growth: float = 0.0
 var _pick: Dictionary = {}
@@ -48,8 +50,10 @@ func _ready() -> void:
 		save.register_section(SAVE_SECTION, to_dict, from_dict)
 
 
-func _process(delta: float) -> void:
-	tick(delta)
+func _process(_delta: float) -> void:
+	# No se usa `delta`: Godot lo recorta a ~0.13 s por frame, y a pocos fps (celulares
+	# lentos, pestañas web en segundo plano) la cuadrilla produciría una fracción de lo debido.
+	tick_realtime(Time.get_ticks_usec())
 
 
 # --- Balance -----------------------------------------------------------------
@@ -146,6 +150,14 @@ func gold_per_second() -> float:
 	for index: int in range(_generators.size()):
 		total += generator_output(index)
 	return total
+
+
+## Producción pasiva según un reloj monotónico (µs, p. ej. Time.get_ticks_usec()).
+## La primera llamada solo fija la referencia; un reloj que retrocede no suma ni resta.
+func tick_realtime(now_usec: int) -> void:
+	if _last_tick_usec > 0 and now_usec > _last_tick_usec:
+		tick((now_usec - _last_tick_usec) / 1000000.0)
+	_last_tick_usec = now_usec
 
 
 ## Producción pasiva: suma oro/s * delta. Se ignora un delta no positivo.
