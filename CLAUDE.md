@@ -56,7 +56,7 @@ Números grandes con sufijos (K, M, B, T...).
 - Escribí código pensado para reutilizar: lo de `core/` no debe depender de nada de `game/`.
 
 ## Hoja de ruta
-- [ ] F0 Setup: proyecto, git, estructura, export web funcionando.
+- [x] F0 Setup: proyecto, git, estructura, export web funcionando.
 - [ ] F1 Loop principal: golpe, cuadrilla, pico, biomas, botín, prestigio, guardado local y offline.
 - [ ] F2 Jugo y assets: sprites, partículas, tweens, SFX, música, fuente pixel.
 - [ ] F3 Contenido: logros, eventos, más mejoras.
