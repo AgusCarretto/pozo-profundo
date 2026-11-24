@@ -5,6 +5,8 @@ extends PanelContainer
 ## código (build) y se actualiza con show_offer. Verde = se puede comprar, gris = no alcanza (lo decide el
 ## tema según `disabled`). Los estilos salen del tema (ui/theme.tres).
 
+const Juice := preload("res://game/juice.gd")
+
 ## Alto mínimo de la fila (px de diseño): entra el botón de compra de 96 px con su margen.
 const ROW_MIN_HEIGHT: float = 124.0
 const ICON_SIZE: float = 80.0
@@ -60,6 +62,7 @@ func build(icon_texture: Texture2D) -> void:
 	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	button.focus_mode = Control.FOCUS_NONE
 	button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+	button.pressed.connect(func() -> void: Juice.bounce(button))
 	box.add_child(button)
 
 

@@ -30,6 +30,8 @@ func _initialize() -> void:
 	await _test_shake()
 	await _test_reduce_effects()
 	await _test_particles()
+	await _test_buttons_bounce()
+	await _test_crew_pops_in()
 	_scene.get_parent().queue_free()
 	await process_frame
 	_settings.from_dict(_saved_settings)
@@ -248,3 +250,81 @@ func _test_particles() -> void:
 	_check(chips.all(func(e: CPUParticles2D) -> bool: return e.amount == full_amount), "y vuelven a ser todas")
 	(_scene.get_node("%MineView") as Node).call("show_biome", "earth")
 	await _wait(1.2)
+
+## Un control "rebota" si justo después de tocarlo está escalado (desde su centro) y al rato vuelve a 1,
+## sin moverse de lugar: la escala no cambia el layout.
+func _check_bounce(control: Control, label: String) -> void:
+	var rect: Rect2 = control.get_global_rect()
+	await process_frame
+	_check(not control.scale.is_equal_approx(Vector2.ONE), "%s rebota al tocarlo (%s)" % [label, str(control.scale)])
+	_check(control.pivot_offset.is_equal_approx(control.size * 0.5), "%s rebota desde su centro" % label)
+	await _wait(0.4)
+	_check(control.scale.is_equal_approx(Vector2.ONE), "%s vuelve a su tamaño" % label)
+	_check(control.get_global_rect().is_equal_approx(rect), "%s no se mueve de lugar" % label)
+
+
+func _test_buttons_bounce() -> void:
+	_section("Los botones rebotan")
+	_economy.reset()
+	_economy.gold = 1.0e6
+	await _wait(0.1)
+	var buy: Button = _scene.get_node("%GeneratorList").get_child(0).find_children("*", "Button", true, false)[0] as Button
+	buy.pressed.emit()
+	await _check_bounce(buy, "comprar")
+	var pick: Button = _scene.get_node("%PickRow").find_children("*", "Button", true, false)[0] as Button
+	pick.pressed.emit()
+	await _check_bounce(pick, "mejorar el pico")
+	var tab: Button = _scene.get_node("%TabLootButton") as Button
+	tab.button_pressed = true
+	await _check_bounce(tab, "una pestaña")
+	(_scene.get_node("%TabCrewButton") as Button).button_pressed = true
+	await _wait(0.4)
+	var mode: Button = _scene.get_node("%Mode10Button") as Button
+	mode.button_pressed = true
+	await _check_bounce(mode, "el modo ×10")
+	(_scene.get_node("%Mode1Button") as Button).button_pressed = true
+	await _wait(0.4)
+	var sound: Button = _scene.get_node("%SoundButton") as Button
+	sound.pressed.emit()
+	await _check_bounce(sound, "el silencio")
+	sound.pressed.emit()
+	await _wait(0.4)
+	_economy.reset()
+	await _wait(0.1)
+
+
+func _test_crew_pops_in() -> void:
+	_section("La cuadrilla nueva aparece animada")
+	var mine: Control = _mine()
+	var miners: Array = mine.get("miner_sprites")
+	var first: Control = miners[0]
+	_check(first.scale.is_equal_approx(Vector2.ONE), "al abrir el juego, la cuadrilla que ya había no aparece animada")
+	_economy.reset()
+	_economy.gold = 1000.0
+	await _wait(0.1)
+	var buy: Button = _scene.get_node("%GeneratorList").get_child(0).find_children("*", "Button", true, false)[0] as Button
+	buy.pressed.emit()
+	# main.gd refresca la mina en su _process, que corre después de process_frame: dos frames.
+	await process_frame
+	await process_frame
+	_check(first.visible, "comprar un minero lo muestra en la mina")
+	_check(first.scale.x < 1.0, "y aparece de a poco, creciendo (%s)" % str(first.scale))
+	_check(first.pivot_offset.is_equal_approx(first.size * Vector2(0.5, 1.0)), "desde los pies")
+	await _wait(0.6)
+	_check(first.scale.is_equal_approx(Vector2.ONE), "hasta su tamaño")
+	var drill: Control = mine.get("drill_sprite")
+	_economy.gold = 1000.0
+	var buy_drill: Button = _scene.get_node("%GeneratorList").get_child(1).find_children("*", "Button", true, false)[0] as Button
+	buy_drill.pressed.emit()
+	await process_frame
+	await process_frame
+	_check(drill.visible and drill.scale.x < 1.0, "el taladro también aparece animado")
+	await _wait(0.6)
+	# Una escena nueva con cuadrilla (una partida cargada) la muestra quieta.
+	_scene.get_parent().queue_free()
+	await process_frame
+	await _mount()
+	var reloaded: Array = _mine().get("miner_sprites")
+	_check((reloaded[0] as Control).visible and (reloaded[0] as Control).scale.is_equal_approx(Vector2.ONE), "una partida cargada muestra la cuadrilla quieta, sin animar")
+	_economy.reset()
+	await _wait(0.1)

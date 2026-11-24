@@ -11,6 +11,7 @@ extends Control
 
 const Palette := preload("res://game/palette.gd")
 const BiomePalette := preload("res://game/biome_palette.gd")
+const Juice := preload("res://game/juice.gd")
 
 const SPRITE_DIR: String = "res://assets/sprites/generated/"
 const DEFAULT_BIOME: String = "earth"
@@ -123,6 +124,8 @@ var _next_lane: int = 0
 var _chip_emitters: Array[CPUParticles2D] = []
 var _gem_emitters: Array[CPUParticles2D] = []
 var _next_chip: int = 0
+## Ya se mostró la cuadrilla una vez: desde ahora, lo que aparece aparece animado.
+var _crew_shown: bool = false
 var _next_gem: int = 0
 
 
@@ -313,12 +316,22 @@ func show_biome(id: String) -> void:
 
 
 ## Muestra `miners` mineros (hasta MINER_COUNT) y, si se compraron, el taladro y el gólem.
+## Lo que aparece después de la primera vez (una compra) crece desde los pies; la primera vez (abrir el
+## juego con una partida guardada) se muestra quieto.
 func set_crew(miners: int, has_drill: bool, has_golem: bool) -> void:
 	for index: int in range(miner_sprites.size()):
-		miner_sprites[index].visible = index < miners
-	drill_sprite.visible = has_drill
-	golem_sprite.visible = has_golem
+		_show_member(miner_sprites[index], index < miners)
+	_show_member(drill_sprite, has_drill)
+	_show_member(golem_sprite, has_golem)
+	_crew_shown = true
 	queue_redraw()
+
+
+func _show_member(sprite: TextureRect, show: bool) -> void:
+	var appears: bool = show and not sprite.visible
+	sprite.visible = show
+	if appears and _crew_shown:
+		Juice.pop_in(sprite, sprite.size * Vector2(0.5, 1.0))
 
 
 ## Las sombras que se dibujan: una elipse ancha y chata a los pies de la roca y de cada sprite que se ve.

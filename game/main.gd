@@ -13,6 +13,7 @@ const Modal := preload("res://game/modal.gd")
 const MineView := preload("res://game/mine_view.gd")
 const NumberFormat := preload("res://core/number_format.gd")
 const OptionsPanel := preload("res://game/options_panel.gd")
+const Juice := preload("res://game/juice.gd")
 const PickRow := preload("res://game/pick_row.gd")
 const SoundCues := preload("res://game/sound_cues.gd")
 
@@ -76,6 +77,7 @@ var _gold_font_size: int = 0
 @onready var _tap_button: Button = %TapButton
 @onready var _hint_label: Label = %HintLabel
 @onready var _tab_buttons: Array[Button] = [%TabCrewButton, %TabLootButton, %TabRelicsButton]
+@onready var _mode_buttons: Array[Button] = [%Mode1Button, %Mode10Button, %ModeMaxButton]
 @onready var _pages: Array[Control] = [%CrewPage, %LootPage, %RelicsPage]
 @onready var _loot_box: VBoxContainer = %LootBox
 @onready var _loot_info_label: Label = %LootInfoLabel
@@ -138,7 +140,9 @@ func _ready() -> void:
 	# Opciones: encima del juego y del panel de debug, debajo del cartel.
 	_options = OptionsPanel.new()
 	add_child(_options)
-	_options_button.pressed.connect(_options.open)
+	_options_button.pressed.connect(func() -> void:
+		Juice.bounce(_options_button)
+		_options.open())
 	_sound_button.pressed.connect(_on_sound_pressed)
 	Settings.changed.connect(_apply_settings)
 	_apply_settings()
@@ -181,6 +185,7 @@ func _on_hit_landed(amount: float) -> void:
 
 ## Silencia todo o devuelve el sonido. El click suena solo al devolverlo (silenciado no suena nada).
 func _on_sound_pressed() -> void:
+	Juice.bounce(_sound_button)
 	Settings.muted = not Settings.muted
 	Audio.play_sfx("toggle")
 
@@ -196,6 +201,9 @@ func _on_mode_toggled(pressed: bool, mode: int) -> void:
 	if pressed:
 		if _built:
 			Audio.play_sfx("mode")
+			for button: Button in _mode_buttons:
+				if button.button_pressed:
+					Juice.bounce(button)
 		_mode = mode
 		_mark_dirty()
 
@@ -204,6 +212,7 @@ func _on_tab_toggled(pressed: bool, tab: int) -> void:
 	if pressed:
 		if _built:
 			Audio.play_sfx("tab")
+			Juice.bounce(_tab_buttons[tab])
 		_show_page(tab)
 
 
@@ -415,6 +424,7 @@ func _relics_phrase(count: int) -> String:
 
 ## Pide confirmación antes de volver a la superficie: se pierde casi toda la partida.
 func _on_prestige_pressed() -> void:
+	Juice.bounce(_prestige_button)
 	if not Economy.can_prestige():
 		return
 	var gain: int = Economy.prestige_relics()
