@@ -14,6 +14,10 @@ const GOLD_FACTOR: float = 1000.0
 const ADVANCE_SECONDS: float = 3600.0
 ## Tope para no llegar a infinito apretando "Oro" muchas veces.
 const MAX_DEBUG_GOLD: float = 1.0e100
+## El botón DBG va justo debajo del HUD, a la izquierda de la mina: no tapa el oro ni el multiplicador.
+const TOGGLE_POSITION: Vector2 = Vector2(8.0, 268.0)
+## Alto de los botones (px de diseño): 96 = 48 px en un celular de 360 px de ancho, igual que el juego.
+const BUTTON_HEIGHT: float = 96.0
 
 var toggle_button: Button
 var body: PanelContainer
@@ -43,13 +47,13 @@ func _init() -> void:
 
 func _ready() -> void:
 	toggle_button = _make_button("DBG", 22)
-	toggle_button.position = Vector2(8, 8)
-	toggle_button.custom_minimum_size = Vector2(96, 56)
+	toggle_button.position = TOGGLE_POSITION
+	toggle_button.custom_minimum_size = Vector2(110, BUTTON_HEIGHT)
 	toggle_button.pressed.connect(_on_toggle_pressed)
 	add_child(toggle_button)
 
 	body = PanelContainer.new()
-	body.position = Vector2(8, 72)
+	body.position = TOGGLE_POSITION + Vector2(0, BUTTON_HEIGHT + 8.0)
 	body.custom_minimum_size = Vector2(460, 0)
 	body.visible = false
 	add_child(body)
@@ -134,7 +138,7 @@ func _on_chest_pressed(rarity: int) -> void:
 func _make_button(text: String, font_size: int) -> Button:
 	var button: Button = Button.new()
 	button.text = text
-	button.custom_minimum_size = Vector2(0, 64)
+	button.custom_minimum_size = Vector2(0, BUTTON_HEIGHT)
 	button.focus_mode = Control.FOCUS_NONE
 	button.add_theme_font_size_override("font_size", font_size)
 	return button

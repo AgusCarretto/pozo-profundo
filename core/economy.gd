@@ -210,6 +210,13 @@ func generator_name(index: int) -> String:
 	return _generators[index]["name"]
 
 
+## Id del generador en el balance ("miner", "steam_drill"...), para que la UI elija su arte.
+func generator_id(index: int) -> String:
+	if not _is_valid_index(index):
+		return ""
+	return _generators[index]["id"]
+
+
 # --- Profundidad y biomas ------------------------------------------------------
 
 ## Profundidad en metros, según el oro ganado en la partida. 0 si el balance no tiene "depth".

@@ -63,6 +63,10 @@ func _test_initial_state() -> void:
 	_check_eq(e.gold_per_second(), 0.0, "0 oro/s")
 	_check_eq(e.hit_value(), 1.0, "un golpe vale 1")
 	_check_eq(e.generator_name(1), "B", "nombre del generador 1")
+	_check_eq(e.generator_id(0), "a", "id del generador 0 (la UI elige su arte por id)")
+	_check_eq(e.generator_id(1), "b", "id del generador 1")
+	_check_eq(e.generator_id(2), "", "un generador inexistente no tiene id (ni explota)")
+	_check_eq(e.generator_id(-1), "", "un índice negativo tampoco")
 
 
 func _test_hit() -> void:
@@ -359,4 +363,8 @@ func _test_real_balance_file() -> void:
 	_check_eq(e.load_balance_file("res://data/balance.json"), true, "carga el balance real")
 	_check_eq(e.generator_count(), 5, "5 generadores")
 	_check_eq(e.generator_name(0), "Minero", "el primero es el Minero")
+	var ids: Array[String] = []
+	for index: int in range(e.generator_count()):
+		ids.append(e.generator_id(index))
+	_check_eq(ids, ["miner", "steam_drill", "dynamite_crew", "stone_golem", "rune_excavator"] as Array[String], "los ids del balance real, en orden")
 	_check_eq(e.load_balance_file("res://data/no_existe.json"), false, "un archivo inexistente devuelve false")

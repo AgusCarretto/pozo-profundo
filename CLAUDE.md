@@ -21,12 +21,24 @@ res://
   core/        # código reutilizable entre juegos (autoloads: Save, Audio, Economy, Analytics)
   game/        # código específico de este juego (escenas, scripts)
   data/        # balance en archivos de datos (generadores, biomas, rarezas); nada de números mágicos en el código
-  ui/          # escenas y temas de interfaz
-  assets/      # assets ya importados (sprites, audio, fuentes)
+  ui/          # tema de interfaz (theme.tres, generado por tools/build_theme.gd)
+  assets/      # assets ya importados: fonts/, sprites/tiny_dungeon/ (originales), sprites/generated/ (propios), ui/ui_pack/
   tests/       # tests headless
+  tools/       # scripts de ayuda (tests, export web, sprites, tema, capturas)
 assets_src/    # zips/originales descargados (fuera de res://, ignorado por Godot con .gdignore)
+docs/          # documentación y capturas de cada hito
 CREDITS.md     # licencia y autor de CADA asset de terceros (obligatorio)
 ```
+
+## Pantalla y arte (F2-A)
+- **Layout vertical** (`game/main.tscn`), pensado para celular: arriba el HUD (oro, oro/s, multiplicador, profundidad con barra al próximo bioma); al medio la mina (`game/mine_view.gd`: fondo del bioma, roca grande, hasta 8 mineros alrededor, y el taladro y el gólem cuando se compran); abajo un panel con pestañas **Cuadrilla** (modos ×1/×10/Máx, pico y generadores), **Botín** y **Reliquias**. La mina se estira con el alto de la pantalla; el panel de abajo tiene alto mínimo y scroll.
+- **Medidas**: la pantalla se diseña a 720 px de ancho. Con `aspect = expand`, un celular de 360×640 es 720×1280 y uno de 412×915 es 720×1599. **Todo lo que se toca mide ≥ 96 px de diseño** (= 48 px en 360 de ancho). Los tests lo verifican en esos dos tamaños (`tests/layout_scene_test.gd`), igual que el texto cortado y el orden de dibujo.
+- **Pixel art**: filtro `Nearest` y escala entera (cada píxel de sprite = N×N en pantalla). La UI va con filtro lineal (los botones del UI Pack son vectoriales).
+- **Paleta**: los 27 colores de Tiny Dungeon (`game/palette.gd`). Cada bioma tiene la suya (`game/biome_palette.gd`: fondo, roca, vetas, acento de la barra), indexada por el id del bioma del balance; un bioma nuevo en `balance.json` necesita colores y arte (`tests/assets_test.gd` lo exige).
+- **Sprites**: personajes y cofre salen de Tiny Dungeon (`assets/sprites/tiny_dungeon/`, solo las tiles usadas). Lo que no trae el pack (roca y fondo por bioma, taladro, gólem, dinamita, runas, moneda, pico, gema) y los mineros recoloreados los dibuja `tools/generate_sprites.gd` en 16×16 → `assets/sprites/generated/`. Volver a correrlo reescribe los mismos archivos.
+- **Tema**: `ui/theme.tres` (botones del UI Pack + Pixelify Sans) lo arma `tools/build_theme.gd`; las escenas eligen estilos con `theme_type_variation` (`ButtonGreen`, `TabButton`, `CardPanel`...).
+- **No usar `z_index`** en la mina: pondría los sprites por encima del cartel modal y del panel de debug. El orden de dibujo es el orden de los hijos (el cartel va último).
+- Comandos útiles (desde la raíz): tests `powershell -File tools/run_tests.ps1`; sprites `godot --headless --path . --script res://tools/generate_sprites.gd` y luego `godot --headless --path . --import`; tema `godot --headless --path . --script res://tools/build_theme.gd`; capturas `godot --path . --windowed --script res://tools/screenshot.gd -- <carpeta>` (abre una ventana; no toca la partida guardada).
 
 ## Balance inicial (viene de la demo web, ajustable)
 - Generadores (oro/s base, costo base, crecimiento de costo ×1.15 por unidad):
@@ -67,7 +79,9 @@ Solo existe en builds de debug (`OS.is_debug_build()`): el export release (el de
 ## Hoja de ruta
 - [x] F0 Setup: proyecto, git, estructura, export web funcionando.
 - [x] F1 Loop principal: golpe, cuadrilla, pico, biomas, botín, prestigio, guardado local y offline.
-- [ ] F2 Jugo y assets: sprites, partículas, tweens, SFX, música, fuente pixel.
+- [ ] F2 Jugo y assets
+  - [ ] F2-A Arte y layout vertical: sprites, paleta por bioma, tema de UI, fuente pixel, HUD / mina / pestañas. Implementado y con tests; falta el OK sobre las capturas de `docs/capturas-f2a/`.
+  - [ ] F2-B Jugo: partículas, tweens (squash de la roca, números flotantes, rebote de botones), SFX, música, transición entre biomas.
 - [ ] F3 Contenido: logros, eventos, más mejoras.
 - [ ] F4 Validación web: publicar en itch.io, test con familia y la comunidad del bot, medir retención día 1.
 - [ ] F5 Android: export firmado, cuenta de Play Console, prueba cerrada de 14 días con 12+ testers.

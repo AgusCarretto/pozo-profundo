@@ -1,9 +1,13 @@
 extends Control
 ## Cartel modal: oscurece la pantalla y pide confirmar (dos botones) o solo avisa (uno).
 ##
-## Visual provisorio de F1 (panel + texto + botones); el arte llega en F2.
 ## Se arma por código y empieza cerrado. No sabe qué se confirma: quien lo abre le pasa
 ## el texto y la acción. Mientras está abierto traga los toques, así nada de abajo responde.
+## Los estilos salen del tema (ui/theme.tres): panel, etiquetas y botones de 96 px de alto.
+
+## Ancho del cartel y alto mínimo de sus botones (px de diseño).
+const PANEL_WIDTH: float = 620.0
+const BUTTON_HEIGHT: float = 96.0
 
 var title_label: Label
 var body_label: Label
@@ -30,41 +34,33 @@ func _init() -> void:
 	add_child(center)
 
 	var panel: PanelContainer = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(600, 0)
+	panel.theme_type_variation = &"ModalPanel"
+	panel.custom_minimum_size = Vector2(PANEL_WIDTH, 0)
 	center.add_child(panel)
-
-	var margin: MarginContainer = MarginContainer.new()
-	for side: String in ["left", "top", "right", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 24)
-	panel.add_child(margin)
 
 	var box: VBoxContainer = VBoxContainer.new()
 	box.add_theme_constant_override("separation", 20)
-	margin.add_child(box)
+	panel.add_child(box)
 
 	title_label = Label.new()
-	title_label.add_theme_font_size_override("font_size", 38)
-	title_label.add_theme_color_override("font_color", Color(0.96, 0.77, 0.26))
+	title_label.theme_type_variation = &"TitleLabel"
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	title_label.custom_minimum_size = Vector2(552, 0)
 	box.add_child(title_label)
 
 	body_label = Label.new()
-	body_label.add_theme_font_size_override("font_size", 28)
 	body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body_label.custom_minimum_size = Vector2(552, 0)
 	box.add_child(body_label)
 
 	var buttons: HBoxContainer = HBoxContainer.new()
-	buttons.add_theme_constant_override("separation", 12)
+	buttons.add_theme_constant_override("separation", 14)
 	box.add_child(buttons)
 
-	cancel_button = _make_button()
+	cancel_button = _make_button(&"ButtonGrey")
 	cancel_button.pressed.connect(close)
 	buttons.add_child(cancel_button)
 
-	confirm_button = _make_button()
+	confirm_button = _make_button(&"ButtonGreen")
 	confirm_button.pressed.connect(_on_confirm_pressed)
 	buttons.add_child(confirm_button)
 
@@ -91,10 +87,10 @@ func _on_confirm_pressed() -> void:
 		_on_confirm.call()
 
 
-func _make_button() -> Button:
+func _make_button(variation: StringName) -> Button:
 	var button: Button = Button.new()
-	button.custom_minimum_size = Vector2(0, 88)
+	button.theme_type_variation = variation
+	button.custom_minimum_size = Vector2(0, BUTTON_HEIGHT)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.focus_mode = Control.FOCUS_NONE
-	button.add_theme_font_size_override("font_size", 28)
 	return button

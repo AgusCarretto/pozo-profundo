@@ -22,7 +22,7 @@ const BY_ID: Dictionary = {
 		"rock_light": Palette.STEEL_LIGHT, "rock": Palette.STEEL, "rock_dark": Palette.SLATE,
 		"vein": Palette.TERRA, "vein_light": Palette.CLAY,
 		"bg": Palette.SLATE, "bg_dark": Palette.NAVY, "bg_light": Palette.SLATE_LIGHT, "bg_spark": Palette.STEEL,
-		"accent": Palette.STEEL_LIGHT,
+		"accent": Palette.STEEL, # no más claro: el texto blanco de la barra de profundidad tiene que leerse encima
 	},
 	"crystal": {
 		"rock_light": Palette.STEEL, "rock": Palette.SLATE_LIGHT, "rock_dark": Palette.SLATE,
