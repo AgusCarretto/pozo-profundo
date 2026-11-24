@@ -98,7 +98,7 @@ Solo existe en builds de debug (`OS.is_debug_build()`): el export release (el de
 - [x] F1 Loop principal: golpe, cuadrilla, pico, biomas, botín, prestigio, guardado local y offline.
 - [ ] F2 Jugo y assets
   - [ ] F2-A Arte y layout vertical: sprites, paleta por bioma, tema de UI, fuente pixel, HUD / mina / pestañas. Implementado y con tests; falta el OK sobre las capturas de `docs/capturas-f2a/`.
-  - [ ] F2-B Jugo: partículas, tweens (squash de la roca, números flotantes, rebote de botones), SFX, música, transición entre biomas.
+  - [ ] F2-B Jugo: partículas, tweens (squash de la roca, números flotantes, rebote de botones), SFX, música, transición entre biomas. Implementado y con tests (ver "Sonido y opciones (F2-B)"); faltan los archivos de música (el código ya la pide por bioma) y el OK sobre las capturas de `docs/capturas-f2b/`.
 - [ ] F3 Contenido: logros, eventos, más mejoras.
 - [ ] F4 Validación web: publicar en itch.io, test con familia y la comunidad del bot, medir retención día 1.
 - [ ] F5 Android: export firmado, cuenta de Play Console, prueba cerrada de 14 días con 12+ testers.

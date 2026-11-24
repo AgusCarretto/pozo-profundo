@@ -66,7 +66,9 @@ func _run() -> void:
 		for shot: Dictionary in SHOTS:
 			print("tomando %dx%d_%s..." % [size.x, size.y, shot["name"]])
 			_apply(economy, shot)
-			# Sin restos de la captura anterior (números y astillas en el aire).
+			# Saltar de un estado a otro más profundo cuenta como bajar de bioma (cartel): se deja asentar el estado y
+			# se limpian los efectos (cartel, números y astillas de la captura anterior) antes de la acción de la captura.
+			await _settle()
 			scene.get_node("%MineView").call("clear_effects")
 			(scene.get_node("%" + ["TabCrewButton", "TabLootButton", "TabRelicsButton"][shot["tab"]]) as Button).button_pressed = true
 			if shot["name"].begins_with("1_"):
