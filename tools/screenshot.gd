@@ -12,7 +12,8 @@ extends SceneTree
 const SIZES: Array[Vector2i] = [Vector2i(360, 640), Vector2i(412, 915)]
 
 ## Estados de muestra: nombre, pestaña (0 Cuadrilla, 1 Botín, 2 Reliquias) y partida. Con "options": true la
-## captura sale con el panel de Opciones abierto.
+## captura sale con el panel de Opciones abierto; con "hits": N, se golpea N veces justo antes (números flotantes,
+## roca aplastada).
 ## `owned` sigue el orden del balance: Minero, Taladro, Dinamita, Gólem, Excavadora.
 const SHOTS: Array[Dictionary] = [
 	{ "name": "1_inicio", "tab": 0, "gold": 22.0, "run_gold": 22.0, "pick": 0, "owned": [], "loot": 0.0, "relics": 0 },
@@ -21,6 +22,7 @@ const SHOTS: Array[Dictionary] = [
 	{ "name": "4_magma_reliquias", "tab": 2, "gold": 4.0e6, "run_gold": 5.0e6, "pick": 7, "owned": [30, 8, 5, 2, 0], "loot": 1.1, "relics": 3 },
 	{ "name": "5_abismo", "tab": 0, "gold": 9.0e8, "run_gold": 2.0e9, "pick": 9, "owned": [60, 25, 12, 6, 2], "loot": 2.0, "relics": 5 },
 	{ "name": "6_opciones", "tab": 0, "gold": 8.88e15, "run_gold": 1.0e15, "pick": 9, "owned": [60, 25, 12, 6, 2], "loot": 2.0, "relics": 40, "options": true },
+	{ "name": "7_golpe", "tab": 0, "gold": 3400.0, "run_gold": 4200.0, "pick": 3, "owned": [4, 1], "loot": 0.12, "relics": 0, "hits": 6 },
 ]
 
 var _out_dir: String = ""
@@ -62,12 +64,20 @@ func _run() -> void:
 				options.call("open")
 			else:
 				options.set("visible", false)
+			for hit: int in range(int(shot.get("hits", 0))):
+				(scene.get_node("%TapButton") as Button).button_down.emit()
+				await create_timer(0.1).timeout # como alguien que golpea rápido, no todo en el mismo frame
 			await _settle()
 			var image: Image = root.get_texture().get_image()
 			var path: String = "%s/%dx%d_%s.png" % [_out_dir, size.x, size.y, shot["name"]]
 			image.save_png(path)
 			print("%s  (%dx%d)" % [path, image.get_width(), image.get_height()])
 	economy.reset()
+	# Al salir no tiene que quedar nada vivo: los números flotantes con sus tweens y el último sonido (si no,
+	# Godot avisa de recursos todavía en uso).
+	scene.queue_free()
+	root.get_node("Audio").call("silence")
+	await create_timer(0.2).timeout
 	quit(0)
 
 

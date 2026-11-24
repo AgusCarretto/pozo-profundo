@@ -140,8 +140,8 @@ func _ready() -> void:
 	add_child(_options)
 	_options_button.pressed.connect(_options.open)
 	_sound_button.pressed.connect(_on_sound_pressed)
-	Settings.changed.connect(_refresh_sound_icon)
-	_refresh_sound_icon()
+	Settings.changed.connect(_apply_settings)
+	_apply_settings()
 	# El cartel va último entre los hijos: se dibuja encima de todo (también del panel de debug).
 	_modal = Modal.new()
 	add_child(_modal)
@@ -151,6 +151,7 @@ func _ready() -> void:
 	Economy.pick_upgraded.connect(_mark_dirty.unbind(1))
 	Economy.prestiged.connect(_mark_dirty.unbind(1))
 	Economy.loot_dropped.connect(_on_loot_dropped)
+	Economy.hit_landed.connect(_on_hit_landed)
 	Economy.offline_progress.connect(_show_offline_notice)
 	_refresh()
 	_built = true
@@ -173,14 +174,21 @@ func _on_tap() -> void:
 	Economy.hit()
 
 
+## Cada golpe se ve: la roca se aplasta, la mina se sacude y sale el oro que dio flotando.
+func _on_hit_landed(amount: float) -> void:
+	_mine_view.play_hit("+%s" % NumberFormat.format_number(amount))
+
+
 ## Silencia todo o devuelve el sonido. El click suena solo al devolverlo (silenciado no suena nada).
 func _on_sound_pressed() -> void:
 	Settings.muted = not Settings.muted
 	Audio.play_sfx("toggle")
 
 
-func _refresh_sound_icon() -> void:
+## Lo que depende de las opciones: el ícono del silencio y si la mina reduce los efectos.
+func _apply_settings() -> void:
 	_sound_button.icon = SOUND_OFF_ICON if Settings.muted else SOUND_ON_ICON
+	_mine_view.reduce_effects = Settings.reduce_effects
 
 
 # Los toggles que se marcan al armar la escena (en _ready) no suenan: solo los que toca el jugador.

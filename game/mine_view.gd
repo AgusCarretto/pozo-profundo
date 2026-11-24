@@ -44,6 +44,23 @@ const MACHINE_SHADOW_WIDTH: float = 0.44
 const SHADOW_FLATNESS: float = 0.3
 const SHADOW_COLOR: Color = Color(0.0, 0.0, 0.0, 0.5)
 
+## Golpe: la roca se aplasta contra el piso (más ancha y más baja) y rebota a su tamaño.
+const SQUASH_SCALE: Vector2 = Vector2(1.12, 0.86)
+const SQUASH_TIME: float = 0.22
+## Golpe: sacudida leve de la mina (px de diseño) que se apaga sola.
+const SHAKE_STRENGTH: float = 6.0
+const SHAKE_TIME: float = 0.16
+## Golpe: número flotante que sube y se desvanece. Más de MAX_FLOATERS a la vez no: se va el más viejo.
+const MAX_FLOATERS: int = 12
+const FLOAT_RISE: float = 120.0
+const FLOAT_TIME: float = 0.8
+## Carriles por los que salen los números (como parte del ancho de la roca, desde su centro): dos golpes
+## seguidos salen por carriles distintos y no se pisan. Encima, un poco de azar.
+const FLOAT_LANES: Array[float] = [-0.26, 0.12, -0.08, 0.28, 0.0, -0.3, 0.2]
+const FLOAT_JITTER: float = 0.04
+## Golpe: vibración corta (solo hace algo en celulares).
+const VIBRATION_MS: int = 25
+
 ## Puestos de trabajo, en px de diseño desde el centro de la roca. Ninguno toca la roca (que mide 352):
 ## los mineros ocupan primero los costados y después una fila arriba, y el gólem y el taladro quedan
 ## abajo a los lados. Abajo de la roca no hay lugar: la roca va un poco más abajo del centro.
@@ -62,9 +79,30 @@ var miner_sprites: Array[TextureRect] = []
 var drill_sprite: TextureRect
 var golem_sprite: TextureRect
 
+## "Reducir efectos" (lo fija main.gd desde Settings): sin sacudida ni vibración.
+var reduce_effects: bool = false
+## Cuánto está corrida ahora la mina por la sacudida (px de pantalla); cero en reposo. La roca, la
+## cuadrilla y el piso se dibujan corridos; la mina en sí (y el HUD) no se mueven.
+var shake_offset: Vector2 = Vector2.ZERO:
+	set(value):
+		shake_offset = value
+		_apply_shake()
+## Cuántas veces vibró (para los tests: en la PC vibrar no hace nada visible).
+var vibrations: int = 0
+
 var _rock: TextureRect
 var _tap_button: Button
 var _backdrop_texture: Texture2D
+## Capa de efectos (números flotantes, partículas...): último hijo, no come toques, recorta lo que se sale.
+var _fx: Control
+## Escala del acomodo actual (1 = tamaño de diseño).
+var _unit: float = 1.0
+## Dónde va cada sprite sin sacudida (lo calcula _layout).
+var _base_positions: Dictionary = {}
+var _squash_tween: Tween
+var _shake_tween: Tween
+var _shake_direction: Vector2 = Vector2.RIGHT
+var _next_lane: int = 0
 
 
 func _ready() -> void:
@@ -74,8 +112,87 @@ func _ready() -> void:
 		miner_sprites.append(_make_sprite("miner_%d.png" % (index + 1), "Miner%d" % (index + 1)))
 	drill_sprite = _make_sprite("drill.png", "Drill")
 	golem_sprite = _make_sprite("golem.png", "Golem")
+	_fx = Control.new()
+	_fx.name = "FxLayer"
+	_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fx.clip_contents = true
+	add_child(_fx)
+	_fx.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	show_biome(DEFAULT_BIOME)
 	_layout()
+
+
+# --- Golpe -------------------------------------------------------------------
+
+## Lo que se ve y se siente al golpear: la roca se aplasta, la mina se sacude, sale `text` flotando y el
+## celular vibra. Con reduce_effects no hay sacudida ni vibración (el número y el aplastado quedan).
+func play_hit(text: String) -> void:
+	_squash_rock()
+	_spawn_floater(text)
+	if reduce_effects:
+		return
+	_shake()
+	vibrations += 1
+	Input.vibrate_handheld(VIBRATION_MS)
+
+
+func _squash_rock() -> void:
+	if _squash_tween != null and _squash_tween.is_valid():
+		_squash_tween.kill()
+	_rock.scale = SQUASH_SCALE
+	_squash_tween = create_tween()
+	_squash_tween.tween_property(_rock, "scale", Vector2.ONE, SQUASH_TIME).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## La sacudida va y viene en una dirección al azar y se apaga en SHAKE_TIME.
+func _shake() -> void:
+	if _shake_tween != null and _shake_tween.is_valid():
+		_shake_tween.kill()
+	_shake_direction = Vector2.RIGHT.rotated(randf() * TAU)
+	_shake_tween = create_tween()
+	_shake_tween.tween_method(_shake_step, 0.0, 1.0, SHAKE_TIME)
+	_shake_tween.tween_callback(func() -> void: shake_offset = Vector2.ZERO)
+	_shake_step(0.0)
+
+
+## `progress` de 0 a 1: oscila (tres idas y vueltas) y se achica hasta cero.
+func _shake_step(progress: float) -> void:
+	var amplitude: float = SHAKE_STRENGTH * _unit * (1.0 - progress)
+	shake_offset = (_shake_direction * amplitude * cos(progress * TAU * 3.0)).round()
+
+
+func _apply_shake() -> void:
+	for sprite: Variant in _base_positions:
+		(sprite as Control).position = _base_positions[sprite] + shake_offset
+	queue_redraw()
+
+
+func _spawn_floater(text: String) -> void:
+	var alive: Array[Node] = []
+	for child: Node in _fx.get_children():
+		if child is Label and not child.is_queued_for_deletion():
+			alive.append(child)
+	while alive.size() >= MAX_FLOATERS:
+		alive.pop_front().queue_free()
+	var label: Label = Label.new()
+	label.theme_type_variation = &"FloatLabel"
+	label.text = text
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fx.add_child(label)
+	label.size = label.get_combined_minimum_size()
+	label.pivot_offset = label.size * 0.5
+	var rock_rect: Rect2 = Rect2(_base_positions.get(_rock, _rock.position), _rock.size)
+	var start: Vector2 = Vector2(
+		rock_rect.get_center().x + (FLOAT_LANES[_next_lane] + randf_range(-FLOAT_JITTER, FLOAT_JITTER)) * rock_rect.size.x,
+		rock_rect.position.y + rock_rect.size.y * randf_range(0.18, 0.3))
+	_next_lane = (_next_lane + 1) % FLOAT_LANES.size()
+	label.position = (start - label.size * 0.5).round()
+	label.scale = Vector2(0.6, 0.6)
+	var tween: Tween = label.create_tween().set_parallel(true)
+	tween.tween_property(label, "scale", Vector2.ONE, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "position:y", label.position.y - FLOAT_RISE * _unit, FLOAT_TIME).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "modulate:a", 0.0, FLOAT_TIME * 0.6).set_delay(FLOAT_TIME * 0.4)
+	tween.chain().tween_callback(label.queue_free)
 
 
 func _notification(what: int) -> void:
@@ -148,6 +265,7 @@ func _layout() -> void:
 	if _rock == null or drill_sprite == null:
 		return
 	var unit: float = clampf(minf(size.x / DESIGN_SIZE.x, size.y / DESIGN_SIZE.y), MIN_UNIT, MAX_UNIT)
+	_unit = unit
 	var center: Vector2 = Vector2(size.x * 0.5, size.y * ROCK_HEIGHT_SHARE)
 	_place(_rock, center, Vector2.ZERO, ROCK_SCALE, unit)
 	for index: int in range(miner_sprites.size()):
@@ -155,9 +273,15 @@ func _layout() -> void:
 		_look_at_rock(miner_sprites[index], index)
 	_place(drill_sprite, center, DRILL_SLOT, DRILL_SCALE, unit)
 	_place(golem_sprite, center, GOLEM_SLOT, GOLEM_SCALE, unit)
+	# La roca se aplasta contra el piso: el pivote va abajo al centro.
+	_rock.pivot_offset = _rock.size * Vector2(0.5, 1.0)
 	var margin: Vector2 = Vector2.ONE * TAP_MARGIN * unit
 	_tap_button.position = _rock.position - margin
 	_tap_button.size = _rock.size + margin * 2.0
+	_base_positions.clear()
+	for sprite: TextureRect in [_rock, drill_sprite, golem_sprite] + miner_sprites:
+		_base_positions[sprite] = sprite.position
+	_apply_shake()
 	_sort_by_depth()
 	queue_redraw()
 
@@ -191,11 +315,13 @@ func _sort_by_depth() -> void:
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), backdrop_color)
 	if _backdrop_texture != null:
+		# El piso también se sacude: el mosaico se corre con shake_offset (sobra una fila y una columna
+		# de cada lado para que no se vea el borde).
 		var tile: int = 16 * BACKDROP_SCALE
 		var tint: Color = Color(1.0, 1.0, 1.0, BACKDROP_STRENGTH)
-		for ty: int in range(ceili(size.y / tile)):
-			for tx: int in range(ceili(size.x / tile)):
-				draw_texture_rect(_backdrop_texture, Rect2(tx * tile, ty * tile, tile, tile), false, tint)
+		for ty: int in range(-1, ceili(size.y / tile) + 1):
+			for tx: int in range(-1, ceili(size.x / tile) + 1):
+				draw_texture_rect(_backdrop_texture, Rect2(Vector2(tx * tile, ty * tile) + shake_offset, Vector2(tile, tile)), false, tint)
 	# sombras a los pies de la roca y de la cuadrilla (se dibujan antes que los sprites: quedan debajo)
 	for shadow: Dictionary in shadow_ellipses():
 		var radius: Vector2 = shadow["radius"]
