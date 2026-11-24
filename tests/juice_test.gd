@@ -32,6 +32,8 @@ func _initialize() -> void:
 	await _test_particles()
 	await _test_buttons_bounce()
 	await _test_crew_pops_in()
+	await _test_miners_swing()
+	await _test_clear_effects()
 	_scene.get_parent().queue_free()
 	await process_frame
 	_settings.from_dict(_saved_settings)
@@ -328,3 +330,73 @@ func _test_crew_pops_in() -> void:
 	_check((reloaded[0] as Control).visible and (reloaded[0] as Control).scale.is_equal_approx(Vector2.ONE), "una partida cargada muestra la cuadrilla quieta, sin animar")
 	_economy.reset()
 	await _wait(0.1)
+
+func _test_miners_swing() -> void:
+	_section("Los mineros pican en loop, cada uno a su ritmo")
+	var mine: Control = _mine()
+	var script_constants: Dictionary = mine.get_script().get_script_constant_map()
+	var swing: Callable = Callable(mine, "pick_angle")
+	_check_near(float(swing.call(0.0)), 0.0, "el golpe arranca con el pico quieto", 1e-6)
+	var lowest: float = 0.0
+	var lowest_at: float = 0.0
+	for step: int in range(100):
+		var angle: float = float(swing.call(step / 100.0))
+		if angle < lowest:
+			lowest = angle
+			lowest_at = step / 100.0
+	_check(lowest < deg_to_rad(-40.0), "levanta el pico hacia atrás (%d°)" % int(rad_to_deg(lowest)))
+	_check(lowest_at >= 0.4 and lowest_at <= 0.75, "despacio (la mayor parte del ciclo: arriba al %d%%)" % int(lowest_at * 100.0))
+	var strike: float = float(swing.call(minf(lowest_at + 0.12, 0.99)))
+	_check(strike > 0.0, "y lo baja de golpe contra la roca (%d°)" % int(rad_to_deg(strike)))
+	_check_near(float(swing.call(1.0)), 0.0, "y vuelve a quieto al terminar el ciclo", 1e-6)
+	_check(script_constants.has("SWING_PERIOD") and float(script_constants["SWING_PERIOD"]) >= 0.6 and float(script_constants["SWING_PERIOD"]) <= 2.0, "un golpe cada 0,6 a 2 segundos")
+
+	_economy.reset()
+	_economy.owned[0] = 8
+	_economy.gold_changed.emit(_economy.gold)
+	await _wait(0.8)
+	var miners: Array = mine.get("miner_sprites")
+	var rock_center: Vector2 = _rock().get_rect().get_center()
+	var picks: Array[Control] = []
+	var facing_ok: bool = true
+	for miner: Control in miners:
+		var pick: Control = miner.get_node_or_null("Pick") as Control
+		if pick == null:
+			continue
+		picks.append(pick)
+		_check_eq(pick.mouse_filter, Control.MOUSE_FILTER_IGNORE, "el pico de %s no come toques" % miner.name)
+		var miner_center: Vector2 = miner.get_rect().get_center()
+		var pick_center: Vector2 = miner.position + (pick.position + pick.size * 0.5) * miner.scale
+		var to_rock: Vector2 = rock_center - miner_center
+		if absf(to_rock.x) > absf(to_rock.y) and signf(pick_center.x - miner_center.x) != signf(to_rock.x):
+			facing_ok = false
+	_check_eq(picks.size(), 8, "cada minero tiene su pico")
+	_check(facing_ok, "y lo tiene del lado de la roca")
+	if picks.is_empty():
+		return
+	var first: Array[float] = []
+	for pick: Control in picks:
+		first.append(pick.rotation)
+	await _wait(0.25)
+	var moved: int = 0
+	var angles: Dictionary = {}
+	for index: int in range(picks.size()):
+		if not is_equal_approx(picks[index].rotation, first[index]):
+			moved += 1
+		angles[snappedf(picks[index].rotation, 0.05)] = true
+	_check_eq(moved, picks.size(), "los picos se mueven solos")
+	_check(angles.size() >= 4, "y no todos al mismo tiempo: están desfasados (%d ángulos distintos)" % angles.size())
+	_economy.reset()
+	await _wait(0.1)
+
+func _test_clear_effects() -> void:
+	_section("Los efectos se pueden limpiar de golpe")
+	for index: int in range(5):
+		_tap()
+	await process_frame
+	_check(_floaters().size() > 0 and _emitting(_emitters("chips_")) > 0, "hay números y astillas en el aire")
+	_mine().call("clear_effects")
+	await process_frame
+	_check_eq(_floaters().size(), 0, "clear_effects saca los números")
+	_check_eq(_emitting(_emitters("chips_")), 0, "y apaga las astillas")
+	_check((_mine().get("shake_offset") as Vector2).is_zero_approx() and _rock().scale.is_equal_approx(Vector2.ONE), "y deja la roca quieta en su lugar")

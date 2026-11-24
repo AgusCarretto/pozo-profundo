@@ -56,6 +56,8 @@ func _run() -> void:
 		DisplayServer.window_set_size(size)
 		for shot: Dictionary in SHOTS:
 			_apply(economy, shot)
+			# Sin restos de la captura anterior (números y astillas en el aire).
+			scene.get_node("%MineView").call("clear_effects")
 			(scene.get_node("%" + ["TabCrewButton", "TabLootButton", "TabRelicsButton"][shot["tab"]]) as Button).button_pressed = true
 			if shot["name"].begins_with("1_"):
 				scene.get_node("%Mode1Button").button_pressed = true

@@ -72,6 +72,21 @@ const GEM_AMOUNT: int = 3
 const GEM_SCALE: float = 2.0
 const GEM_CHANCE: float = 0.3
 
+## Mineros picando: cada uno tiene un pico (pick.png, a escala PICK_SCALE) en la mano del lado de la roca
+## y lo usa en loop: lo levanta despacio, lo baja de golpe y vuelve. Cada minero tiene su fase y un período
+## apenas distinto: nunca pican todos juntos.
+const SWING_PERIOD: float = 1.1
+const PICK_SCALE: int = 3
+## Ángulos del pico (radianes; positivo = hacia la roca): bien levantado hacia atrás y el golpe.
+const SWING_RAISED: float = -1.3
+const SWING_STRIKE: float = 0.5
+## Partes del ciclo: levantar hasta 60%, bajar de golpe hasta 72%, volver a quieto hasta 100%.
+const SWING_RAISE_END: float = 0.6
+const SWING_STRIKE_END: float = 0.72
+## Dónde agarra el mango (píxel del sprite pick.png) y dónde está la mano del minero (parte de su tamaño).
+const PICK_GRIP: Vector2 = Vector2(3.5, 13.5)
+const HAND: Vector2 = Vector2(0.8, 0.62)
+
 ## Puestos de trabajo, en px de diseño desde el centro de la roca. Ninguno toca la roca (que mide 352):
 ## los mineros ocupan primero los costados y después una fila arriba, y el gólem y el taladro quedan
 ## abajo a los lados. Abajo de la roca no hay lugar: la roca va un poco más abajo del centro.
@@ -124,6 +139,9 @@ var _next_lane: int = 0
 var _chip_emitters: Array[CPUParticles2D] = []
 var _gem_emitters: Array[CPUParticles2D] = []
 var _next_chip: int = 0
+## El pico de cada minero y para qué lado lo usa (1 = la roca está a su derecha, -1 = a su izquierda).
+var _picks: Array[TextureRect] = []
+var _pick_sides: Array[float] = []
 ## Ya se mostró la cuadrilla una vez: desde ahora, lo que aparece aparece animado.
 var _crew_shown: bool = false
 var _next_gem: int = 0
@@ -132,8 +150,19 @@ var _next_gem: int = 0
 func _ready() -> void:
 	_rock = get_node("Rock") as TextureRect
 	_tap_button = get_node("TapButton") as Button
+	var pick_texture: Texture2D = load(SPRITE_DIR + "pick.png") as Texture2D
 	for index: int in range(MINER_COUNT):
-		miner_sprites.append(_make_sprite("miner_%d.png" % (index + 1), "Miner%d" % (index + 1)))
+		var miner: TextureRect = _make_sprite("miner_%d.png" % (index + 1), "Miner%d" % (index + 1))
+		miner_sprites.append(miner)
+		var pick: TextureRect = TextureRect.new()
+		pick.name = "Pick"
+		pick.texture = pick_texture
+		pick.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		pick.stretch_mode = TextureRect.STRETCH_SCALE
+		pick.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		miner.add_child(pick)
+		_picks.append(pick)
+		_pick_sides.append(1.0)
 	drill_sprite = _make_sprite("drill.png", "Drill")
 	golem_sprite = _make_sprite("golem.png", "Golem")
 	_fx = Control.new()
@@ -196,6 +225,23 @@ func _apply_shake() -> void:
 	for sprite: Variant in _base_positions:
 		(sprite as Control).position = _base_positions[sprite] + shake_offset
 	queue_redraw()
+
+
+## Corta todo lo que está en el aire (números, astillas, gemas, sacudida, aplastado): para un cambio de
+## escena (volver a la superficie) o una captura limpia.
+func clear_effects() -> void:
+	for child: Node in _fx.get_children():
+		if child is Label:
+			child.queue_free()
+	for emitter: CPUParticles2D in _chip_emitters + _gem_emitters:
+		emitter.emitting = false
+		emitter.restart()
+		emitter.emitting = false
+	for tween: Tween in [_squash_tween, _shake_tween]:
+		if tween != null and tween.is_valid():
+			tween.kill()
+	_rock.scale = Vector2.ONE
+	shake_offset = Vector2.ZERO
 
 
 ## Una tanda de astillas desde la parte de arriba de la roca y, con suerte (GEM_CHANCE), unas gemas.
@@ -292,6 +338,28 @@ func _spawn_floater(text: String) -> void:
 	tween.tween_property(label, "position:y", label.position.y - FLOAT_RISE * _unit, FLOAT_TIME).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tween.tween_property(label, "modulate:a", 0.0, FLOAT_TIME * 0.6).set_delay(FLOAT_TIME * 0.4)
 	tween.chain().tween_callback(label.queue_free)
+
+
+func _process(_delta: float) -> void:
+	var now: float = Time.get_ticks_msec() / 1000.0
+	for index: int in range(_picks.size()):
+		if not miner_sprites[index].visible:
+			continue
+		# Fases repartidas con la razón áurea y períodos apenas distintos: nunca se sincronizan.
+		var period: float = SWING_PERIOD * (1.0 + 0.08 * float(index % 3 - 1))
+		var progress: float = fposmod(now / period + index * 0.618, 1.0)
+		_picks[index].rotation = pick_angle(progress) * _pick_sides[index]
+
+
+## Ángulo del pico (radianes, positivo = hacia la roca) en el momento `progress` (0 a 1) de un golpe.
+func pick_angle(progress: float) -> float:
+	var p: float = clampf(progress, 0.0, 1.0)
+	if p <= SWING_RAISE_END:
+		return SWING_RAISED * smoothstep(0.0, 1.0, p / SWING_RAISE_END)
+	if p <= SWING_STRIKE_END:
+		var t: float = (p - SWING_RAISE_END) / (SWING_STRIKE_END - SWING_RAISE_END)
+		return lerpf(SWING_RAISED, SWING_STRIKE, t * t)
+	return lerpf(SWING_STRIKE, 0.0, smoothstep(0.0, 1.0, (p - SWING_STRIKE_END) / (1.0 - SWING_STRIKE_END)))
 
 
 func _notification(what: int) -> void:
@@ -411,6 +479,22 @@ func _look_at_rock(sprite: TextureRect, index: int) -> void:
 	var to_rock: Vector2 = _rock.get_rect().get_center() - sprite.get_rect().get_center()
 	var gaze: String = GAZES[2] if (absf(to_rock.y) >= absf(to_rock.x) and to_rock.y > 0.0) else (GAZES[1] if to_rock.x > 0.0 else GAZES[0])
 	sprite.texture = load(SPRITE_DIR + "miner_%d_%s.png" % [index + 1, gaze]) as Texture2D
+	_hold_pick(index, -1.0 if gaze == GAZES[0] else 1.0)
+
+
+## Le pone el pico en la mano al minero `index`, del lado de la roca (`side` 1 = a su derecha, -1 = a su
+## izquierda: el dibujo se espeja). Gira desde donde lo agarra.
+func _hold_pick(index: int, side: float) -> void:
+	var miner: TextureRect = miner_sprites[index]
+	var pick: TextureRect = _picks[index]
+	_pick_sides[index] = side
+	var pixel: float = maxf(roundf(PICK_SCALE * _unit), 1.0)
+	pick.size = Vector2(16.0, 16.0) * pixel
+	pick.flip_h = side < 0.0
+	var grip: Vector2 = Vector2(16.0 - PICK_GRIP.x if side < 0.0 else PICK_GRIP.x, PICK_GRIP.y) * pixel
+	var hand: Vector2 = Vector2(HAND.x if side > 0.0 else 1.0 - HAND.x, HAND.y) * miner.size
+	pick.pivot_offset = grip
+	pick.position = (hand - grip).round()
 
 
 ## Los de más abajo se dibujan delante: parece que hay profundidad. Se ordena por posición de hijo (los
