@@ -18,6 +18,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 Save="*res://core/save.gd"
+Settings="*res://core/settings.gd"
 Audio="*res://core/audio.gd"
 Economy="*res://core/economy.gd"
 Analytics="*res://core/analytics.gd"
