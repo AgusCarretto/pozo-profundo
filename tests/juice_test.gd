@@ -1,4 +1,5 @@
 extends "res://tests/scene_fx_base.gd"
+## @lento (animaciones: corre con -All o -Slow, ver tools/run_tests.ps1)
 ## Tests headless del "jugo" del golpe (F2-B): número flotante, roca que se aplasta, sacudida, astillas y gemas,
 ## y lo que apaga "reducir efectos". Miden estado, no cómo se ve: eso se mira en capturas (tools/screenshot.gd).
 ## Los helpers y el armado de la escena están en scene_fx_base.gd.

@@ -1,4 +1,5 @@
 extends "res://tests/scene_fx_base.gd"
+## @lento (animaciones: corre con -All o -Slow, ver tools/run_tests.ps1)
 ## Tests headless del cofre (F2-B): cae en la mina con un brillo del color de su rareza, sale un aviso con el
 ## bonus que suma (el del cofre y lo que de verdad sube el efectivo, que rinde cada vez menos) y el legendario
 ## tiene su momento: una pausa breve y un destello (sin destello con "reducir efectos").

@@ -1,4 +1,5 @@
 extends "res://tests/scene_fx_base.gd"
+## @lento (animaciones: corre con -All o -Slow, ver tools/run_tests.ps1)
 ## Tests headless de la escena viva (F2-B): botones que rebotan, cuadrilla que aparece animada, mineros que pican
 ## en loop, dinamita que explota en el borde de la roca y runas que orbitan. Miden estado, no cómo se ve.
 ## Los helpers y el armado de la escena están en scene_fx_base.gd.

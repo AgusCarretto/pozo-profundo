@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-  Corre todos los tests headless de tests/*_test.gd y resume el resultado.
+  Corre los tests headless de tests/*_test.gd y resume el resultado.
 
 .DESCRIPTION
   Usa el Godot indicado en -Godot, o en la variable de entorno GODOT, o el de
@@ -17,16 +17,25 @@
 
   Sale con código 0 si todo pasó y 1 si algo falló.
 
+  Tests rápidos y lentos: un test es lento si su encabezado tiene una línea `## @lento` (los de
+  animaciones, que esperan a que terminen tweens y partículas). Sin parámetros corren solo los rápidos;
+  con -All, todos (antes de un commit de fase); con -Slow, solo los lentos. Un -Filter explícito incluye
+  los lentos que coincidan: nombrar un test es pedirlo.
+
 .EXAMPLE
   powershell -File tools/run_tests.ps1
   powershell -File tools/run_tests.ps1 -Filter "economy*"
   powershell -File tools/run_tests.ps1 -ShowOutput
+  powershell -File tools/run_tests.ps1 -All
+  powershell -File tools/run_tests.ps1 -Slow
 #>
 param(
     [string]$Godot = $(if ($env:GODOT) { $env:GODOT } else { Join-Path $env:USERPROFILE "Downloads\Godot_v4.7.2-stable_win64.exe\Godot_v4.7.2-stable_win64_console.exe" }),
     [string]$Filter = "*",
     [int]$TimeoutSeconds = 60,
-    [switch]$ShowOutput
+    [switch]$ShowOutput,
+    [switch]$All,
+    [switch]$Slow
 )
 
 $ErrorActionPreference = "Stop"
@@ -36,13 +45,33 @@ if (-not (Test-Path $Godot)) {
     throw "No encuentro Godot en '$Godot'. Pasalo con -Godot o definí la variable GODOT."
 }
 
-$tests = Get-ChildItem (Join-Path $project "tests") -Filter "*_test.gd" |
-    Where-Object { $_.BaseName -like $Filter } |
-    Sort-Object Name
-if (-not $tests) {
-    throw "No hay tests que coincidan con '$Filter' en tests/."
+# Un test es lento si alguna línea de su encabezado (los comentarios de arriba) empieza con "## @lento".
+function Test-IsSlow([System.IO.FileInfo]$File) {
+    foreach ($line in (Get-Content -LiteralPath $File.FullName -Encoding UTF8 -TotalCount 15)) {
+        if ($line -match "^\s*## @lento\b") { return $true }
+    }
+    return $false
 }
 
+$matching = Get-ChildItem (Join-Path $project "tests") -Filter "*_test.gd" |
+    Where-Object { $_.BaseName -like $Filter } |
+    Sort-Object Name
+if (-not $matching) {
+    throw "No hay tests que coincidan con '$Filter' en tests/."
+}
+$explicitFilter = $Filter -ne "*"
+$tests = @()
+$skippedSlow = @()
+foreach ($file in $matching) {
+    $isSlow = Test-IsSlow $file
+    if ($Slow) { $wanted = $isSlow }
+    elseif ($All -or $explicitFilter) { $wanted = $true }
+    else { $wanted = -not $isSlow }
+    if ($wanted) { $tests += $file } elseif ($isSlow) { $skippedSlow += $file.BaseName }
+}
+if (-not $tests) {
+    throw "No hay tests para correr con estos parámetros (Filter '$Filter')."
+}
 # Se usa Process (y no `&` con 2>&1) porque en PowerShell 5.1 redirigir el stderr de un
 # ejecutable nativo lo convierte en errores terminantes bajo $ErrorActionPreference = "Stop".
 function Invoke-GodotTest([string]$ScriptName) {
@@ -111,4 +140,7 @@ if ($failed.Count -gt 0) {
     exit 1
 }
 Write-Host "Pasaron los $($results.Count) tests." -ForegroundColor Green
+if ($skippedSlow.Count -gt 0) {
+    Write-Host "Se saltearon $($skippedSlow.Count) tests lentos ($($skippedSlow -join ', ')): correlos con -All o -Slow." -ForegroundColor Yellow
+}
 exit 0

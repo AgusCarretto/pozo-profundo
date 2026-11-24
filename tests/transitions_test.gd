@@ -1,4 +1,5 @@
 extends "res://tests/scene_fx_base.gd"
+## @lento (animaciones: corre con -All o -Slow, ver tools/run_tests.ps1)
 ## Tests headless de las transiciones (F2-B): cambio de bioma (fundido del piso y la roca, cartel pasajero y
 ## música), la ventana de vuelta offline (contador que sube y lluvia de monedas) y la vuelta a la superficie
 ## (fundido a blanco y reliquias que vuelan al contador).
