@@ -15,6 +15,10 @@ signal pick_upgraded(level: int)
 signal loot_dropped(rarity: int, amount: float)
 ## Volviste a la superficie y ganaste `relics_gained` reliquias.
 signal prestiged(relics_gained: int)
+## Se acreditó progreso offline y hay un aviso para el jugador: `report` = {seconds, gold, capped}
+## (segundos acreditados, oro ganado y si se cortó por el tope). Es el mismo dato que
+## queda en `pending_offline_report` hasta que la UI llame a dismiss_offline_report().
+signal offline_progress(report: Dictionary)
 
 enum BuyMode { X1, X10, MAX }
 
@@ -22,6 +26,7 @@ const EconomyMath := preload("res://core/economy_math.gd")
 
 const DEFAULT_BALANCE_PATH: String = "res://data/balance.json"
 const SAVE_SECTION: String = "economy"
+const SECONDS_PER_HOUR: float = 3600.0
 const X10_COUNT: int = 10
 ## Topes para datos de partida dañados o editados a mano (evitan desbordes a infinito).
 const MAX_LOADED_OWNED: float = 1000000.0
@@ -37,6 +42,8 @@ var pick_level: int = 0
 var run_gold: float = 0.0
 ## Reliquias acumuladas: sobreviven al prestigio y dan oro permanente.
 var relics: int = 0
+## Aviso del progreso offline que el jugador todavía no vio ({} = ninguno). No se guarda.
+var pending_offline_report: Dictionary = {}
 ## Azar del botín. Los tests le fijan la semilla para repetir una tirada.
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
@@ -65,6 +72,8 @@ var _rarities: Array[Dictionary] = []
 var _rarity_weights: Array[float] = []
 ## Reglas del prestigio (min_depth, depth_offset, depth_step, exponent, bonus_per_relic). Vacío = sin prestigio.
 var _prestige: Dictionary = {}
+## Reglas del progreso offline (max_hours, min_notice_seconds). Vacío = sin progreso offline.
+var _offline: Dictionary = {}
 
 
 func _init() -> void:
@@ -79,6 +88,9 @@ func _ready() -> void:
 	var save: Node = get_node_or_null("/root/Save")
 	if save != null and save.has_method("register_section"):
 		save.register_section(SAVE_SECTION, to_dict, from_dict)
+		# Save ya leyó el archivo (es el primer autoload): si había partida, la cuadrilla
+		# siguió trabajando desde la hora de ese save.
+		apply_offline_since(int(save.loaded_saved_at), Time.get_unix_time_from_system())
 
 
 func _process(_delta: float) -> void:
@@ -145,6 +157,9 @@ func load_balance(balance: Dictionary) -> bool:
 	var parsed_prestige: Variant = _read_numbers(balance, "prestige", ["min_depth", "depth_step", "exponent", "bonus_per_relic"], ["depth_offset"])
 	if parsed_prestige == null:
 		return false
+	var parsed_offline: Variant = _read_numbers(balance, "offline", ["max_hours", "min_notice_seconds"])
+	if parsed_offline == null:
+		return false
 
 	last_error = ""
 	_cost_growth = growth
@@ -152,6 +167,7 @@ func load_balance(balance: Dictionary) -> bool:
 	_pick = parsed_pick
 	_depth = parsed_depth
 	_prestige = parsed_prestige
+	_offline = parsed_offline
 	_biomes = []
 	_biome_meters_each = 0.0
 	_biome_growth = 1.0
@@ -319,6 +335,7 @@ func _roll_loot(chance: float) -> void:
 ## Empieza una partida de cero (también sin reliquias), conservando el balance.
 func reset() -> void:
 	relics = 0
+	pending_offline_report = {}
 	_reset_run()
 
 
@@ -355,9 +372,15 @@ func gold_per_second() -> float:
 
 ## Producción pasiva según un reloj monotónico (µs, p. ej. Time.get_ticks_usec()).
 ## La primera llamada solo fija la referencia; un reloj que retrocede no suma ni resta.
+## Un hueco largo (el navegador o el celular congeló la app) es una ausencia: se acredita
+## como progreso offline, con tope y aviso, y no como horas de producción normal.
 func tick_realtime(now_usec: int) -> void:
 	if _last_tick_usec > 0 and now_usec > _last_tick_usec:
-		tick((now_usec - _last_tick_usec) / 1000000.0)
+		var gap: float = (now_usec - _last_tick_usec) / 1000000.0
+		if not _offline.is_empty() and gap >= _offline["min_notice_seconds"]:
+			apply_offline(gap)
+		else:
+			tick(gap)
 	_last_tick_usec = now_usec
 
 
@@ -373,6 +396,62 @@ func tick(delta: float) -> void:
 	# así un frame lento no tira menos cofres que varios rápidos.
 	_roll_loot(1.0 - pow(1.0 - _loot_second_chance, delta))
 	gold_changed.emit(gold)
+
+
+# --- Progreso offline ------------------------------------------------------------
+
+## Tope de segundos de ausencia que se acreditan (0 si el balance no tiene "offline").
+func offline_max_seconds() -> float:
+	if _offline.is_empty():
+		return 0.0
+	return float(_offline["max_hours"]) * SECONDS_PER_HOUR
+
+
+## Acredita lo que produjo la cuadrilla durante `elapsed` segundos de ausencia, hasta el tope.
+## Usa la producción de hoy (bioma y reliquias actuales), no la que iría subiendo por el camino:
+## es una cuenta conservadora. No sortea cofres. Devuelve el reporte {seconds, gold, capped},
+## o {} si no acreditó nada (ausencia nula o inválida, sin cuadrilla, o sin sección offline).
+## Si la ausencia llega a `min_notice_seconds`, deja el aviso en pending_offline_report y emite
+## offline_progress; una ausencia más corta se acredita igual, pero sin cartel.
+func apply_offline(elapsed: float) -> Dictionary:
+	if _offline.is_empty():
+		return {}
+	var seconds: float = EconomyMath.offline_seconds(elapsed, offline_max_seconds())
+	var gained: float = gold_per_second() * seconds
+	if seconds <= 0.0 or gained <= 0.0:
+		return {}
+	_earn(gained)
+	var report: Dictionary = { "seconds": seconds, "gold": gained, "capped": elapsed > offline_max_seconds() }
+	gold_changed.emit(gold)
+	if elapsed >= _offline["min_notice_seconds"]:
+		_queue_offline_notice(report)
+	return report
+
+
+## Offline desde la hora (unix) en que se guardó la partida. saved_at <= 0 = no había save.
+func apply_offline_since(saved_at: int, now: float) -> Dictionary:
+	if saved_at <= 0:
+		return {}
+	return apply_offline(now - saved_at)
+
+
+## El jugador ya vio el aviso.
+func dismiss_offline_report() -> void:
+	pending_offline_report = {}
+
+
+## Deja `report` como aviso pendiente. Si ya había uno sin cerrar, los suma: así el cartel
+## nunca esconde oro que ya se acreditó.
+func _queue_offline_notice(report: Dictionary) -> void:
+	if pending_offline_report.is_empty():
+		pending_offline_report = report
+	else:
+		pending_offline_report = {
+			"seconds": float(pending_offline_report["seconds"]) + float(report["seconds"]),
+			"gold": float(pending_offline_report["gold"]) + float(report["gold"]),
+			"capped": bool(pending_offline_report["capped"]) or bool(report["capped"]),
+		}
+	offline_progress.emit(pending_offline_report)
 
 
 # --- Golpe y pico ------------------------------------------------------------

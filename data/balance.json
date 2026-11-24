@@ -44,5 +44,9 @@
 		"depth_step": 50,
 		"exponent": 1.3,
 		"bonus_per_relic": 0.25
+	},
+	"offline": {
+		"max_hours": 8,
+		"min_notice_seconds": 60
 	}
 }
