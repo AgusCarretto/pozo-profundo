@@ -53,8 +53,16 @@ theme_override_font_sizes/font_size = 26
 text = "Golpe 1 · 0 oro/s"
 horizontal_alignment = 1
 
+[node name="DepthLabel" type="Label" parent="Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.78, 0.9, 1)
+theme_override_font_sizes/font_size = 28
+text = "Profundidad 0 m"
+horizontal_alignment = 1
+
 [node name="RockArea" type="Control" parent="Margin/VBox"]
-custom_minimum_size = Vector2(0, 330)
+custom_minimum_size = Vector2(0, 230)
 layout_mode = 2
 
 [node name="Rock" type="ColorRect" parent="Margin/VBox/RockArea"]
@@ -64,10 +72,10 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -150.0
-offset_top = -150.0
-offset_right = 150.0
-offset_bottom = 150.0
+offset_left = -100.0
+offset_top = -100.0
+offset_right = 100.0
+offset_bottom = 100.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
@@ -80,10 +88,10 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -45.0
-offset_top = -75.0
-offset_right = 45.0
-offset_bottom = 15.0
+offset_left = -30.0
+offset_top = -50.0
+offset_right = 30.0
+offset_bottom = 10.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
@@ -101,6 +109,32 @@ focus_mode = 0
 theme_override_font_sizes/font_size = 40
 text = "¡Picar!"
 flat = true
+
+[node name="LootBox" type="VBoxContainer" parent="Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="LootInfoLabel" type="Label" parent="Margin/VBox/LootBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.64, 0.58, 1)
+theme_override_font_sizes/font_size = 22
+text = "Cofres"
+horizontal_alignment = 1
+
+[node name="OddsRow" type="HBoxContainer" parent="Margin/VBox/LootBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="LastLootLabel" type="Label" parent="Margin/VBox/LootBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.64, 0.58, 1)
+theme_override_font_sizes/font_size = 24
+text = " "
+horizontal_alignment = 1
 
 [node name="ModeBar" type="HBoxContainer" parent="Margin/VBox"]
 layout_mode = 2
@@ -143,6 +177,22 @@ layout_mode = 2
 focus_mode = 0
 theme_override_font_sizes/font_size = 30
 text = "Mejorar pico"
+
+[node name="RelicsLabel" type="Label" parent="Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.78, 0.9, 1)
+theme_override_font_sizes/font_size = 26
+text = "Reliquias: 0"
+horizontal_alignment = 1
+
+[node name="PrestigeButton" type="Button" parent="Margin/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 28
+text = "Volver a la superficie"
 
 [node name="Scroll" type="ScrollContainer" parent="Margin/VBox"]
 layout_mode = 2
