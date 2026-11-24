@@ -33,6 +33,15 @@ const SPECIAL_PAUSE: float = 0.3
 const SPECIAL_SLOW: float = 0.05
 const SPECIAL_FLASH: Color = Color(1.0, 0.97, 0.85, 0.85)
 const SPECIAL_FLASH_FADE: float = 0.5
+## Volver a la superficie: fundido (a blanco; a oscuro con "reducir efectos") y reliquias que vuelan al contador.
+const PRESTIGE_WHITE: Color = Color(1.0, 1.0, 1.0)
+const PRESTIGE_DARK: Color = Color(0.08, 0.07, 0.12)
+const PRESTIGE_FADE_IN: float = 0.45
+const PRESTIGE_FADE_OUT: float = 0.7
+const MAX_FLYING_RELICS: int = 10
+const RELIC_FLIGHT_TIME: float = 0.7
+const RELIC_STAGGER: float = 0.12
+const RELIC_SPREAD: float = 90.0
 
 const SOUND_ON_ICON: Texture2D = preload("res://assets/ui/game_icons/audioOn.png")
 const SOUND_OFF_ICON: Texture2D = preload("res://assets/ui/game_icons/audioOff.png")
@@ -71,6 +80,10 @@ var _shown_biome: int = -1
 ## Se prende al final de _ready: lo que se marca mientras se arma la escena no suena. (is_node_ready() no sirve:
 ## ya es true adentro de _ready.)
 var _built: bool = false
+## Mientras dura la vuelta a la superficie (no se puede confirmar dos veces) y cuántas reliquias muestra el contador
+## mientras vuelan (-1 = las de Economy).
+var _prestiging: bool = false
+var _relics_shown: int = -1
 ## Tamaño de fuente del oro según el tema (el que se usa cuando el número entra).
 var _gold_font_size: int = 0
 
@@ -425,9 +438,10 @@ func _rarity_color(id: String) -> Color:
 # --- Reliquias y prestigio ---------------------------------------------------
 
 func _refresh_prestige() -> void:
-	var relics_text: String = "Reliquias: %d" % Economy.relics
-	if Economy.relics > 0:
-		relics_text += " · +%s de oro" % NumberFormat.format_percent(Economy.relics * Economy.relic_bonus())
+	var relics: int = Economy.relics if _relics_shown < 0 else _relics_shown
+	var relics_text: String = "Reliquias: %d" % relics
+	if relics > 0:
+		relics_text += " · +%s de oro" % NumberFormat.format_percent(relics * Economy.relic_bonus())
 	_relics_label.text = relics_text
 	_relics_hint.text = "Desde los %s m podés volver a la superficie y ganar reliquias: cada una da +%s de oro para siempre." % [
 		NumberFormat.format_number(Economy.prestige_min_depth()),
@@ -445,7 +459,7 @@ func _refresh_prestige() -> void:
 
 ## Una runa por reliquia (hasta MAX_RUNES_SHOWN), alternando entre los tres símbolos.
 func _refresh_runes() -> void:
-	var wanted: int = mini(Economy.relics, MAX_RUNES_SHOWN)
+	var wanted: int = mini(Economy.relics if _relics_shown < 0 else _relics_shown, MAX_RUNES_SHOWN)
 	if wanted == _shown_runes:
 		return
 	_shown_runes = wanted
@@ -482,8 +496,47 @@ func _on_prestige_pressed() -> void:
 	_modal.open("¿Volver a la superficie?", body, "Sí, volver", "Seguir cavando", _confirm_prestige, &"ButtonRed")
 
 
+## Volver a la superficie: la pantalla se funde a blanco (a oscuro con "reducir efectos") y recién ahí se reinicia
+## la partida, así no se ve el oro bajar a 0. Al aclarar, las reliquias ganadas vuelan desde el centro al
+## contador, que suma una por cada una que llega.
 func _confirm_prestige() -> void:
-	Economy.prestige()
+	if _prestiging:
+		return
+	_prestiging = true
+	await _screen_fx.cover(PRESTIGE_DARK if Settings.reduce_effects else PRESTIGE_WHITE, PRESTIGE_FADE_IN)
+	var before: int = Economy.relics
+	var gained: int = Economy.prestige()
+	_mine_view.clear_effects()
+	_relics_shown = before
+	_refresh()
+	_screen_fx.uncover(PRESTIGE_FADE_OUT)
+	await _fly_relics(before, gained)
+	_relics_shown = -1
+	_prestiging = false
+	_mark_dirty()
+
+
+## Las reliquias ganadas (hasta MAX_FLYING_RELICS figuras) vuelan al contador; cada una que llega lo sube. Si se
+## ganaron más que figuras, cada figura suma su parte y la última deja el total.
+func _fly_relics(before: int, gained: int) -> void:
+	var figures: int = mini(gained, MAX_FLYING_RELICS)
+	if figures <= 0:
+		return
+	var target_control: Control = _relics_label if _relics_label.is_visible_in_tree() else _tab_buttons[Tab.RELICS]
+	var target: Vector2 = target_control.get_global_rect().get_center() - _screen_fx.get_global_rect().position
+	var origin: Vector2 = _screen_fx.size * 0.5
+	var arrived: Array[int] = [0]
+	for index: int in range(figures):
+		var spread: Vector2 = Vector2.RIGHT.rotated(TAU * index / figures) * RELIC_SPREAD * minf(figures - 1, 1)
+		var on_arrive: Callable = func() -> void:
+			arrived[0] += 1
+			_relics_shown = before + int(roundf(gained * float(arrived[0]) / figures))
+			_refresh_prestige()
+			Juice.bounce(_relics_label)
+			Audio.play_sfx("relic")
+		_screen_fx.fly(load(RUNE_ICONS[index % RUNE_ICONS.size()]) as Texture2D, origin + spread, target, RUNE_SIZE, PRESTIGE_FADE_OUT * 0.5 + index * RELIC_STAGGER, RELIC_FLIGHT_TIME, on_arrive)
+	var deadline: float = PRESTIGE_FADE_OUT * 0.5 + figures * RELIC_STAGGER + RELIC_FLIGHT_TIME + 0.3
+	await get_tree().create_timer(deadline, true, false, true).timeout
 
 
 # --- Progreso offline --------------------------------------------------------

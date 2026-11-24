@@ -99,6 +99,14 @@
 			"pitch": [0.85, 0.95],
 			"volume_db": 0
 		},
+		"relic": {
+			"files": [
+				"res://assets/audio/interface_sounds/glass_001.ogg",
+				"res://assets/audio/interface_sounds/glass_003.ogg"
+			],
+			"pitch": [1.15, 1.35],
+			"volume_db": -4
+		},
 		"biome": {
 			"files": ["res://assets/audio/interface_sounds/bong_001.ogg"],
 			"volume_db": -2

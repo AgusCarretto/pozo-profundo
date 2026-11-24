@@ -9,6 +9,8 @@ func _run_tests() -> void:
 	await _test_biome_banner()
 	await _test_no_banner_when_going_up()
 	await _test_offline_welcome()
+	await _test_prestige_whiteout()
+	await _test_prestige_reduced()
 
 
 func _banners() -> Array[Control]:
@@ -150,4 +152,95 @@ func _test_offline_welcome() -> void:
 	_check(not counter.visible and not coins.emitting, "otro cartel cualquiera no tiene contador ni monedas")
 	modal.call("close")
 	root.get_node("Audio").sfx_played.disconnect(record)
+	_economy.reset()
+
+
+func _flash() -> ColorRect:
+	return _scene.get_node("ScreenFx/Flash") as ColorRect
+
+
+func _flying_relics() -> Array[TextureRect]:
+	var found: Array[TextureRect] = []
+	for child: Node in _scene.get_node("ScreenFx").get_children():
+		if str(child.name).begins_with("FlyingRelic") and not child.is_queued_for_deletion():
+			found.append(child as TextureRect)
+	return found
+
+
+## Deja todo listo para volver a la superficie con 2 reliquias (300 m), en la pestaña Reliquias, y confirma.
+func _start_prestige() -> void:
+	_economy.reset()
+	_economy.gold = 5000.0
+	_economy.owned[0] = 3
+	_economy.run_gold = 41000.0
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	(_scene.get_node("%TabRelicsButton") as Button).button_pressed = true
+	await process_frame
+	(_scene.get_node("%PrestigeButton") as Button).pressed.emit()
+	var modal: Node = _scene.get_node("Modal")
+	(modal.get("confirm_button") as Button).pressed.emit()
+
+
+func _test_prestige_whiteout() -> void:
+	_section("Volver a la superficie: fundido a blanco y reliquias que vuelan")
+	var heard: Array[String] = []
+	var record: Callable = func(id: String) -> void: heard.append(id)
+	root.get_node("Audio").sfx_played.connect(record)
+	await _start_prestige()
+	var screen_fx: Control = _scene.get_node("ScreenFx") as Control
+	_check_eq(_economy.relics, 0, "al confirmar todavía no pasó nada: primero se funde a blanco")
+	_check_eq(screen_fx.mouse_filter, Control.MOUSE_FILTER_STOP, "mientras dura no se puede tocar nada")
+	var alpha_at_reset: float = -1.0
+	var relics_label: Label = _scene.get_node("%RelicsLabel") as Label
+	var labels: Dictionary = {}
+	var max_flying: int = 0
+	var flying_textures: Dictionary = {}
+	var deadline: int = Time.get_ticks_msec() + 5000
+	while Time.get_ticks_msec() < deadline:
+		await process_frame
+		if alpha_at_reset < 0.0 and _economy.relics == 2:
+			alpha_at_reset = _flash().color.a
+		labels[relics_label.text] = true
+		var flying: Array[TextureRect] = _flying_relics()
+		max_flying = maxi(max_flying, flying.size())
+		for relic: TextureRect in flying:
+			flying_textures[relic.texture.resource_path.get_file()] = true
+		if alpha_at_reset >= 0.0 and flying.is_empty() and _flash().color.a == 0.0 and relics_label.text.contains("+50%"):
+			break
+	_check(alpha_at_reset >= 0.95, "la partida se reinicia con la pantalla blanca (no se ve el oro bajar a 0) (%.2f)" % alpha_at_reset)
+	var flash_color: Color = _flash().color
+	_check(flash_color.r > 0.9 and flash_color.g > 0.9 and flash_color.b > 0.9, "el fundido es a blanco")
+	_check_eq(max_flying, 2, "las 2 reliquias vuelan")
+	_check(flying_textures.keys().all(func(file: String) -> bool: return file.begins_with("rune_")), "con forma de runa (%s)" % str(flying_textures.keys()))
+	_check(labels.has("Reliquias: 0") or labels.has("Reliquias: 1"), "el contador las va sumando al llegar (%s)" % str(labels.keys()))
+	_check_eq(relics_label.text, "Reliquias: 2 · +50% de oro", "y termina en el total")
+	_check(heard.count("relic") >= 2, "cada una suena al llegar (%d)" % heard.count("relic"))
+	_check_eq(_flash().color.a, 0.0, "la pantalla vuelve a verse")
+	_check_eq(screen_fx.mouse_filter, Control.MOUSE_FILTER_IGNORE, "y se puede tocar de nuevo")
+	_check_eq(str(_mine().get("biome_id")), "earth", "de vuelta en Tierra")
+	root.get_node("Audio").sfx_played.disconnect(record)
+	(_scene.get_node("%TabCrewButton") as Button).button_pressed = true
+	_economy.reset()
+	# Que termine la transición (la cola de la última reliquia) antes de la próxima vuelta a la superficie.
+	await _wait(1.0)
+
+
+func _test_prestige_reduced() -> void:
+	_section("Volver a la superficie con reducir efectos")
+	_settings.reduce_effects = true
+	await _start_prestige()
+	var brightest: float = 0.0
+	var deadline: int = Time.get_ticks_msec() + 4000
+	while Time.get_ticks_msec() < deadline:
+		await process_frame
+		var color: Color = _flash().color
+		if color.a > 0.5:
+			brightest = maxf(brightest, color.get_luminance())
+		if _economy.relics == 2 and color.a == 0.0 and _flying_relics().is_empty():
+			break
+	_check(brightest > 0.0 and brightest < 0.4, "funde a oscuro en vez de a blanco (sin destello) (luminancia %.2f)" % brightest)
+	_check_eq(_economy.relics, 2, "y vuelve a la superficie igual")
+	_settings.reduce_effects = false
+	(_scene.get_node("%TabCrewButton") as Button).button_pressed = true
 	_economy.reset()

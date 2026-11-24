@@ -15,7 +15,8 @@ const SIZES: Array[Vector2i] = [Vector2i(360, 640), Vector2i(412, 915)]
 ## captura sale con el panel de Opciones abierto; con "hits": N, se golpea N veces justo antes (números flotantes,
 ## roca aplastada); con "chest": i, cae un cofre de la rareza i; con "wait": s, se esperan s segundos antes de
 ## capturar (para agarrar una explosión o el cofre ya apoyado); con "descend": oro, después de armar el estado se baja
-## a esa profundidad (cambio de bioma con fundido y cartel); con "offline": s, se vuelve de s segundos fuera.
+## a esa profundidad (cambio de bioma con fundido y cartel); con "offline": s, se vuelve de s segundos fuera; con
+## "prestige": true, se vuelve a la superficie (fundido y reliquias volando).
 ## `owned` sigue el orden del balance: Minero, Taladro, Dinamita, Gólem, Excavadora.
 const SHOTS: Array[Dictionary] = [
 	{ "name": "1_inicio", "tab": 0, "gold": 22.0, "run_gold": 22.0, "pick": 0, "owned": [], "loot": 0.0, "relics": 0 },
@@ -30,6 +31,7 @@ const SHOTS: Array[Dictionary] = [
 	{ "name": "10_legendario", "tab": 1, "gold": 4.0e6, "run_gold": 5.0e6, "pick": 7, "owned": [30, 8, 5, 2, 0], "loot": 1.1, "relics": 3, "chest": 3, "wait": 1.2 },
 	{ "name": "11_bioma_nuevo", "tab": 0, "gold": 900.0, "run_gold": 600.0, "pick": 2, "owned": [4, 1], "loot": 0.0, "relics": 0, "descend": 700.0, "wait": 0.3 },
 	{ "name": "12_vuelta", "tab": 0, "gold": 3400.0, "run_gold": 4200.0, "pick": 3, "owned": [12, 2], "loot": 0.12, "relics": 0, "offline": 11520.0, "wait": 0.6 },
+	{ "name": "13_superficie", "tab": 2, "gold": 4.0e6, "run_gold": 5.0e6, "pick": 7, "owned": [30, 8, 5, 2, 0], "loot": 1.1, "relics": 3, "prestige": true, "wait": 0.95 },
 ]
 
 var _out_dir: String = ""
@@ -62,6 +64,7 @@ func _run() -> void:
 	for size: Vector2i in SIZES:
 		DisplayServer.window_set_size(size)
 		for shot: Dictionary in SHOTS:
+			print("tomando %dx%d_%s..." % [size.x, size.y, shot["name"]])
 			_apply(economy, shot)
 			# Sin restos de la captura anterior (números y astillas en el aire).
 			scene.get_node("%MineView").call("clear_effects")
@@ -79,6 +82,10 @@ func _run() -> void:
 				economy.gold_changed.emit(economy.gold)
 			if shot.has("offline"):
 				economy.apply_offline(float(shot["offline"]))
+			if shot.get("prestige", false):
+				await _settle()
+				(scene.get_node("%PrestigeButton") as Button).pressed.emit()
+				(scene.get_node("Modal").get("confirm_button") as Button).pressed.emit()
 			if shot.has("chest"):
 				economy.drop_loot(int(shot["chest"]))
 			for hit: int in range(int(shot.get("hits", 0))):
@@ -91,6 +98,8 @@ func _run() -> void:
 			var path: String = "%s/%dx%d_%s.png" % [_out_dir, size.x, size.y, shot["name"]]
 			image.save_png(path)
 			scene.get_node("Modal").call("close")
+			if shot.get("prestige", false):
+				await create_timer(2.0).timeout # que termine la transición antes de la próxima captura
 			print("%s  (%dx%d)" % [path, image.get_width(), image.get_height()])
 	economy.reset()
 	# Al salir no tiene que quedar nada vivo: los números flotantes con sus tweens y el último sonido (si no,

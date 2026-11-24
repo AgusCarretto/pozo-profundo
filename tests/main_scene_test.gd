@@ -86,6 +86,13 @@ func _modal() -> Control:
 	return _scene.get_node("Modal") as Control
 
 
+## Espera (en tiempo real) a que condition dé true, o hasta seconds.
+func _wait_until(condition: Callable, seconds: float) -> void:
+	var deadline: int = Time.get_ticks_msec() + int(seconds * 1000.0)
+	while not condition.call() and Time.get_ticks_msec() < deadline:
+		await process_frame
+
+
 ## Fija el oro ganado de la partida (la profundidad) y espera a que la UI se refresque.
 func _set_run_gold(run_gold: float) -> void:
 	_economy.run_gold = run_gold
@@ -262,13 +269,16 @@ func _test_prestige_flow() -> void:
 	_check(_modal().visible, "se puede volver a abrir")
 	_modal().confirm_button.pressed.emit()
 	_check(not _modal().visible, "confirmar cierra el cartel")
+	# La vuelta a la superficie pasa detrás de un fundido a blanco (ver transitions_test.gd): se espera a que pase.
+	await _wait_until(func() -> bool: return _economy.relics == 2, 3.0)
 	_check_eq(_economy.relics, 2, "y da 2 reliquias")
 	_check_eq(_economy.loot_bonus, 0.0, "y reinicia el bonus de botín")
 	_check_eq(_economy.gold, 0.0, "el oro vuelve a 0")
 	_check_eq(_economy.owned_count(0), 0, "sin cuadrilla")
 	_check_eq(_economy.pick_level, 0, "pico en 0")
 	_check_eq(_economy.depth(), 0.0, "profundidad 0")
-	await process_frame
+	# El contador de reliquias sube cuando llegan volando: se espera a que termine la transición.
+	await _wait_until(func() -> bool: return _label("RelicsLabel").text.contains("+50%"), 4.0)
 	_check_eq(_label("RelicsLabel").text, "Reliquias: 2 · +50% de oro", "el cartel de reliquias se actualiza (%s)" % _label("RelicsLabel").text)
 	_check(_label("DepthLabel").text.contains("Tierra"), "de vuelta en Tierra")
 	_check(button.disabled, "y el botón vuelve a estar deshabilitado")

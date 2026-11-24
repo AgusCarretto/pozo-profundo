@@ -9,7 +9,7 @@ const MAIN_SCENE: String = "res://game/main.tscn"
 const CATALOG_PATH: String = "res://data/sounds.json"
 const AUDIO_DIR: String = "res://assets/audio"
 ## Los SFX que el juego pide sí o sí (los de los cofres se agregan por rareza del balance).
-const REQUIRED_SFX: Array[String] = ["hit", "buy", "pick", "tab", "mode", "toggle", "open", "close", "prestige", "biome", "dynamite", "coins"]
+const REQUIRED_SFX: Array[String] = ["hit", "buy", "pick", "tab", "mode", "toggle", "open", "close", "prestige", "biome", "dynamite", "coins", "relic"]
 
 var _economy: Node
 var _audio: Node
@@ -205,8 +205,14 @@ func _test_prestige_cues() -> void:
 	_check(_take().has("open"), "pedir volver abre el cartel")
 	var modal: Node = _scene.get_node("Modal")
 	(modal.get("confirm_button") as Button).pressed.emit()
-	await process_frame
-	var played: Array[String] = _take()
+	# La vuelta a la superficie pasa detrás de un fundido: se espera (por tiempo real) a que suceda.
+	var played: Array[String] = []
+	var deadline: int = Time.get_ticks_msec() + 3000
+	while not played.has("prestige") and Time.get_ticks_msec() < deadline:
+		await process_frame
+		played.append_array(_take())
+	await create_timer(1.5).timeout
+	played.append_array(_take())
 	_check(played.has("prestige"), "confirmar suena como prestigio (%s)" % str(played))
 	_check(not played.has("biome"), "y volver a Tierra no suena como bioma nuevo")
 
