@@ -13,6 +13,8 @@ signal generator_bought(index: int, count: int)
 signal pick_upgraded(level: int)
 ## Cayó un cofre de la rareza `rarity` (índice de loot_table()) y sumó `amount` de oro.
 signal loot_dropped(rarity: int, amount: float)
+## Volviste a la superficie y ganaste `relics_gained` reliquias.
+signal prestiged(relics_gained: int)
 
 enum BuyMode { X1, X10, MAX }
 
@@ -24,6 +26,7 @@ const X10_COUNT: int = 10
 ## Topes para datos de partida dañados o editados a mano (evitan desbordes a infinito).
 const MAX_LOADED_OWNED: float = 1000000.0
 const MAX_LOADED_PICK_LEVEL: float = 300.0
+const MAX_LOADED_RELICS: float = 1000000.0
 
 var gold: float = 0.0
 ## Unidades compradas de cada generador (mismo orden que en el balance).
@@ -32,14 +35,15 @@ var pick_level: int = 0
 ## Oro ganado en la partida actual (producción, golpes y botín). No baja al gastar:
 ## de él sale la profundidad, y por eso un gasto nunca te hace retroceder de bioma.
 var run_gold: float = 0.0
+## Reliquias acumuladas: sobreviven al prestigio y dan oro permanente.
+var relics: int = 0
 ## Azar del botín. Los tests le fijan la semilla para repetir una tirada.
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
-## Multiplicador global de oro: el del bioma actual (y, más adelante, el de las reliquias).
-## Se calcula en cada lectura; no se asigna.
+## Multiplicador global de oro: bioma actual x reliquias. Se calcula en cada lectura; no se asigna.
 var multiplier: float:
 	get:
-		return biome_multiplier()
+		return biome_multiplier() * relic_multiplier()
 
 ## Motivo por el que se rechazó el último balance ("" si cargó bien).
 var last_error: String = ""
@@ -59,6 +63,8 @@ var _loot_second_chance: float = 0.0
 ## Rarezas de los cofres: {id, name, weight, bonus}. Vacía = no hay botín.
 var _rarities: Array[Dictionary] = []
 var _rarity_weights: Array[float] = []
+## Reglas del prestigio (min_depth, depth_offset, depth_step, exponent, bonus_per_relic). Vacío = sin prestigio.
+var _prestige: Dictionary = {}
 
 
 func _init() -> void:
@@ -136,12 +142,16 @@ func load_balance(balance: Dictionary) -> bool:
 	var parsed_loot: Variant = _read_loot(balance)
 	if parsed_loot == null:
 		return false
+	var parsed_prestige: Variant = _read_numbers(balance, "prestige", ["min_depth", "depth_step", "exponent", "bonus_per_relic"], ["depth_offset"])
+	if parsed_prestige == null:
+		return false
 
 	last_error = ""
 	_cost_growth = growth
 	_generators = parsed_generators
 	_pick = parsed_pick
 	_depth = parsed_depth
+	_prestige = parsed_prestige
 	_biomes = []
 	_biome_meters_each = 0.0
 	_biome_growth = 1.0
@@ -242,6 +252,56 @@ func loot_amount(rarity: int) -> float:
 	return maxf(gold * float(_rarities[rarity]["bonus"]), hit_value())
 
 
+# --- Reliquias y prestigio ---------------------------------------------------
+
+## Multiplicador de oro de las reliquias que tenés (x1 si el balance no tiene prestigio).
+func relic_multiplier() -> float:
+	return relic_multiplier_for(relics)
+
+
+## Multiplicador que darían `count` reliquias (para mostrar cómo quedaría tras una subida).
+func relic_multiplier_for(count: int) -> float:
+	if _prestige.is_empty():
+		return 1.0
+	return EconomyMath.relic_multiplier(count, _prestige["bonus_per_relic"])
+
+
+## Bonus de oro de cada reliquia (0.25 = +25%).
+func relic_bonus() -> float:
+	return _prestige.get("bonus_per_relic", 0.0)
+
+
+## Profundidad mínima (m) para volver a la superficie con reliquias.
+func prestige_min_depth() -> float:
+	return _prestige.get("min_depth", 0.0)
+
+
+## Reliquias que daría volver a la superficie ahora: 0 si todavía no llegaste a la profundidad mínima.
+func prestige_relics() -> int:
+	if _prestige.is_empty():
+		return 0
+	return EconomyMath.relics_for_depth(depth(), _prestige["min_depth"], _prestige["depth_offset"], _prestige["depth_step"], _prestige["exponent"])
+
+
+func can_prestige() -> bool:
+	return prestige_relics() > 0
+
+
+## Vuelve a la superficie: suma las reliquias de esta bajada y reinicia la partida (oro,
+## profundidad, cuadrilla y pico). Devuelve las reliquias ganadas; si todavía no se puede,
+## devuelve 0 y no toca nada. Ejecuta ya mismo: la confirmación al jugador la pide la UI antes.
+func prestige() -> int:
+	var gained: int = prestige_relics()
+	if gained <= 0:
+		return 0
+	relics = mini(relics + gained, int(MAX_LOADED_RELICS))
+	_reset_run()
+	prestiged.emit(gained)
+	return gained
+
+
+# --- Botín (tirada) -----------------------------------------------------------
+
 ## Tira por un cofre con probabilidad `chance`. Si sale, sortea la rareza y acredita el oro.
 func _roll_loot(chance: float) -> void:
 	if _rarities.is_empty() or chance <= 0.0 or rng.randf() >= chance:
@@ -256,8 +316,15 @@ func _roll_loot(chance: float) -> void:
 
 # --- Estado ------------------------------------------------------------------
 
-## Vuelve al estado inicial (oro 0, sin unidades, pico nivel 0), conservando el balance.
+## Empieza una partida de cero (también sin reliquias), conservando el balance.
 func reset() -> void:
+	relics = 0
+	_reset_run()
+
+
+## Reinicia solo la partida en curso: oro, oro ganado (profundidad), cuadrilla y pico.
+## Las reliquias no se tocan.
+func _reset_run() -> void:
 	gold = 0.0
 	run_gold = 0.0
 	pick_level = 0
@@ -377,6 +444,7 @@ func to_dict() -> Dictionary:
 		"owned": owned.duplicate(),
 		"pick_level": pick_level,
 		"run_gold": run_gold,
+		"relics": relics,
 	}
 
 
@@ -388,6 +456,7 @@ func from_dict(data: Dictionary) -> void:
 	# Lo ganado nunca puede ser menos que lo que tenés: cubre saves anteriores a la
 	# profundidad (sin run_gold) y datos editados a mano.
 	run_gold = maxf(_number(data.get("run_gold"), 0.0), gold)
+	relics = int(clampf(_number(data.get("relics"), 0.0), 0.0, MAX_LOADED_RELICS))
 	pick_level = int(clampf(_number(data.get("pick_level"), 0.0), 0.0, MAX_LOADED_PICK_LEVEL))
 	owned.fill(0)
 	var saved_owned: Variant = data.get("owned")

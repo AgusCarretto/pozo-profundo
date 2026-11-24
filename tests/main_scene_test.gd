@@ -21,8 +21,12 @@ func _initialize() -> void:
 		_finish()
 		return
 
+	# En modo --script los autoloads recién corren _ready() después del primer frame, y Economy
+	# recarga ahí el balance real: hay que esperar ese frame antes de cambiárselo.
+	await process_frame
 	# El botín es azar: cualquier cofre movería el oro que estos tests cuentan golpe a golpe.
 	_check(_economy.load_balance(_balance_without_loot()), "carga el balance real sin botín (%s)" % _economy.last_error)
+	_check_eq(_economy.loot_table().size(), 0, "el botín quedó apagado (el azar no mueve el oro)")
 	_scene = packed.instantiate() as Control
 	root.add_child(_scene)
 	await process_frame
