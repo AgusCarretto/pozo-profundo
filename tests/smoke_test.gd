@@ -16,6 +16,12 @@ func _initialize() -> void:
 	_test_autoloads()
 	_test_core_independence()
 	await _test_main_scene()
+	# Igual que test_base._finish(): cortar el audio y esperar un ciclo de mezcla, o Godot reporta el último
+	# sonido como recurso en uso al salir.
+	var audio: Node = root.get_node_or_null("Audio")
+	if audio != null and audio.has_method("silence"):
+		audio.call("silence")
+		await create_timer(0.1).timeout
 	print("")
 	if _failures == 0:
 		print("OK: todos los checks pasaron")
@@ -46,7 +52,7 @@ func _test_project_settings() -> void:
 
 func _test_autoloads() -> void:
 	print("Autoloads")
-	for autoload_name: String in ["Save", "Audio", "Economy", "Analytics"]:
+	for autoload_name: String in ["Save", "Settings", "Audio", "Economy", "Analytics"]:
 		_check(root.get_node_or_null(autoload_name) != null, "autoload %s presente" % autoload_name)
 
 

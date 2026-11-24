@@ -1,0 +1,94 @@
+{
+	"sfx": {
+		"hit": {
+			"files": [
+				"res://assets/audio/impact_sounds/impactMining_000.ogg",
+				"res://assets/audio/impact_sounds/impactMining_001.ogg",
+				"res://assets/audio/impact_sounds/impactMining_002.ogg",
+				"res://assets/audio/impact_sounds/impactMining_003.ogg",
+				"res://assets/audio/impact_sounds/impactMining_004.ogg"
+			],
+			"pitch": [0.9, 1.12],
+			"volume_db": -3
+		},
+		"buy": {
+			"files": ["res://assets/audio/rpg_audio/handleCoins.ogg"],
+			"pitch": [0.95, 1.08],
+			"volume_db": -2
+		},
+		"pick": {
+			"files": [
+				"res://assets/audio/impact_sounds/impactMetal_light_000.ogg",
+				"res://assets/audio/impact_sounds/impactMetal_light_001.ogg",
+				"res://assets/audio/impact_sounds/impactMetal_light_002.ogg",
+				"res://assets/audio/impact_sounds/impactMetal_light_004.ogg"
+			],
+			"pitch": [0.95, 1.1],
+			"volume_db": -2
+		},
+		"chest_common": {
+			"files": [
+				"res://assets/audio/interface_sounds/drop_002.ogg",
+				"res://assets/audio/interface_sounds/drop_003.ogg"
+			],
+			"pitch": [0.95, 1.05],
+			"volume_db": -2
+		},
+		"chest_rare": {
+			"files": [
+				"res://assets/audio/interface_sounds/glass_001.ogg",
+				"res://assets/audio/interface_sounds/glass_003.ogg"
+			],
+			"volume_db": 0
+		},
+		"chest_epic": {
+			"files": ["res://assets/audio/interface_sounds/glass_004.ogg"],
+			"volume_db": 0
+		},
+		"chest_legendary": {
+			"files": ["res://assets/audio/impact_sounds/impactBell_heavy_000.ogg"],
+			"volume_db": 3
+		},
+		"tab": {
+			"files": [
+				"res://assets/audio/interface_sounds/select_001.ogg",
+				"res://assets/audio/interface_sounds/select_002.ogg"
+			],
+			"volume_db": -6
+		},
+		"mode": {
+			"files": [
+				"res://assets/audio/interface_sounds/click_002.ogg",
+				"res://assets/audio/interface_sounds/click_003.ogg",
+				"res://assets/audio/interface_sounds/click_004.ogg",
+				"res://assets/audio/interface_sounds/click_005.ogg"
+			],
+			"volume_db": -4
+		},
+		"toggle": {
+			"files": [
+				"res://assets/audio/interface_sounds/toggle_001.ogg",
+				"res://assets/audio/interface_sounds/toggle_002.ogg",
+				"res://assets/audio/interface_sounds/toggle_003.ogg"
+			],
+			"volume_db": -9
+		},
+		"open": {
+			"files": ["res://assets/audio/interface_sounds/open_001.ogg"],
+			"volume_db": -8
+		},
+		"close": {
+			"files": ["res://assets/audio/interface_sounds/close_001.ogg"],
+			"volume_db": -8
+		},
+		"prestige": {
+			"files": ["res://assets/audio/interface_sounds/confirmation_001.ogg"],
+			"volume_db": -6
+		},
+		"biome": {
+			"files": ["res://assets/audio/interface_sounds/bong_001.ogg"],
+			"volume_db": -2
+		}
+	},
+	"music": {}
+}

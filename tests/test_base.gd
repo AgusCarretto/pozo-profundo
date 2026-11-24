@@ -49,6 +49,12 @@ func _section(title: String) -> void:
 
 
 func _finish() -> void:
+	# Un sonido que sigue sonando al salir queda retenido por el AudioServer y Godot lo reporta como
+	# "resources still in use at exit". Se corta todo y se le da un ciclo de mezcla para soltarlo.
+	var audio: Node = root.get_node_or_null("Audio")
+	if audio != null and audio.has_method("silence"):
+		audio.call("silence")
+		await create_timer(0.1).timeout
 	print("")
 	if _failures == 0:
 		print("OK: %d checks pasaron" % _checks)

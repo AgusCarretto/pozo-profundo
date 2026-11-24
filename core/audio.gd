@@ -15,6 +15,9 @@ extends Node
 ## existen. Los volúmenes y el silencio vienen de Settings (que va antes en los autoloads) y se aplican a
 ## los buses cada vez que cambian. play_music() cambia de tema con un fundido cruzado.
 
+## Sonó el SFX `id` (no se emite si no sonó: id desconocido, silencio o volumen 0).
+signal sfx_played(id: String)
+
 const SettingsScript := preload("res://core/settings.gd")
 
 const MUSIC_BUS: StringName = &"Music"
@@ -73,6 +76,22 @@ func _ready() -> void:
 	if catalog_path != "" and FileAccess.file_exists(catalog_path):
 		if not load_catalog_file(catalog_path):
 			push_error("Audio: no se pudo cargar %s (%s)" % [catalog_path, last_error])
+
+
+func _exit_tree() -> void:
+	silence()
+
+
+## Corta en seco todo lo que suena (SFX y música) y suelta los streams de los reproductores. El catálogo
+## queda: después se puede volver a sonar. Lo usa el cierre: un sonido que sigue sonando cuando Godot
+## sale queda retenido por el AudioServer y se reporta como recurso todavía en uso (el AudioServer lo
+## suelta unos milisegundos después de cortarlo, en su próximo ciclo de mezcla).
+func silence() -> void:
+	_kill_music_tween()
+	_current_music = -1
+	for player: AudioStreamPlayer in _voices + _music_players:
+		player.stop()
+		player.stream = null
 
 
 # --- Catálogo ----------------------------------------------------------------
@@ -157,6 +176,7 @@ func play_sfx(id: String) -> AudioStreamPlayer:
 	player.pitch_scale = rng.randf_range(entry["pitch_min"], entry["pitch_max"])
 	player.volume_db = entry["volume_db"]
 	player.play()
+	sfx_played.emit(id)
 	return player
 
 

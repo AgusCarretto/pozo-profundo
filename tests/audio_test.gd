@@ -169,6 +169,11 @@ func _test_sfx() -> void:
 		_check(player.playing, "y está sonando")
 		_check(player.pitch_scale >= 0.9 and player.pitch_scale <= 1.1, "con tono dentro del rango del catálogo (%.3f)" % player.pitch_scale)
 		_check_near(player.volume_db, -2.0, "con el volumen del catálogo")
+	var heard: Array[String] = []
+	audio.sfx_played.connect(func(id: String) -> void: heard.append(id))
+	audio.play_sfx("hit")
+	audio.play_sfx("no_existe")
+	_check_eq(heard, ["hit"] as Array[String], "avisa con sfx_played lo que sonó (y no lo que no existe)")
 	var buy: AudioStreamPlayer = audio.play_sfx("buy")
 	_check(buy != null and buy.pitch_scale == 1.0 and buy.volume_db == 0.0, "sin tono ni volumen en el catálogo: 1 y 0 dB")
 	_check(audio.play_sfx("no_existe") == null, "un SFX que no está en el catálogo no suena (y no es error)")

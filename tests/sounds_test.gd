@@ -1,0 +1,209 @@
+extends "res://tests/test_base.gd"
+## Tests headless de los sonidos del juego (F2-B): el catálogo real (data/sounds.json) y qué suena con
+## cada acción de la escena principal.
+##
+## No escuchan nada: miran qué SFX pidió el juego (la señal Audio.sfx_played). Si suena bien o fuerte
+## se decide con los auriculares puestos.
+
+const MAIN_SCENE: String = "res://game/main.tscn"
+const CATALOG_PATH: String = "res://data/sounds.json"
+const AUDIO_DIR: String = "res://assets/audio"
+## Los SFX que el juego pide sí o sí (los de los cofres se agregan por rareza del balance).
+const REQUIRED_SFX: Array[String] = ["hit", "buy", "pick", "tab", "mode", "toggle", "open", "close", "prestige", "biome"]
+
+var _economy: Node
+var _audio: Node
+var _scene: Control
+var _played: Array[String] = []
+
+
+func _initialize() -> void:
+	_economy = root.get_node_or_null("Economy")
+	_audio = root.get_node_or_null("Audio")
+	# Los _ready de los autoloads (Audio lee el catálogo) corren después de _initialize.
+	await process_frame
+	_test_catalog()
+	_test_files()
+	if _economy == null or _audio == null:
+		_check(false, "existen los autoloads Economy y Audio")
+		_finish()
+		return
+	_audio.sfx_played.connect(_record)
+	await _mount()
+	await _test_economy_cues()
+	await _test_ui_cues()
+	await _test_biome_cue()
+	await _test_prestige_cues()
+	_scene.queue_free()
+	await process_frame
+	_economy.reset()
+	_finish()
+
+
+func _record(id: String) -> void:
+	_played.append(id)
+
+
+func _catalog() -> Dictionary:
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(CATALOG_PATH))
+	return parsed if parsed is Dictionary else {}
+
+
+func _real_balance() -> Dictionary:
+	return JSON.parse_string(FileAccess.get_file_as_string("res://data/balance.json"))
+
+
+func _mount() -> void:
+	_check(_economy.load_balance(_real_balance()), "carga el balance real")
+	_take()
+	_scene = (load(MAIN_SCENE) as PackedScene).instantiate() as Control
+	root.add_child(_scene)
+	await process_frame
+	await process_frame
+	var played: Array[String] = _take()
+	_check(played.is_empty(), "abrir la escena no hace sonar nada (%s)" % str(played))
+
+
+func _button(node_name: String) -> Button:
+	return _scene.get_node("%" + node_name) as Button
+
+
+## Lo que sonó desde la última vez que se miró (y lo olvida).
+func _take() -> Array[String]:
+	var played: Array[String] = _played.duplicate()
+	_played.clear()
+	return played
+
+
+func _test_catalog() -> void:
+	_section("El catálogo de sonidos")
+	_check(FileAccess.file_exists(CATALOG_PATH), "existe " + CATALOG_PATH)
+	_check(_audio != null and _audio.last_error == "", "el autoload Audio lo cargó sin errores (%s)" % (_audio.last_error if _audio != null else "sin Audio"))
+	if _audio == null:
+		return
+	var required: Array[String] = REQUIRED_SFX.duplicate()
+	for rarity: Variant in _real_balance()["loot"]["rarities"]:
+		required.append("chest_%s" % (rarity as Dictionary)["id"])
+	for id: String in required:
+		_check(_audio.has_sfx(id), "tiene sonido para '%s'" % id)
+	_check(_audio.sfx_variants("hit") >= 3, "el golpe, que suena todo el tiempo, tiene varias variantes (%d)" % _audio.sfx_variants("hit"))
+	var hit: Dictionary = _catalog()["sfx"]["hit"]
+	_check(hit.has("pitch") and float(hit["pitch"][0]) < float(hit["pitch"][1]), "y su tono varía")
+
+
+func _test_files() -> void:
+	_section("Los archivos de sonido")
+	var referenced: Dictionary = {}
+	var catalog: Dictionary = _catalog()
+	for id: String in catalog.get("sfx", {}):
+		for file: Variant in catalog["sfx"][id]["files"]:
+			referenced[str(file)] = true
+	for id: String in catalog.get("music", {}):
+		referenced[str(catalog["music"][id])] = true
+	var outside: Array[String] = []
+	for path: String in referenced:
+		if not path.begins_with(AUDIO_DIR + "/"):
+			outside.append(path)
+	_check(outside.is_empty(), "todos viven en %s/ (fuera: %s)" % [AUDIO_DIR, str(outside)])
+	var unused: Array[String] = []
+	for path: String in _list_audio(AUDIO_DIR):
+		if not referenced.has(path):
+			unused.append(path)
+	_check(unused.is_empty(), "y no hay sonidos importados sin usar (%s)" % str(unused))
+
+
+func _list_audio(dir_path: String) -> Array[String]:
+	var found: Array[String] = []
+	var dir: DirAccess = DirAccess.open(dir_path)
+	if dir == null:
+		return found
+	for sub: String in dir.get_directories():
+		found.append_array(_list_audio(dir_path + "/" + sub))
+	for file_name: String in dir.get_files():
+		if file_name.get_extension() in ["ogg", "wav", "mp3"]:
+			found.append(dir_path + "/" + file_name)
+	return found
+
+
+func _test_economy_cues() -> void:
+	_section("Lo que pasa en la mina suena")
+	_economy.reset()
+	_economy.gold = 1.0e6
+	await process_frame
+	_take()
+	_button("TapButton").button_down.emit()
+	_check(_take().has("hit"), "golpear la roca")
+	var buy: Button = _scene.get_node("%GeneratorList").get_child(0).find_children("*", "Button", true, false)[0] as Button
+	buy.pressed.emit()
+	_check(_take().has("buy"), "comprar un generador")
+	var pick: Button = _scene.get_node("%PickRow").find_children("*", "Button", true, false)[0] as Button
+	pick.pressed.emit()
+	_check(_take().has("pick"), "mejorar el pico")
+	var table: Array = _economy.loot_table()
+	for index: int in range(table.size()):
+		_economy.drop_loot(index)
+		var id: String = "chest_%s" % (table[index] as Dictionary)["id"]
+		_check(_take().has(id), "un cofre %s suena como %s" % [(table[index] as Dictionary)["name"], id])
+	_economy.reset()
+	await process_frame
+
+
+func _test_ui_cues() -> void:
+	_section("La interfaz suena")
+	_take()
+	_button("TabLootButton").button_pressed = true
+	_check(_take().has("tab"), "cambiar de pestaña")
+	_button("TabLootButton").button_pressed = true
+	_check(not _take().has("tab"), "tocar la pestaña que ya está activa no suena")
+	_button("TabCrewButton").button_pressed = true
+	_take()
+	_button("Mode10Button").button_pressed = true
+	_check(_take().has("mode"), "elegir ×10")
+	_button("Mode1Button").button_pressed = true
+	_take()
+	var modal: Control = _scene.get_node("Modal") as Control
+	modal.open("Aviso", "Cuerpo", "Listo")
+	_check(_take().has("open"), "abrir un cartel")
+	modal.close()
+	_check(_take().has("close"), "cerrarlo")
+	await process_frame
+
+
+func _test_biome_cue() -> void:
+	_section("Llegar a un bioma nuevo suena")
+	_economy.reset()
+	await process_frame
+	_take()
+	_economy.run_gold = 700.0 # Roca
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	_check(_take().has("biome"), "entrar a Roca")
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	_check(not _take().has("biome"), "y no vuelve a sonar mientras sigas en Roca")
+	# Una escena que arranca en un bioma profundo (una partida guardada) no suena al abrir.
+	_scene.queue_free()
+	await process_frame
+	_economy.run_gold = 60000.0 # Cristal
+	_scene = (load(MAIN_SCENE) as PackedScene).instantiate() as Control
+	root.add_child(_scene)
+	await process_frame
+	await process_frame
+	_check(not _take().has("biome"), "abrir el juego ya en Cristal no suena como bioma nuevo")
+
+
+func _test_prestige_cues() -> void:
+	_section("Volver a la superficie")
+	_economy.run_gold = 41000.0 # 300 m: ya se puede
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	_button("TabRelicsButton").button_pressed = true
+	_take()
+	_button("PrestigeButton").pressed.emit()
+	_check(_take().has("open"), "pedir volver abre el cartel")
+	var modal: Node = _scene.get_node("Modal")
+	(modal.get("confirm_button") as Button).pressed.emit()
+	await process_frame
+	var played: Array[String] = _take()
+	_check(played.has("prestige"), "confirmar suena como prestigio (%s)" % str(played))
+	_check(not played.has("biome"), "y volver a Tierra no suena como bioma nuevo")

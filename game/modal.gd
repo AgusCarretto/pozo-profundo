@@ -79,10 +79,14 @@ func open(title: String, body: String, confirm_text: String, cancel_text: String
 	cancel_button.text = cancel_text
 	cancel_button.visible = cancel_text != ""
 	_on_confirm = on_confirm
+	if not visible:
+		Audio.play_sfx("open")
 	visible = true
 
 
 func close() -> void:
+	if visible:
+		Audio.play_sfx("close")
 	visible = false
 
 

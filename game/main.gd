@@ -13,6 +13,7 @@ const Modal := preload("res://game/modal.gd")
 const MineView := preload("res://game/mine_view.gd")
 const NumberFormat := preload("res://core/number_format.gd")
 const PickRow := preload("res://game/pick_row.gd")
+const SoundCues := preload("res://game/sound_cues.gd")
 
 ## Color de cada rareza de cofre, por id del balance. Es presentación, no balance.
 const RARITY_COLORS: Dictionary = {
@@ -46,6 +47,11 @@ var _shown_runes: int = -1
 ## El último cofre que salió en esta partida ({rarity, bonus}); vacío si todavía no salió ninguno (o si el
 ## bonus volvió a 0). El aviso del botín se arma con esto y con el bonus real: ver _refresh_last_loot().
 var _last_chest: Dictionary = {}
+## Índice del bioma que se está mostrando (-1 = todavía ninguno). Bajar a uno más profundo suena.
+var _shown_biome: int = -1
+## Se prende al final de _ready: lo que se marca mientras se arma la escena no suena. (is_node_ready() no sirve:
+## ya es true adentro de _ready.)
+var _built: bool = false
 
 @onready var _gold_label: Label = %GoldLabel
 @onready var _rate_label: Label = %RateLabel
@@ -111,6 +117,7 @@ func _ready() -> void:
 	_prestige_button.pressed.connect(_on_prestige_pressed)
 
 	_build_loot_panel()
+	add_child(SoundCues.new())
 
 	# Solo en builds de debug; en un export de release no se crea (ver debug_panel.gd).
 	DebugPanel.attach_if_debug(self, OS.is_debug_build())
@@ -125,6 +132,7 @@ func _ready() -> void:
 	Economy.loot_dropped.connect(_on_loot_dropped)
 	Economy.offline_progress.connect(_show_offline_notice)
 	_refresh()
+	_built = true
 
 	# Si el juego arrancó con progreso offline, Economy ya lo acreditó antes de que existiera esta escena.
 	if not Economy.pending_offline_report.is_empty():
@@ -144,14 +152,19 @@ func _on_tap() -> void:
 	Economy.hit()
 
 
+# Los toggles que se marcan al armar la escena (en _ready) no suenan: solo los que toca el jugador.
 func _on_mode_toggled(pressed: bool, mode: int) -> void:
 	if pressed:
+		if _built:
+			Audio.play_sfx("mode")
 		_mode = mode
 		_mark_dirty()
 
 
 func _on_tab_toggled(pressed: bool, tab: int) -> void:
 	if pressed:
+		if _built:
+			Audio.play_sfx("tab")
 		_show_page(tab)
 
 
@@ -196,6 +209,11 @@ func _refresh_depth() -> void:
 	else:
 		_next_biome_label.text = "¡Fondo!"
 	_apply_biome(Economy.biome_id(Economy.biome_index()))
+	# Suena al bajar a un bioma más profundo; no al abrir el juego ni al volver a la superficie.
+	var biome: int = Economy.biome_index()
+	if _shown_biome >= 0 and biome > _shown_biome:
+		Audio.play_sfx("biome")
+	_shown_biome = biome
 
 
 ## Cambia la paleta de la mina y el color de la barra cuando se entra en otro bioma.
