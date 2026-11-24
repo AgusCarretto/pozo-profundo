@@ -1,0 +1,18 @@
+# Godot 4+
+.godot/
+/android/
+
+# Exports generados (se regeneran con tools/export_web.ps1)
+build/
+
+# Credenciales y firmas (Android / Play Store, fases F5+)
+export_credentials.cfg
+*.keystore
+*.jks
+
+# Temporales / editor
+*.tmp
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
