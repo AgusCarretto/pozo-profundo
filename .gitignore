@@ -16,3 +16,8 @@ export_credentials.cfg
 .idea/
 .DS_Store
 Thumbs.db
+
+# Packs originales descargados (están en Drive; no se suben). El .gdignore sí se versiona: hace que Godot ignore la carpeta.
+assets_src/*
+!assets_src/.gdignore
+assets_src.rar
