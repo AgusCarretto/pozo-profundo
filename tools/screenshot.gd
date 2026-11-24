@@ -14,7 +14,8 @@ const SIZES: Array[Vector2i] = [Vector2i(360, 640), Vector2i(412, 915)]
 ## Estados de muestra: nombre, pestaña (0 Cuadrilla, 1 Botín, 2 Reliquias) y partida. Con "options": true la
 ## captura sale con el panel de Opciones abierto; con "hits": N, se golpea N veces justo antes (números flotantes,
 ## roca aplastada); con "chest": i, cae un cofre de la rareza i; con "wait": s, se esperan s segundos antes de
-## capturar (para agarrar una explosión o el cofre ya apoyado).
+## capturar (para agarrar una explosión o el cofre ya apoyado); con "descend": oro, después de armar el estado se baja
+## a esa profundidad (cambio de bioma con fundido y cartel).
 ## `owned` sigue el orden del balance: Minero, Taladro, Dinamita, Gólem, Excavadora.
 const SHOTS: Array[Dictionary] = [
 	{ "name": "1_inicio", "tab": 0, "gold": 22.0, "run_gold": 22.0, "pick": 0, "owned": [], "loot": 0.0, "relics": 0 },
@@ -27,6 +28,7 @@ const SHOTS: Array[Dictionary] = [
 	{ "name": "8_dinamita", "tab": 0, "gold": 52000.0, "run_gold": 60000.0, "pick": 5, "owned": [8, 3, 400, 1], "loot": 0.45, "relics": 0, "wait": 1.12 },
 	{ "name": "9_cofre", "tab": 1, "gold": 52000.0, "run_gold": 60000.0, "pick": 5, "owned": [8, 3, 1, 1], "loot": 1.0, "relics": 0, "chest": 1, "wait": 0.7 },
 	{ "name": "10_legendario", "tab": 1, "gold": 4.0e6, "run_gold": 5.0e6, "pick": 7, "owned": [30, 8, 5, 2, 0], "loot": 1.1, "relics": 3, "chest": 3, "wait": 1.2 },
+	{ "name": "11_bioma_nuevo", "tab": 0, "gold": 900.0, "run_gold": 600.0, "pick": 2, "owned": [4, 1], "loot": 0.0, "relics": 0, "descend": 700.0, "wait": 0.3 },
 ]
 
 var _out_dir: String = ""
@@ -70,6 +72,10 @@ func _run() -> void:
 				options.call("open")
 			else:
 				options.set("visible", false)
+			if shot.has("descend"):
+				await _settle()
+				economy.run_gold = float(shot["descend"])
+				economy.gold_changed.emit(economy.gold)
 			if shot.has("chest"):
 				economy.drop_loot(int(shot["chest"]))
 			for hit: int in range(int(shot.get("hits", 0))):

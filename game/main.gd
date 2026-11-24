@@ -286,19 +286,25 @@ func _refresh_depth() -> void:
 		_next_biome_label.text = "→ %s · %s m" % [Economy.biome_name(next), NumberFormat.format_number(Economy.next_biome_depth())]
 	else:
 		_next_biome_label.text = "¡Fondo!"
-	_apply_biome(Economy.biome_id(Economy.biome_index()))
-	# Suena al bajar a un bioma más profundo; no al abrir el juego ni al volver a la superficie.
+	# Bajar a un bioma más profundo es una novedad: el piso y la roca se funden al nuevo, sale un cartel y suena.
+	# Abrir el juego o volver a la superficie cambia sin ceremonia. La música sigue al bioma siempre.
 	var biome: int = Economy.biome_index()
-	if _shown_biome >= 0 and biome > _shown_biome:
+	var deeper: bool = _shown_biome >= 0 and biome > _shown_biome
+	var id: String = Economy.biome_id(biome)
+	if biome != _shown_biome:
+		Audio.play_music(id)
+	_apply_biome(id, deeper)
+	if deeper:
 		Audio.play_sfx("biome")
+		_mine_view.show_banner("Bioma %s" % Economy.biome_name(biome), "×%.2f de oro" % Economy.biome_multiplier(), BiomePalette.of(id)["accent"])
 	_shown_biome = biome
 
 
 ## Cambia la paleta de la mina y el color de la barra cuando se entra en otro bioma.
-func _apply_biome(id: String) -> void:
+func _apply_biome(id: String, animate: bool = false) -> void:
 	if id == _mine_view.biome_id:
 		return
-	_mine_view.show_biome(id)
+	_mine_view.show_biome(id, animate)
 	var fill: StyleBox = _depth_bar.get_theme_stylebox("fill")
 	if fill is StyleBoxTexture:
 		var tinted: StyleBoxTexture = (fill as StyleBoxTexture).duplicate()

@@ -35,6 +35,7 @@ func _initialize() -> void:
 	await _test_dynamite_cue()
 	await _test_biome_cue()
 	await _test_prestige_cues()
+	await _test_music_follows_biome()
 	_scene.queue_free()
 	await process_frame
 	_economy.reset()
@@ -228,3 +229,51 @@ func _test_dynamite_cue() -> void:
 	_economy.reset()
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
+
+
+## Cada bioma tiene su tema (music.<id del bioma> en el catálogo). Todavía no hay música en el juego: se prueba
+## con un catálogo de prueba (dos sonidos mudos) y al final se vuelve a cargar el real.
+func _test_music_follows_biome() -> void:
+	_section("La música sigue al bioma")
+	DirAccess.make_dir_recursive_absolute("user://sounds_test")
+	var paths: Array[String] = []
+	for song: String in ["earth", "rock"]:
+		var wav: AudioStreamWAV = AudioStreamWAV.new()
+		wav.format = AudioStreamWAV.FORMAT_16_BITS
+		wav.mix_rate = 22050
+		var data: PackedByteArray = PackedByteArray()
+		data.resize(22050 * 2 * 2)
+		wav.data = data
+		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		wav.loop_end = 22050 * 2
+		var path: String = "user://sounds_test/%s.tres" % song
+		ResourceSaver.save(wav, path)
+		paths.append(path)
+	_check(_audio.load_catalog({ "music": { "earth": paths[0], "rock": paths[1] } }), "carga un catálogo de prueba con música")
+	_economy.reset()
+	_economy.gold_changed.emit(_economy.gold)
+	_scene.queue_free()
+	await process_frame
+	_scene = (load(MAIN_SCENE) as PackedScene).instantiate() as Control
+	root.add_child(_scene)
+	await process_frame
+	await process_frame
+	var player: AudioStreamPlayer = _audio.current_music_player()
+	_check(player != null and player.stream.resource_path == paths[0], "al abrir el juego en Tierra suena el tema de Tierra")
+	_economy.run_gold = 700.0
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	await process_frame
+	player = _audio.current_music_player()
+	_check(player != null and player.stream.resource_path == paths[1], "al bajar a Roca cambia al tema de Roca")
+	_economy.reset()
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	await process_frame
+	player = _audio.current_music_player()
+	_check(player != null and player.stream.resource_path == paths[0], "y al volver a la superficie, al de Tierra")
+	_audio.stop_music(0.0)
+	_check(_audio.load_catalog_file("res://data/sounds.json"), "se vuelve a cargar el catálogo real")
+	for path: String in paths:
+		DirAccess.remove_absolute(path)
+	DirAccess.remove_absolute("user://sounds_test")

@@ -82,6 +82,7 @@ func _build_labels() -> void:
 	_label_variation("TitleLabel", 38, Palette.YELLOW, 0)
 	_label_variation("RowNameLabel", 30, Palette.FROST, 0)
 	_label_variation("FloatLabel", 44, Palette.YELLOW, 8) # el número que sale de la roca al golpear
+	_label_variation("BannerLabel", 60, Palette.WHITE, 10) # el cartel de bioma nuevo
 
 
 func _label_variation(type_name: String, size: int, color: Color, outline: int) -> void:

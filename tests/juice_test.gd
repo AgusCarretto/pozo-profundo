@@ -178,4 +178,8 @@ func _test_clear_effects() -> void:
 	await process_frame
 	_check_eq(_floaters().size(), 0, "clear_effects saca los números")
 	_check_eq(_emitting(_emitters("chips_")), 0, "y apaga las astillas")
+	_check(_emitters("chips_").all(func(e: CPUParticles2D) -> bool: return not e.visible), "y saca las que estaban en el aire (no se ven)")
+	_tap()
+	_check_eq(_emitters("chips_").filter(func(e: CPUParticles2D) -> bool: return e.visible and e.emitting).size(), 1, "el próximo golpe vuelve a largar astillas")
+	await _wait(1.0)
 	_check((_mine().get("shake_offset") as Vector2).is_zero_approx() and _rock().scale.is_equal_approx(Vector2.ONE), "y deja la roca quieta en su lugar")

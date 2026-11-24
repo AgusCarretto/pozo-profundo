@@ -119,6 +119,12 @@ const TOAST_SLIDE_TIME: float = 0.25
 const TOAST_TOP: float = 16.0
 const TOAST_ICON: float = 48.0
 
+## Cambio de bioma: el piso y la roca nuevos aparecen fundiéndose sobre los viejos en BIOME_FADE_TIME. Un cartel
+## pasajero (no modal) anuncia el bioma: entra creciendo, queda BANNER_TIME y se desvanece.
+const BIOME_FADE_TIME: float = 0.9
+const BANNER_TIME: float = 1.6
+const BANNER_HEIGHT_SHARE: float = 0.3
+
 ## Mineros picando: cada uno tiene un pico (pick.png, a escala PICK_SCALE) en la mano del lado de la roca
 ## y lo usa en loop: lo levanta despacio, lo baja de golpe y vuelve. Cada minero tiene su fase y un período
 ## apenas distinto: nunca pican todos juntos.
@@ -147,6 +153,8 @@ const GOLEM_SLOT: Vector2 = Vector2(-256.0, 135.0)
 ## Bioma que se está mostrando ("earth", "rock"...) y color de fondo de su paleta.
 var biome_id: String = ""
 var backdrop_color: Color = Color.BLACK
+## Cuánto se ve el piso nuevo en un cambio de bioma (1 = del todo; menos = se está fundiendo sobre el viejo).
+var biome_blend: float = 1.0
 ## Los puestos de la cuadrilla; solo se ven los ocupados (set_crew).
 var miner_sprites: Array[TextureRect] = []
 var drill_sprite: TextureRect
@@ -177,6 +185,10 @@ var chests_dropped: int = 0
 var _rock: TextureRect
 var _tap_button: Button
 var _backdrop_texture: Texture2D
+## El piso del bioma anterior mientras dura el fundido.
+var _old_backdrop_texture: Texture2D
+var _old_backdrop_color: Color = Color.BLACK
+var _biome_tween: Tween
 ## Capa de efectos (números flotantes, partículas...): último hijo, no come toques, recorta lo que se sale.
 var _fx: Control
 ## Escala del acomodo actual (1 = tamaño de diseño).
@@ -285,6 +297,81 @@ func _apply_shake() -> void:
 	for sprite: Variant in _base_positions:
 		(sprite as Control).position = _base_positions[sprite] + shake_offset
 	queue_redraw()
+
+
+# --- Cambio de bioma ---------------------------------------------------------
+
+## Guarda el piso y la roca de ahora para fundirlos con los del bioma nuevo.
+func _start_biome_fade() -> void:
+	_finish_biome_fade()
+	_old_backdrop_texture = _backdrop_texture
+	_old_backdrop_color = backdrop_color
+	var old_rock: TextureRect = TextureRect.new()
+	old_rock.name = "OldRock"
+	old_rock.texture = _rock.texture
+	old_rock.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	old_rock.stretch_mode = TextureRect.STRETCH_SCALE
+	old_rock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_rock.add_child(old_rock)
+	old_rock.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	biome_blend = 0.0
+	_biome_tween = create_tween()
+	_biome_tween.tween_method(_set_biome_blend, 0.0, 1.0, BIOME_FADE_TIME).set_trans(Tween.TRANS_SINE)
+	_biome_tween.tween_callback(_finish_biome_fade)
+
+
+func _set_biome_blend(value: float) -> void:
+	biome_blend = value
+	var old_rock: TextureRect = _rock.get_node_or_null("OldRock") as TextureRect
+	if old_rock != null:
+		old_rock.modulate.a = 1.0 - value
+	queue_redraw()
+
+
+func _finish_biome_fade() -> void:
+	if _biome_tween != null and _biome_tween.is_valid():
+		_biome_tween.kill()
+	_biome_tween = null
+	biome_blend = 1.0
+	_old_backdrop_texture = null
+	if _rock != null:
+		var old_rock: Node = _rock.get_node_or_null("OldRock")
+		if old_rock != null:
+			_rock.remove_child(old_rock)
+			old_rock.queue_free()
+	queue_redraw()
+
+
+## Cartel pasajero (no modal) en el medio de la mina: `title` grande y `subtitle` en `color`. Entra creciendo y
+## se va solo; uno nuevo reemplaza al anterior.
+func show_banner(title: String, subtitle: String, color: Color) -> void:
+	for child: Node in _fx.get_children():
+		if str(child.name).begins_with("BiomeBanner"):
+			_fx.remove_child(child)
+			child.queue_free()
+	var banner: VBoxContainer = VBoxContainer.new()
+	banner.name = "BiomeBanner"
+	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	banner.add_theme_constant_override("separation", 0)
+	var title_label: Label = Label.new()
+	title_label.theme_type_variation = &"BannerLabel"
+	title_label.text = title
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	banner.add_child(title_label)
+	var subtitle_label: Label = Label.new()
+	subtitle_label.theme_type_variation = &"HudLabel"
+	subtitle_label.text = subtitle
+	subtitle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle_label.add_theme_color_override("font_color", color)
+	banner.add_child(subtitle_label)
+	_fx.add_child(banner)
+	banner.size = banner.get_combined_minimum_size()
+	banner.position = Vector2((size.x - banner.size.x) * 0.5, size.y * BANNER_HEIGHT_SHARE - banner.size.y * 0.5).round()
+	Juice.pop_in(banner, banner.size * 0.5)
+	var tween: Tween = banner.create_tween()
+	tween.tween_interval(BANNER_TIME)
+	tween.tween_property(banner, "modulate:a", 0.0, CHEST_FADE_TIME)
+	tween.tween_callback(banner.queue_free)
 
 
 # --- Cofre -------------------------------------------------------------------
@@ -440,10 +527,11 @@ func clear_effects() -> void:
 		if not (child is CPUParticles2D) and not child.has_meta(PERSISTENT_META):
 			child.queue_free()
 	_dynamite_clock = 0.0
+	# Apagar un emisor no saca las partículas que ya están en el aire: se oculta, y el próximo disparo (_fire) lo
+	# reinicia y lo vuelve a mostrar.
 	for emitter: CPUParticles2D in _chip_emitters + _gem_emitters:
 		emitter.emitting = false
-		emitter.restart()
-		emitter.emitting = false
+		emitter.visible = false
 	for tween: Tween in [_squash_tween, _shake_tween]:
 		if tween != null and tween.is_valid():
 			tween.kill()
@@ -481,6 +569,7 @@ func _fire(emitter: CPUParticles2D, origin: Vector2, extents: Vector2, direction
 	emitter.gravity = Vector2(0.0, 1500.0 * _unit)
 	emitter.restart()
 	emitter.emitting = true
+	emitter.visible = true
 
 
 ## Un emisor de partículas de una sola tanda: salen todas juntas hacia arriba (abiertas), giran y caen.
@@ -710,16 +799,23 @@ func _notification(what: int) -> void:
 		_layout()
 
 
-## Cambia el piso y la roca por los del bioma `id` (uno desconocido usa los de Tierra).
-func show_biome(id: String) -> void:
+## Cambia el piso y la roca por los del bioma `id` (uno desconocido usa los de Tierra). Con `animate`, los nuevos
+## se funden sobre los viejos (bajar a un bioma nuevo); si no, el cambio es inmediato (abrir el juego, volver a
+## la superficie).
+func show_biome(id: String, animate: bool = false) -> void:
 	var known: String = id if BiomePalette.BY_ID.has(id) else DEFAULT_BIOME
 	if known == biome_id:
 		return
+	var had_biome: bool = biome_id != ""
+	if animate and had_biome and _rock != null:
+		_start_biome_fade()
+	else:
+		_finish_biome_fade()
 	biome_id = known
 	backdrop_color = BiomePalette.of(known)["bg"]
 	if _rock != null:
 		_rock.texture = load(SPRITE_DIR + "rock_%s.png" % known) as Texture2D
-	_backdrop_texture = load(SPRITE_DIR + "bg_%s.png" % known) as Texture2D
+	_backdrop_texture =load(SPRITE_DIR + "bg_%s.png" % known) as Texture2D
 	var chips: Texture2D = load(SPRITE_DIR + "chips_%s.png" % known) as Texture2D
 	for emitter: CPUParticles2D in _chip_emitters:
 		emitter.texture = chips
@@ -857,18 +953,29 @@ func _sort_by_depth() -> void:
 
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), backdrop_color)
-	if _backdrop_texture != null:
-		# El piso también se sacude: el mosaico se corre con shake_offset (sobra una fila y una columna
-		# de cada lado para que no se vea el borde).
-		var tile: int = 16 * BACKDROP_SCALE
-		var tint: Color = Color(1.0, 1.0, 1.0, BACKDROP_STRENGTH)
-		for ty: int in range(-1, ceili(size.y / tile) + 1):
-			for tx: int in range(-1, ceili(size.x / tile) + 1):
-				draw_texture_rect(_backdrop_texture, Rect2(Vector2(tx * tile, ty * tile) + shake_offset, Vector2(tile, tile)), false, tint)
+	# En un cambio de bioma, el piso nuevo se dibuja encima del viejo con opacidad biome_blend.
+	if biome_blend < 1.0 and _old_backdrop_texture != null:
+		_draw_floor(_old_backdrop_color, _old_backdrop_texture, 1.0)
+		_draw_floor(backdrop_color, _backdrop_texture, biome_blend)
+	else:
+		_draw_floor(backdrop_color, _backdrop_texture, 1.0)
 	# sombras a los pies de la roca y de la cuadrilla (se dibujan antes que los sprites: quedan debajo)
 	for shadow: Dictionary in shadow_ellipses():
 		var radius: Vector2 = shadow["radius"]
 		draw_set_transform(shadow["center"], 0.0, Vector2(1.0, radius.y / radius.x))
 		draw_circle(Vector2.ZERO, radius.x, SHADOW_COLOR)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## El piso: el color base y encima el mosaico del bioma, mezclado a BACKDROP_STRENGTH, todo con opacidad `alpha`.
+## El piso también se sacude: el mosaico se corre con shake_offset (sobra una fila y una columna de cada lado
+## para que no se vea el borde).
+func _draw_floor(color: Color, texture: Texture2D, alpha: float) -> void:
+	draw_rect(Rect2(Vector2.ZERO, size), Color(color, color.a * alpha))
+	if texture == null:
+		return
+	var tile: int = 16 * BACKDROP_SCALE
+	var tint: Color = Color(1.0, 1.0, 1.0, BACKDROP_STRENGTH * alpha)
+	for ty: int in range(-1, ceili(size.y / tile) + 1):
+		for tx: int in range(-1, ceili(size.x / tile) + 1):
+			draw_texture_rect(texture, Rect2(Vector2(tx * tile, ty * tile) + shake_offset, Vector2(tile, tile)), false, tint)
