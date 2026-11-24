@@ -15,7 +15,7 @@ const BY_ID: Dictionary = {
 	"earth": {
 		"rock_light": Palette.ORANGE, "rock": Palette.TERRA, "rock_dark": Palette.MAROON,
 		"vein": Palette.GOLD, "vein_light": Palette.YELLOW,
-		"bg": Palette.MAROON, "bg_dark": Palette.OUTLINE, "bg_light": Palette.TERRA, "bg_spark": Palette.CLAY,
+		"bg": Palette.MAROON, "bg_dark": Palette.OUTLINE, "bg_light": Palette.TERRA, "bg_spark": Palette.ORANGE,
 		"accent": Palette.GOLD,
 	},
 	"rock": {
@@ -27,7 +27,7 @@ const BY_ID: Dictionary = {
 	"crystal": {
 		"rock_light": Palette.STEEL, "rock": Palette.SLATE_LIGHT, "rock_dark": Palette.SLATE,
 		"vein": Palette.BLUE, "vein_light": Palette.CYAN,
-		"bg": Palette.NAVY, "bg_dark": Palette.OUTLINE, "bg_light": Palette.SLATE, "bg_spark": Palette.CYAN,
+		"bg": Palette.NAVY, "bg_dark": Palette.OUTLINE, "bg_light": Palette.SLATE, "bg_spark": Palette.BLUE,
 		"accent": Palette.CYAN,
 	},
 	"magma": {
@@ -39,7 +39,7 @@ const BY_ID: Dictionary = {
 	"abyss": {
 		"rock_light": Palette.PINK, "rock": Palette.PURPLE, "rock_dark": Palette.OUTLINE,
 		"vein": Palette.MINT, "vein_light": Palette.AQUA,
-		"bg": Palette.NAVY, "bg_dark": Palette.OUTLINE, "bg_light": Palette.PURPLE, "bg_spark": Palette.PINK,
+		"bg": Palette.NAVY, "bg_dark": Palette.OUTLINE, "bg_light": Palette.PURPLE, "bg_spark": Palette.PURPLE,
 		"accent": Palette.PINK,
 	},
 }

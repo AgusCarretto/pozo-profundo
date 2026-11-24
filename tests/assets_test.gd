@@ -15,11 +15,22 @@ const FONT_PATH: String = "res://assets/fonts/PixelifySans.ttf"
 const CREDITS_PATH: String = "res://CREDITS.md"
 const BALANCE_PATH: String = "res://data/balance.json"
 
+const MineView := preload("res://game/mine_view.gd")
+
 const SINGLE_SPRITES: Array[String] = [
 	"drill", "golem", "dynamite", "rune_1", "rune_2", "rune_3", "coin", "pick", "gem",
 	"miner_1", "miner_2", "miner_3", "miner_4", "miner_5", "miner_6", "miner_7", "miner_8",
 ]
-const UI_COLORS: Array[String] = ["yellow", "green", "blue", "red", "grey"]
+## Hacia dónde mira cada variante de un minero: cuánto se desplazan sus ojos (1 px) respecto del frente.
+const GAZES: Dictionary = { "left": Vector2i(-1, 0), "right": Vector2i(1, 0), "down": Vector2i(0, 1) }
+## Los colores del UI Pack que tienen un rol (amarillo: pestaña activa, verde: comprar, rojo: prestigio,
+## gris: no alcanza). El azul no se usa y por eso no se importa.
+const UI_COLORS: Array[String] = ["yellow", "green", "red", "grey"]
+## Los 8 vecinos de un píxel, en orden circular.
+const RING: Array[Vector2i] = [
+	Vector2i(0, -1), Vector2i(1, -1), Vector2i(1, 0), Vector2i(1, 1),
+	Vector2i(0, 1), Vector2i(-1, 1), Vector2i(-1, 0), Vector2i(-1, -1),
+]
 ## Extensiones que no son assets (los genera Godot o son textos de licencia).
 const IGNORED_FILES: Array[String] = ["import", "uid", "gitkeep", "txt"]
 
@@ -30,6 +41,10 @@ func _initialize() -> void:
 	_test_generated_sprites()
 	_test_miners_are_different()
 	_test_biomes_look_different()
+	_test_miners_look_at_the_rock()
+	_test_cracks_branch()
+	_test_floor_is_seen_from_above()
+	_test_background_is_low_contrast()
 	_test_tiny_dungeon_tiles()
 	_test_ui_pack_and_font()
 	_test_credits()
@@ -118,6 +133,9 @@ func _generated_files() -> Array[String]:
 		files.append("rock_%s" % id)
 		files.append("bg_%s" % id)
 	files.append_array(SINGLE_SPRITES)
+	for number: int in range(1, 9):
+		for gaze: String in GAZES:
+			files.append("miner_%d_%s" % [number, gaze])
 	return files
 
 
@@ -187,6 +205,138 @@ func _test_biomes_look_different() -> void:
 	_check_eq(BiomePalette.of("no_existe"), BiomePalette.of("earth"), "un bioma desconocido usa los colores de Tierra")
 
 
+## Los píxeles de `img` que tienen exactamente el color `color`.
+func _pixels_of(img: Image, color: Color) -> Array[Vector2i]:
+	var found: Array[Vector2i] = []
+	for y: int in range(img.get_height()):
+		for x: int in range(img.get_width()):
+			var pixel: Color = img.get_pixel(x, y)
+			if pixel.a == 1.0 and pixel == color:
+				found.append(Vector2i(x, y))
+	return found
+
+
+## Cada minero tiene una variante que mira a la izquierda, a la derecha y hacia abajo (a la roca, según
+## dónde esté parado): los mismos píxeles, con los ojos (los píxeles oscuros de la cara) corridos 1 px.
+func _test_miners_look_at_the_rock() -> void:
+	_section("Mineros que miran hacia la roca")
+	for number: int in range(1, 9):
+		var front: Image = _load_image(GENERATED_DIR + "miner_%d.png" % number)
+		var front_eyes: Array[Vector2i] = _pixels_of(front, Palette.NAVY)
+		_check_eq(front_eyes.size(), 4, "miner_%d: 4 píxeles de ojos al frente" % number)
+		for gaze: String in GAZES:
+			var img: Image = _load_image(GENERATED_DIR + "miner_%d_%s.png" % [number, gaze])
+			if img == null:
+				_check(false, "existe miner_%d_%s.png" % [number, gaze])
+				continue
+			var shift: Vector2i = GAZES[gaze]
+			var expected: Dictionary = {}
+			for eye: Vector2i in front_eyes:
+				expected[eye + shift] = true
+			var actual: Dictionary = {}
+			for eye: Vector2i in _pixels_of(img, Palette.NAVY):
+				actual[eye] = true
+			_check_eq(actual.keys().size(), 4, "miner_%d_%s: sigue teniendo 4 píxeles de ojos" % [number, gaze])
+			_check_eq(actual.keys(), expected.keys(), "miner_%d_%s: los ojos están corridos 1 px hacia %s" % [number, gaze, gaze])
+			var same_silhouette: bool = true
+			var changed: int = 0
+			for y: int in range(16):
+				for x: int in range(16):
+					if (front.get_pixel(x, y).a > 0.5) != (img.get_pixel(x, y).a > 0.5):
+						same_silhouette = false
+					if front.get_pixel(x, y) != img.get_pixel(x, y):
+						changed += 1
+			_check(same_silhouette, "miner_%d_%s: misma silueta que al frente" % [number, gaze])
+			_check(changed > 0 and changed <= 8, "miner_%d_%s: solo cambian los ojos (%d píxeles)" % [number, gaze, changed])
+
+
+## Las vetas de Roca y Magma son grietas irregulares y ramificadas, no una línea diagonal: se abren en
+## las dos diagonales (no caben en una franja) y tienen bifurcaciones.
+func _test_cracks_branch() -> void:
+	_section("Vetas de Roca y Magma: grietas ramificadas")
+	for id: String in ["rock", "magma"]:
+		var colors: Dictionary = BiomePalette.of(id)
+		var img: Image = _load_image(GENERATED_DIR + "rock_%s.png" % id)
+		var veins: Dictionary = {}
+		for color: Color in [colors["vein"], colors["vein_light"]]:
+			for point: Vector2i in _pixels_of(img, color):
+				veins[point] = true
+		_check(veins.size() >= 24 and veins.size() <= 70, "rock_%s: la veta tiene un tamaño razonable (%d píxeles)" % [id, veins.size()])
+		var min_diag: int = 99
+		var max_diag: int = -99
+		var min_anti: int = 99
+		var max_anti: int = -99
+		var forks: int = 0
+		for point: Vector2i in veins:
+			min_diag = mini(min_diag, point.x - point.y)
+			max_diag = maxi(max_diag, point.x - point.y)
+			min_anti = mini(min_anti, point.x + point.y)
+			max_anti = maxi(max_anti, point.x + point.y)
+			# Una bifurcación real: alrededor del píxel hay 3 o más tramos de veta separados. (Una línea
+			# gruesa o en diagonal tiene a lo sumo 2: de dónde viene y a dónde va.)
+			var arcs: int = 0
+			for index: int in range(RING.size()):
+				if veins.has(point + RING[index]) and not veins.has(point + RING[(index + 7) % RING.size()]):
+					arcs += 1
+			if arcs >= 3:
+				forks += 1
+		_check(max_diag - min_diag >= 6, "rock_%s: no cabe en una franja diagonal \\ (ancho %d)" % [id, max_diag - min_diag])
+		_check(max_anti - min_anti >= 6, "rock_%s: ni en una franja diagonal / (ancho %d)" % [id, max_anti - min_anti])
+		_check(forks >= 3, "rock_%s: es una grieta ramificada, no una línea (%d bifurcaciones, mín 3)" % [id, forks])
+
+
+## El fondo se lee como piso visto desde arriba, no como una pared con estratos: las marcas no se
+## alinean en horizontal (tantos pares de píxeles vecinos en horizontal como en vertical) y no la cubren.
+func _test_floor_is_seen_from_above() -> void:
+	_section("El fondo es un piso visto desde arriba")
+	for id: String in BiomePalette.IDS:
+		var base: Color = BiomePalette.of(id)["bg"]
+		var img: Image = _load_image(GENERATED_DIR + "bg_%s.png" % id)
+		var marks: Dictionary = {}
+		for y: int in range(16):
+			for x: int in range(16):
+				if img.get_pixel(x, y) != base:
+					marks[Vector2i(x, y)] = true
+		var horizontal: int = 0
+		var vertical: int = 0
+		for point: Vector2i in marks:
+			if marks.has(Vector2i((point.x + 1) % 16, point.y)):
+				horizontal += 1
+			if marks.has(Vector2i(point.x, (point.y + 1) % 16)):
+				vertical += 1
+		var density: float = marks.size() / 256.0
+		var ratio: float = (horizontal + 1.0) / (vertical + 1.0)
+		_check(density >= 0.06 and density <= 0.45, "bg_%s: las marcas cubren una parte razonable (%.0f%%)" % [id, density * 100.0])
+		_check(ratio >= 0.55 and ratio <= 1.8, "bg_%s: sin estratos, las marcas no se alinean en horizontal (H/V = %.2f)" % [id, ratio])
+
+
+## El fondo tiene poco contraste (la escena lo mezcla con el color base) y la roca sigue destacándose.
+func _test_background_is_low_contrast() -> void:
+	_section("Fondo de bajo contraste, roca bien visible")
+	var mine_script: GDScript = MineView
+	var strength: float = float(mine_script.get_script_constant_map().get("BACKDROP_STRENGTH", -1.0))
+	_check(strength > 0.0 and strength <= 0.7, "la escena mezcla el mosaico al %.0f%% sobre el color base" % (strength * 100.0))
+	for id: String in BiomePalette.IDS:
+		var base: Color = BiomePalette.of(id)["bg"]
+		var tile: Image = _load_image(GENERATED_DIR + "bg_%s.png" % id)
+		var widest: float = 0.0
+		for y: int in range(16):
+			for x: int in range(16):
+				widest = maxf(widest, absf(tile.get_pixel(x, y).get_luminance() - base.get_luminance()))
+		_check(widest * strength <= 0.13, "bg_%s: la marca más fuerte se ve a %.3f de luminancia del base (máx 0.13)" % [id, widest * strength])
+		var rock: Image = _load_image(GENERATED_DIR + "rock_%s.png" % id)
+		var total: float = 0.0
+		var count: int = 0
+		for y: int in range(16):
+			for x: int in range(16):
+				var pixel: Color = rock.get_pixel(x, y)
+				if pixel.a == 1.0 and pixel != Palette.OUTLINE:
+					total += pixel.get_luminance()
+					count += 1
+		var gap: float = absf(total / maxi(count, 1) - base.get_luminance())
+		_check(gap >= 0.1, "rock_%s: la roca se despega del fondo (diferencia de luminancia %.3f, mín 0.1)" % [id, gap])
+
+
 func _test_tiny_dungeon_tiles() -> void:
 	_section("Tiles de Tiny Dungeon importadas")
 	var tiles: Array[String] = ["0085", "0086", "0088", "0089", "0098", "0099", "0112"]
@@ -211,6 +361,7 @@ func _test_ui_pack_and_font() -> void:
 	for color: String in UI_COLORS:
 		for kind: String in ["button_rectangle_depth_flat", "button_rectangle_flat"]:
 			_check(ResourceLoader.exists(UI_PACK_DIR + "%s/%s.png" % [color, kind]), "existe %s/%s" % [color, kind])
+	_check(not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(UI_PACK_DIR + "blue")), "y no hay botones azules importados (no se usan)")
 	_check(FileAccess.file_exists(FONT_PATH), "existe la fuente Pixelify Sans")
 	_check(ResourceLoader.exists(FONT_PATH), "y está importada")
 	var font: Resource = load(FONT_PATH)

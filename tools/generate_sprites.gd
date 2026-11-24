@@ -6,8 +6,9 @@ extends SceneTree
 ##   godot --headless --path . --import      # para que Godot importe los PNG nuevos
 ##
 ## Todo sale a res://assets/sprites/generated/ como PNG de 16x16 con SOLO los 27 colores de
-## Tiny Dungeon (game/palette.gd): roca y fondo de cada bioma, taladro, gólem, dinamita, runas,
-## moneda, pico y las variantes de color de los mineros. Cada sprite se dibuja "relleno" y
+## Tiny Dungeon (game/palette.gd): roca y piso (visto desde arriba) de cada bioma, taladro, gólem,
+## dinamita, runas, moneda, pico, gema y las variantes de los mineros (de color y de mirada: izquierda,
+## derecha y abajo). Cada sprite se dibuja "relleno" y
 ## después se le pone el contorno oscuro del pack automáticamente (un píxel alrededor).
 ## Es determinista: correrlo de nuevo reescribe exactamente los mismos archivos.
 
@@ -18,6 +19,10 @@ const OUT_DIR: String = "res://assets/sprites/generated/"
 const TINY_DUNGEON_DIR: String = "res://assets/sprites/tiny_dungeon/"
 const SIZE: int = 16
 const T: Color = Color(0.0, 0.0, 0.0, 0.0)
+
+## Hacia dónde mira cada variante de un minero: cuánto se corren los ojos (1 px) respecto del frente. Los
+## personajes de Tiny Dungeon miran de frente; así se los puede parar mirando hacia la roca.
+const GAZES: Dictionary = { "left": Vector2i(-1, 0), "right": Vector2i(1, 0), "down": Vector2i(0, 1) }
 
 ## Variantes de color de los mineros: [archivo, tile de Tiny Dungeon, {color original -> color nuevo}].
 ## Sin mapa = el personaje tal cual viene en el pack.
@@ -47,7 +52,10 @@ func _initialize() -> void:
 	_save(_pick(), "pick.png")
 	_save(_gem(), "gem.png")
 	for entry: Array in MINERS:
-		_save(_miner(entry[1], entry[2]), "%s.png" % entry[0])
+		var front: Image = _miner(entry[1], entry[2])
+		_save(front, "%s.png" % entry[0])
+		for gaze: String in GAZES:
+			_save(_look(front, GAZES[gaze]), "%s_%s.png" % [entry[0], gaze])
 	print("Sprites generados en ", OUT_DIR)
 	quit(0)
 
@@ -86,9 +94,68 @@ func _rock(id: String) -> Image:
 		img.set_pixelv(point, colors["rock_dark"])
 	for point: Vector2i in [Vector2i(4, 6), Vector2i(3, 7), Vector2i(5, 5), Vector2i(10, 3), Vector2i(9, 9)]:
 		img.set_pixelv(point, colors["rock_light"])
-	_overlay(img, _veins(id), palette)
+	if CRACKS.has(id):
+		_draw_cracks(img, CRACKS[id], colors["vein"], colors["vein_light"])
+	else:
+		_overlay(img, _veins(id), palette)
 	_outline(img)
 	return img
+
+
+## Grietas de Roca (óxido) y Magma (lava): líneas quebradas por estos puntos, con un tronco irregular y
+## ramas que salen a los costados (ninguna es una diagonal recta). La primera lista de cada una es el
+## tronco; las demás nacen en puntos del tronco o de otra rama.
+const CRACKS: Dictionary = {
+	"rock": [
+		[Vector2i(10, 3), Vector2i(9, 4), Vector2i(9, 6), Vector2i(8, 7), Vector2i(8, 9), Vector2i(7, 10), Vector2i(8, 12)],
+		[Vector2i(9, 6), Vector2i(11, 6), Vector2i(12, 8), Vector2i(12, 10)],
+		[Vector2i(8, 7), Vector2i(6, 7), Vector2i(5, 9), Vector2i(3, 9)],
+		[Vector2i(8, 9), Vector2i(10, 10), Vector2i(11, 12)],
+		[Vector2i(9, 4), Vector2i(7, 4), Vector2i(6, 5)],
+	],
+	"magma": [
+		[Vector2i(8, 3), Vector2i(7, 5), Vector2i(8, 6), Vector2i(7, 8), Vector2i(8, 10), Vector2i(7, 12)],
+		[Vector2i(7, 5), Vector2i(5, 5), Vector2i(4, 7), Vector2i(2, 7)],
+		[Vector2i(8, 6), Vector2i(10, 6), Vector2i(11, 8), Vector2i(13, 8)],
+		[Vector2i(7, 8), Vector2i(5, 9), Vector2i(4, 11)],
+		[Vector2i(8, 10), Vector2i(10, 11), Vector2i(12, 11)],
+		[Vector2i(10, 6), Vector2i(11, 4), Vector2i(12, 3)],
+	],
+}
+
+
+## Pinta las grietas `lines` (listas de puntos) solo sobre la roca; cada tercer píxel de una grieta es
+## "luz" (más claro), para que parezca que brilla o que tiene relieve.
+func _draw_cracks(img: Image, lines: Array, vein: Color, vein_light: Color) -> void:
+	for points: Array in lines:
+		var painted: Array[Vector2i] = []
+		for index: int in range(points.size() - 1):
+			for point: Vector2i in _line_points(points[index], points[index + 1]):
+				if img.get_pixelv(point).a > 0.5 and not painted.has(point):
+					painted.append(point)
+		for index: int in range(painted.size()):
+			img.set_pixelv(painted[index], vein_light if index % 3 == 0 else vein)
+
+
+## Los píxeles de la línea de `from` a `to` (Bresenham), extremos incluidos.
+func _line_points(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
+	var points: Array[Vector2i] = []
+	var delta: Vector2i = Vector2i(absi(to.x - from.x), -absi(to.y - from.y))
+	var step: Vector2i = Vector2i(1 if from.x < to.x else -1, 1 if from.y < to.y else -1)
+	var error: int = delta.x + delta.y
+	var current: Vector2i = from
+	while true:
+		points.append(current)
+		if current == to:
+			break
+		var doubled: int = 2 * error
+		if doubled >= delta.y:
+			error += delta.y
+			current.x += step.x
+		if doubled <= delta.x:
+			error += delta.x
+			current.y += step.y
+	return points
 
 
 ## Vetas de cada bioma ('.' no toca nada).
@@ -113,25 +180,6 @@ func _veins(id: String) -> Array[String]:
 				"................",
 				"................",
 			]
-		"rock": # vetas de óxido que cruzan la roca
-			return [
-				"................",
-				"................",
-				"................",
-				"................",
-				"................",
-				"................",
-				"........w.......",
-				".......wv.......",
-				"......wv....w...",
-				".....wv....wv...",
-				"....wv....wv....",
-				"...wv....wv.....",
-				"................",
-				"................",
-				"................",
-				"................",
-			]
 		"crystal": # cristales que le brotan de arriba
 			return [
 				"................",
@@ -146,25 +194,6 @@ func _veins(id: String) -> Array[String]:
 				"..w...........v.",
 				".wv.............",
 				".vv.............",
-				"................",
-				"................",
-				"................",
-				"................",
-			]
-		"magma": # grietas de lava
-			return [
-				"................",
-				"................",
-				"................",
-				"...........w....",
-				"..........wv....",
-				".....wv..wv.....",
-				"....wv..wv......",
-				".....wvwv.......",
-				"......vv........",
-				"......wv...w....",
-				".....wv...wv....",
-				"....wv.....v....",
 				"................",
 				"................",
 				"................",
@@ -192,28 +221,105 @@ func _veins(id: String) -> Array[String]:
 	return []
 
 
-## Mosaico de fondo 16x16 que se repite sin costuras: base con motas oscuras, claras y destellos.
+## Formas con las que se arman las marcas del piso. Hay de todas las orientaciones y tantas en horizontal
+## como en vertical: un piso visto desde arriba no tiene un "arriba" ni estratos (las marcas alargadas en
+## horizontal parecen capas de una pared).
+const CLUMPS: Array = [
+	[Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1)],
+	[Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, 1)],
+	[Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)],
+	[Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 1)],
+]
+const PAIRS: Array = [
+	[Vector2i(0, 0), Vector2i(1, 0)],
+	[Vector2i(0, 0), Vector2i(0, 1)],
+]
+const BLOCK: Array = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]
+## La sombra de una piedra chica (la luz viene de arriba a la izquierda, como en las rocas).
+const PEBBLE_SHADOW: Array = [Vector2i(2, 1), Vector2i(1, 2), Vector2i(2, 2)]
+const DOT: Array = [Vector2i(0, 0)]
+
+
+## Mosaico de fondo 16x16 que se repite sin costuras: un piso visto desde arriba. Cada bioma tiene el
+## suyo (tierra con piedritas, lajas, esquirlas de cristal, basalto agrietado con brasas, penumbra con
+## motas). Los colores quedan cerca del base: la escena además lo mezcla con él para bajar el contraste.
 func _background(id: String) -> Image:
 	var colors: Dictionary = BiomePalette.of(id)
 	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 	rng.seed = hash(id) # los mismos píxeles cada vez que se genera
 	var img: Image = _blank()
 	img.fill(colors["bg"])
-	var dark: Array[Vector2i] = []
-	var light: Array[Vector2i] = []
-	for i: int in range(18):
-		dark.append(Vector2i(rng.randi_range(0, SIZE - 1), rng.randi_range(0, SIZE - 1)))
-	for i: int in range(12):
-		light.append(Vector2i(rng.randi_range(0, SIZE - 1), rng.randi_range(0, SIZE - 1)))
-	for point: Vector2i in dark:
-		img.set_pixelv(point, colors["bg_dark"])
-		if rng.randf() < 0.45: # algunas motas son de dos píxeles
-			img.set_pixelv(Vector2i((point.x + 1) % SIZE, point.y), colors["bg_dark"])
-	for point: Vector2i in light:
-		img.set_pixelv(point, colors["bg_light"])
-	for i: int in range(3):
-		img.set_pixelv(Vector2i(rng.randi_range(0, SIZE - 1), rng.randi_range(0, SIZE - 1)), colors["bg_spark"])
+	match id:
+		"earth": # tierra apisonada: terrones oscuros, piedritas con su sombra y alguna chispa
+			_scatter(img, rng, CLUMPS, colors["bg_dark"], 5)
+			_pebbles(img, rng, colors["bg_light"], colors["bg_dark"], 5)
+			_scatter(img, rng, [DOT], colors["bg_spark"], 3)
+		"rock": # lajas de piedra con sus juntas
+			_flagstones(img, colors)
+			_scatter(img, rng, [DOT], colors["bg_spark"], 3)
+		"crystal": # piso oscuro con piedras y esquirlas de cristal
+			_pebbles(img, rng, colors["bg_light"], colors["bg_dark"], 4)
+			_scatter(img, rng, [[Vector2i(0, 0), Vector2i(1, 1)], [Vector2i(1, 0), Vector2i(0, 1)]], colors["bg_spark"], 5)
+			_scatter(img, rng, [DOT], colors["bg_spark"], 3)
+		"magma": # basalto agrietado, con brasas
+			for walk: int in range(3):
+				_crack_walk(img, rng, colors["bg_light"], 14)
+			_scatter(img, rng, [DOT], colors["bg_spark"], 5)
+			_scatter(img, rng, PAIRS, colors["bg_spark"], 1)
+		"abyss": # penumbra con manchas y motas
+			_scatter(img, rng, CLUMPS, colors["bg_dark"], 6)
+			_scatter(img, rng, PAIRS, colors["bg_light"], 4)
+			_scatter(img, rng, [DOT], colors["bg_light"], 8)
 	return img
+
+
+## Estampa `count` veces una forma al azar de `shapes` (con vuelta al otro borde: el mosaico no tiene costura).
+func _scatter(img: Image, rng: RandomNumberGenerator, shapes: Array, color: Color, count: int) -> void:
+	for i: int in range(count):
+		_stamp(img, Vector2i(rng.randi_range(0, SIZE - 1), rng.randi_range(0, SIZE - 1)), shapes[rng.randi_range(0, shapes.size() - 1)], color)
+
+
+## Piedritas de 2x2 con su sombra abajo a la derecha.
+func _pebbles(img: Image, rng: RandomNumberGenerator, light: Color, shadow: Color, count: int) -> void:
+	for i: int in range(count):
+		var origin: Vector2i = Vector2i(rng.randi_range(0, SIZE - 1), rng.randi_range(0, SIZE - 1))
+		_stamp(img, origin, PEBBLE_SHADOW, shadow)
+		_stamp(img, origin, BLOCK, light)
+
+
+func _stamp(img: Image, origin: Vector2i, shape: Array, color: Color) -> void:
+	for offset: Vector2i in shape:
+		img.set_pixelv(Vector2i(posmod(origin.x + offset.x, SIZE), posmod(origin.y + offset.y, SIZE)), color)
+
+
+## Una grieta del piso: camina al azar `steps` pasos (mitad en horizontal, mitad en vertical).
+func _crack_walk(img: Image, rng: RandomNumberGenerator, color: Color, steps: int) -> void:
+	var position: Vector2i = Vector2i(rng.randi_range(0, SIZE - 1), rng.randi_range(0, SIZE - 1))
+	var heading: Vector2i = Vector2i(1, 0)
+	for step: int in range(steps):
+		img.set_pixelv(position, color)
+		if rng.randf() < 0.4: # cambia de rumbo: doblá 90 grados para cualquiera de los dos lados
+			heading = Vector2i(heading.y, heading.x) * (1 if rng.randf() < 0.5 else -1)
+		position = Vector2i(posmod(position.x + heading.x, SIZE), posmod(position.y + heading.y, SIZE))
+
+
+## Lajas de piedra: juntas torcidas que forman celdas de 8x8 (como en un piso, no como ladrillos de pared).
+func _flagstones(img: Image, colors: Dictionary) -> void:
+	var joint: Color = colors["bg_dark"]
+	var light: Color = colors["bg_light"]
+	for x: int in range(SIZE):
+		img.set_pixel(x, 1 if x in [5, 6, 12] else 0, joint)
+		img.set_pixel(x, 9 if x in [2, 3, 10, 11] else 8, joint)
+	for y: int in range(1, 8):
+		img.set_pixel(3 if y in [3, 4] else 2, y, joint)
+		img.set_pixel(11 if y in [5, 6] else 10, y, joint)
+	for y: int in range(10, 16):
+		img.set_pixel(7 if y in [12, 13] else 6, y, joint)
+		img.set_pixel(15 if y in [12] else 14, y, joint)
+	# el brillo de cada laja: una L clara en su esquina de arriba a la izquierda
+	for corner: Vector2i in [Vector2i(4, 2), Vector2i(12, 2), Vector2i(8, 11), Vector2i(0, 11)]:
+		for offset: Vector2i in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1)]:
+			img.set_pixelv(Vector2i(posmod(corner.x + offset.x, SIZE), posmod(corner.y + offset.y, SIZE)), light)
 
 
 # --- Máquinas y objetos --------------------------------------------------------------------
@@ -418,6 +524,25 @@ func _miner(tile: String, swaps: Dictionary) -> Image:
 			if current.a > 0.5 and swaps.has(current):
 				img.set_pixel(x, y, swaps[current])
 	return img
+
+
+## El mismo minero con los ojos (los píxeles oscuros de la cara) corridos `shift`: mira para ese lado.
+## Donde estaba el ojo queda la piel que tenía detrás (contra el sentido del giro).
+func _look(img: Image, shift: Vector2i) -> Image:
+	var result: Image = img.duplicate()
+	var eyes: Array[Vector2i] = []
+	for y: int in range(SIZE):
+		for x: int in range(SIZE):
+			if img.get_pixel(x, y) == Palette.NAVY:
+				eyes.append(Vector2i(x, y))
+	for eye: Vector2i in eyes:
+		var behind: Vector2i = eye - shift
+		while eyes.has(behind):
+			behind -= shift
+		result.set_pixelv(eye, img.get_pixelv(behind))
+	for eye: Vector2i in eyes:
+		result.set_pixelv(eye + shift, Palette.NAVY)
+	return result
 
 
 # --- Herramientas de dibujo -----------------------------------------------------------------------

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bcjdejialyhna"
-path="res://.godot/imported/button_rectangle_flat.png-994cc6b7812379554d0d4170b750a016.ctex"
+uid="uid://6sed3svliqhb"
+path="res://.godot/imported/miner_1_left.png-643c7938ebd70998ed5640bfe0a2670d.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/ui/ui_pack/blue/button_rectangle_flat.png"
-dest_files=["res://.godot/imported/button_rectangle_flat.png-994cc6b7812379554d0d4170b750a016.ctex"]
+source_file="res://assets/sprites/generated/miner_1_left.png"
+dest_files=["res://.godot/imported/miner_1_left.png-643c7938ebd70998ed5640bfe0a2670d.ctex"]
 
 [params]
 
