@@ -199,6 +199,8 @@ var _squash_tween: Tween
 var _shake_tween: Tween
 var _shake_direction: Vector2 = Vector2.RIGHT
 var _next_lane: int = 0
+## Reloj de las animaciones en loop (picos, runas): segundos de juego desde que arrancó la mina.
+var _anim_time: float = 0.0
 var _chip_emitters: Array[CPUParticles2D] = []
 var _gem_emitters: Array[CPUParticles2D] = []
 var _next_chip: int = 0
@@ -717,7 +719,9 @@ func _process(delta: float) -> void:
 			_light_fuse()
 	else:
 		_dynamite_clock = 0.0
-	var now: float = Time.get_ticks_msec() / 1000.0
+	# Tiempo de juego (respeta Engine.time_scale: la pausa del legendario los frena y los tests los aceleran).
+	_anim_time += delta
+	var now: float = _anim_time
 	_move_orbit_runes(now)
 	for index: int in range(_picks.size()):
 		if not miner_sprites[index].visible:

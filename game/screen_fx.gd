@@ -3,14 +3,19 @@ extends Control
 ## que tapa la pantalla (volver a la superficie) y cosas que vuelan por encima (las reliquias al contador).
 ##
 ## Va entre los hijos de la escena principal después de Opciones y antes del cartel modal: queda encima de
-## todo el juego y debajo de un aviso. No come toques. La pausa baja Engine.time_scale (tweens, partículas y
-## animaciones casi se frenan) y la vuelve a 1 con un reloj que no depende de esa escala. Economy no se frena:
-## cuenta con el reloj real.
+## todo el juego y debajo de un aviso. No come toques.
+##
+## Tiempo: todo corre en tiempo de juego (respeta Engine.time_scale), salvo la pausa y el destello. La pausa baja
+## la escala a una fracción de la "normal" (la que había antes: 1 en el juego; los tests de animación la suben
+## para no esperar) y la restaura con un reloj real que dura segundos / normal. El destello se apaga aunque haya
+## pausa, en fade / normal segundos reales. Economy no se frena nunca: cuenta con el reloj real.
 
 var _flash: ColorRect
 var _flash_tween: Tween
-## Cuántas pausas están en curso (si se pisan, la escala vuelve a 1 cuando termina la última).
+## Cuántas pausas están en curso (si se pisan, la escala vuelve a la normal cuando termina la última).
 var _stops: int = 0
+## La escala de tiempo de afuera de las pausas.
+var _normal_scale: float = 1.0
 ## Cuántas figuras volaron (para que cada una tenga su nombre).
 var _flights: int = 0
 
@@ -27,14 +32,14 @@ func _init() -> void:
 	add_child(_flash)
 
 
-## Pantalla de `color` que se apaga en `fade` segundos (de tiempo real: no lo frena una pausa).
+## Pantalla de `color` que se apaga en `fade` segundos de juego normal (no lo frena una pausa).
 func flash(color: Color, fade: float) -> void:
 	if _flash_tween != null and _flash_tween.is_valid():
 		_flash_tween.kill()
 	_flash.color = color
 	_flash_tween = create_tween()
 	_flash_tween.set_ignore_time_scale(true)
-	_flash_tween.tween_property(_flash, "color:a", 0.0, fade).set_ease(Tween.EASE_IN)
+	_flash_tween.tween_property(_flash, "color:a", 0.0, fade / _normal()).set_ease(Tween.EASE_IN)
 
 
 ## Tapa la pantalla fundiendo a `color` (opaco) en `seconds`; mientras está tapada no se puede tocar nada. Se
@@ -45,7 +50,6 @@ func cover(color: Color, seconds: float) -> void:
 		_flash_tween.kill()
 	_flash.color = Color(color, 0.0)
 	_flash_tween = create_tween()
-	_flash_tween.set_ignore_time_scale(true)
 	_flash_tween.tween_property(_flash, "color:a", 1.0, seconds).set_trans(Tween.TRANS_SINE)
 	await _flash_tween.finished
 
@@ -55,7 +59,6 @@ func uncover(seconds: float) -> void:
 	if _flash_tween != null and _flash_tween.is_valid():
 		_flash_tween.kill()
 	_flash_tween = create_tween()
-	_flash_tween.set_ignore_time_scale(true)
 	_flash_tween.tween_property(_flash, "color:a", 0.0, seconds).set_trans(Tween.TRANS_SINE)
 	await _flash_tween.finished
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -87,19 +90,26 @@ func fly(texture: Texture2D, from: Vector2, to: Vector2, size_px: float, delay: 
 	tween.tween_callback(figure.queue_free)
 
 
-## Casi congela la escena (`slow` = escala de tiempo) durante `seconds` de tiempo real.
+## Casi congela la escena durante `seconds` de juego normal: la escala de tiempo baja a `slow` veces la normal.
 func hit_stop(seconds: float, slow: float) -> void:
+	if _stops == 0:
+		_normal_scale = Engine.time_scale
 	_stops += 1
-	Engine.time_scale = slow
-	await get_tree().create_timer(seconds, true, false, true).timeout
+	Engine.time_scale = _normal_scale * slow
+	await get_tree().create_timer(seconds / _normal_scale, true, false, true).timeout
 	_stops -= 1
 	if _stops <= 0:
 		_stops = 0
-		Engine.time_scale = 1.0
+		Engine.time_scale = _normal_scale
+
+
+## La escala de tiempo de afuera de las pausas (la de ahora, si no hay ninguna).
+func _normal() -> float:
+	return _normal_scale if _stops > 0 else Engine.time_scale
 
 
 func _exit_tree() -> void:
 	# Que una escena que se va en medio de una pausa no deje el juego en cámara lenta.
 	if _stops > 0:
 		_stops = 0
-		Engine.time_scale = 1.0
+		Engine.time_scale = _normal_scale

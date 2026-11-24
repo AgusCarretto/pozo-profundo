@@ -155,20 +155,21 @@ func _test_legendary() -> void:
 	_check_eq(screen_fx.mouse_filter, Control.MOUSE_FILTER_IGNORE, "y no come toques")
 	_economy.drop_loot(0) # común: nada especial
 	await process_frame
-	_check_eq(Engine.time_scale, 1.0, "un cofre común no pausa nada")
+	_check_eq(Engine.time_scale, TIME_SCALE, "un cofre común no pausa nada")
 	_check(_screen_flash() == null or _screen_flash().color.a == 0.0, "ni destella")
 	await _wait(0.3)
 	_economy.drop_loot(3) # legendario
 	await process_frame
-	_check(Engine.time_scale < 0.5, "el legendario congela la escena un momento (escala de tiempo %.2f)" % Engine.time_scale)
+	_check(Engine.time_scale < TIME_SCALE * 0.5, "el legendario congela la escena un momento (tiempo a %.2f de lo normal)" % (Engine.time_scale / TIME_SCALE))
 	var flash: ColorRect = _screen_flash()
 	_check(flash != null and flash.color.a > 0.3, "y destella")
 	_check(flash != null and flash.get_rect().size.is_equal_approx(screen_fx.size), "en toda la pantalla")
+	# La pausa corre con reloj real (segundos / escala normal): se mide en reloj real y se pasa a tiempo de juego.
 	var start: int = Time.get_ticks_msec()
-	while Engine.time_scale < 1.0 and Time.get_ticks_msec() - start < 3000:
+	while Engine.time_scale < TIME_SCALE and Time.get_ticks_msec() - start < 3000:
 		await process_frame
-	var paused_ms: int = Time.get_ticks_msec() - start
-	_check(paused_ms >= 150 and paused_ms <= 900, "la pausa es breve (%d ms)" % paused_ms)
+	var paused_ms: int = int((Time.get_ticks_msec() - start) * TIME_SCALE)
+	_check(paused_ms >= 150 and paused_ms <= 900, "la pausa es breve (%d ms de juego)" % paused_ms)
 	await _wait(0.8)
 	_check(flash == null or flash.color.a == 0.0, "y el destello se apaga")
 	await _wait(2.5)
@@ -181,8 +182,8 @@ func _test_legendary_reduced() -> void:
 	await process_frame
 	_economy.drop_loot(3)
 	var bright: bool = false
-	var start: int = Time.get_ticks_msec()
-	while Time.get_ticks_msec() - start < 900:
+	var clock: SceneTreeTimer = create_timer(0.9)
+	while clock.time_left > 0.0:
 		await process_frame
 		if _screen_flash() != null and _screen_flash().color.a > 0.0:
 			bright = true

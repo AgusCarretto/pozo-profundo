@@ -138,8 +138,8 @@ func _test_offline_welcome() -> void:
 	var panel: Control = modal.find_children("*", "PanelContainer", true, false)[0] as Control
 	_check(coins.get_index() < panel.get_parent().get_index(), "caen detrás del cartel (se lee igual)")
 	var seen: Dictionary = {}
-	var deadline: int = Time.get_ticks_msec() + 2500
-	while Time.get_ticks_msec() < deadline:
+	var clock: SceneTreeTimer = create_timer(2.5)
+	while clock.time_left > 0.0:
 		await process_frame
 		seen[counter.text] = true
 	_check(seen.size() >= 4, "va subiendo de a poco (%d valores)" % seen.size())
@@ -197,8 +197,8 @@ func _test_prestige_whiteout() -> void:
 	var labels: Dictionary = {}
 	var max_flying: int = 0
 	var flying_textures: Dictionary = {}
-	var deadline: int = Time.get_ticks_msec() + 5000
-	while Time.get_ticks_msec() < deadline:
+	var clock: SceneTreeTimer = create_timer(5.0)
+	while clock.time_left > 0.0:
 		await process_frame
 		if alpha_at_reset < 0.0 and _economy.relics == 2:
 			alpha_at_reset = _flash().color.a
@@ -232,8 +232,8 @@ func _test_prestige_reduced() -> void:
 	_settings.reduce_effects = true
 	await _start_prestige()
 	var brightest: float = 0.0
-	var deadline: int = Time.get_ticks_msec() + 4000
-	while Time.get_ticks_msec() < deadline:
+	var clock: SceneTreeTimer = create_timer(4.0)
+	while clock.time_left > 0.0:
 		await process_frame
 		var color: Color = _flash().color
 		if color.a > 0.5:

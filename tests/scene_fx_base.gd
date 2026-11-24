@@ -8,6 +8,11 @@ extends "res://tests/test_base.gd"
 const NumberFormat := preload("res://core/number_format.gd")
 const MAIN_SCENE: String = "res://game/main.tscn"
 const PHONE: Vector2 = Vector2(720, 1280)
+## Los tests de animación corren el tiempo de juego a esta velocidad (Engine.time_scale) para no esperar en tiempo
+## real: todo lo que miden (tweens, partículas, loops, timers de los tests) va en tiempo de juego. Con ~7 ms por frame
+## en headless, x4 deja ~28 ms de juego por frame: los efectos más cortos (rebote de 0,06 s, sacudida de 0,16 s)
+## siguen viéndose a mitad de camino un frame después.
+const TIME_SCALE: float = 4.0
 
 var _economy: Node
 var _settings: Node
@@ -23,6 +28,7 @@ func _initialize() -> void:
 	_settings.reduce_effects = false
 	_economy.load_balance(_balance())
 	await _mount()
+	Engine.time_scale = TIME_SCALE
 	await _run_tests()
 	_scene.get_parent().queue_free()
 	await process_frame
@@ -85,7 +91,7 @@ func _floaters() -> Array[Label]:
 	return labels
 
 
-## Espera `seconds` de tiempo real (los tweens avanzan con el proceso del árbol).
+## Espera `seconds` de tiempo de juego (con TIME_SCALE, pasan seconds / TIME_SCALE de reloj).
 func _wait(seconds: float) -> void:
 	await create_timer(seconds).timeout
 

@@ -536,7 +536,7 @@ func _fly_relics(before: int, gained: int) -> void:
 			Audio.play_sfx("relic")
 		_screen_fx.fly(load(RUNE_ICONS[index % RUNE_ICONS.size()]) as Texture2D, origin + spread, target, RUNE_SIZE, PRESTIGE_FADE_OUT * 0.5 + index * RELIC_STAGGER, RELIC_FLIGHT_TIME, on_arrive)
 	var deadline: float = PRESTIGE_FADE_OUT * 0.5 + figures * RELIC_STAGGER + RELIC_FLIGHT_TIME + 0.3
-	await get_tree().create_timer(deadline, true, false, true).timeout
+	await get_tree().create_timer(deadline).timeout
 
 
 # --- Progreso offline --------------------------------------------------------

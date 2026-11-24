@@ -165,9 +165,9 @@ func _test_dynamite() -> void:
 	_economy.gold_changed.emit(_economy.gold)
 	var saw_stick: bool = false
 	var saw_glow: bool = false
-	# En headless los frames corren sin límite: se espera por tiempo real, no por cantidad de frames.
-	var deadline: int = Time.get_ticks_msec() + 4000
-	while Time.get_ticks_msec() < deadline:
+	# En headless los frames corren sin límite: se espera por tiempo de juego, no por cantidad de frames.
+	var clock: SceneTreeTimer = create_timer(4.0)
+	while clock.time_left > 0.0:
 		await process_frame
 		if _fx().find_children("*", "TextureRect", true, false).any(func(n: Node) -> bool: return (n as TextureRect).texture != null and (n as TextureRect).texture.resource_path.ends_with("dynamite.png")):
 			saw_stick = true
@@ -199,8 +199,8 @@ func _test_dynamite() -> void:
 	await _wait(0.6)
 	points.clear()
 	var glow_with_reduce: bool = false
-	deadline = Time.get_ticks_msec() + 3000
-	while Time.get_ticks_msec() < deadline:
+	clock = create_timer(3.0)
+	while clock.time_left > 0.0:
 		await process_frame
 		if not _glows().is_empty():
 			glow_with_reduce = true
