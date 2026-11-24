@@ -60,6 +60,16 @@ const FLOAT_LANES: Array[float] = [-0.26, 0.12, -0.08, 0.28, 0.0, -0.3, 0.2]
 const FLOAT_JITTER: float = 0.04
 ## Golpe: vibración corta (solo hace algo en celulares).
 const VIBRATION_MS: int = 25
+## Golpe: astillas de la roca (chips_<bioma>.png, 4 dibujos en 2x2) y, a veces, gemas. Cada golpe usa el
+## emisor siguiente de un grupo fijo (así una tanda no corta a la anterior). Con reduce_effects, la mitad.
+const CHIP_EMITTERS: int = 4
+const CHIP_AMOUNT: int = 10
+const CHIP_SCALE: float = 5.0
+const CHIP_LIFETIME: float = 0.7
+const GEM_EMITTERS: int = 2
+const GEM_AMOUNT: int = 3
+const GEM_SCALE: float = 2.0
+const GEM_CHANCE: float = 0.3
 
 ## Puestos de trabajo, en px de diseño desde el centro de la roca. Ninguno toca la roca (que mide 352):
 ## los mineros ocupan primero los costados y después una fila arriba, y el gólem y el taladro quedan
@@ -79,8 +89,13 @@ var miner_sprites: Array[TextureRect] = []
 var drill_sprite: TextureRect
 var golem_sprite: TextureRect
 
-## "Reducir efectos" (lo fija main.gd desde Settings): sin sacudida ni vibración.
-var reduce_effects: bool = false
+## "Reducir efectos" (lo fija main.gd desde Settings): sin sacudida ni vibración, y la mitad de partículas.
+var reduce_effects: bool = false:
+	set(value):
+		reduce_effects = value
+		_apply_particle_amounts()
+## Azar de los efectos (si salen gemas). Los tests le fijan la semilla.
+var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 ## Cuánto está corrida ahora la mina por la sacudida (px de pantalla); cero en reposo. La roca, la
 ## cuadrilla y el piso se dibujan corridos; la mina en sí (y el HUD) no se mueven.
 var shake_offset: Vector2 = Vector2.ZERO:
@@ -89,6 +104,8 @@ var shake_offset: Vector2 = Vector2.ZERO:
 		_apply_shake()
 ## Cuántas veces vibró (para los tests: en la PC vibrar no hace nada visible).
 var vibrations: int = 0
+## Cuántas tandas de gemas salieron (para los tests).
+var gem_bursts: int = 0
 
 var _rock: TextureRect
 var _tap_button: Button
@@ -103,6 +120,10 @@ var _squash_tween: Tween
 var _shake_tween: Tween
 var _shake_direction: Vector2 = Vector2.RIGHT
 var _next_lane: int = 0
+var _chip_emitters: Array[CPUParticles2D] = []
+var _gem_emitters: Array[CPUParticles2D] = []
+var _next_chip: int = 0
+var _next_gem: int = 0
 
 
 func _ready() -> void:
@@ -118,6 +139,12 @@ func _ready() -> void:
 	_fx.clip_contents = true
 	add_child(_fx)
 	_fx.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var gem_texture: Texture2D = load(SPRITE_DIR + "gem.png") as Texture2D
+	for index: int in range(CHIP_EMITTERS):
+		_chip_emitters.append(_make_emitter("Chips%d" % index, null, true))
+	for index: int in range(GEM_EMITTERS):
+		_gem_emitters.append(_make_emitter("Gems%d" % index, gem_texture, false))
+	_apply_particle_amounts()
 	show_biome(DEFAULT_BIOME)
 	_layout()
 
@@ -128,6 +155,7 @@ func _ready() -> void:
 ## celular vibra. Con reduce_effects no hay sacudida ni vibración (el número y el aplastado quedan).
 func play_hit(text: String) -> void:
 	_squash_rock()
+	_burst_particles()
 	_spawn_floater(text)
 	if reduce_effects:
 		return
@@ -165,6 +193,74 @@ func _apply_shake() -> void:
 	for sprite: Variant in _base_positions:
 		(sprite as Control).position = _base_positions[sprite] + shake_offset
 	queue_redraw()
+
+
+## Una tanda de astillas desde la parte de arriba de la roca y, con suerte (GEM_CHANCE), unas gemas.
+func _burst_particles() -> void:
+	var rock_rect: Rect2 = Rect2(_base_positions.get(_rock, _rock.position), _rock.size)
+	var origin: Vector2 = Vector2(rock_rect.get_center().x, rock_rect.position.y + rock_rect.size.y * 0.3)
+	var chips: CPUParticles2D = _chip_emitters[_next_chip]
+	_next_chip = (_next_chip + 1) % _chip_emitters.size()
+	_fire(chips, origin, rock_rect)
+	if rng.randf() < GEM_CHANCE:
+		var gems: CPUParticles2D = _gem_emitters[_next_gem]
+		_next_gem = (_next_gem + 1) % _gem_emitters.size()
+		_fire(gems, origin, rock_rect)
+		gem_bursts += 1
+
+
+func _fire(emitter: CPUParticles2D, origin: Vector2, rock_rect: Rect2) -> void:
+	emitter.position = origin.round()
+	emitter.emission_rect_extents = Vector2(rock_rect.size.x * 0.25, rock_rect.size.y * 0.08)
+	var is_chip: bool = _chip_emitters.has(emitter)
+	var pixel_scale: float = (CHIP_SCALE if is_chip else GEM_SCALE) * _unit
+	emitter.scale_amount_min = pixel_scale
+	emitter.scale_amount_max = pixel_scale
+	emitter.initial_velocity_min = 260.0 * _unit
+	emitter.initial_velocity_max = 520.0 * _unit
+	emitter.gravity = Vector2(0.0, 1500.0 * _unit)
+	emitter.restart()
+	emitter.emitting = true
+
+
+## Un emisor de partículas de una sola tanda: salen todas juntas hacia arriba (abiertas), giran y caen.
+## Las astillas usan la hoja de 2x2 dibujos (`sheet` = true): a cada una le toca un dibujo al azar.
+func _make_emitter(node_name: String, texture: Texture2D, sheet: bool) -> CPUParticles2D:
+	var emitter: CPUParticles2D = CPUParticles2D.new()
+	emitter.name = node_name
+	emitter.texture = texture
+	emitter.emitting = false
+	emitter.one_shot = true
+	emitter.explosiveness = 1.0
+	emitter.lifetime = CHIP_LIFETIME if sheet else CHIP_LIFETIME * 1.3
+	emitter.local_coords = false
+	emitter.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	emitter.direction = Vector2(0.0, -1.0)
+	emitter.spread = 70.0
+	emitter.angular_velocity_min = -540.0
+	emitter.angular_velocity_max = 540.0
+	if sheet:
+		var material: CanvasItemMaterial = CanvasItemMaterial.new()
+		material.particles_animation = true
+		material.particles_anim_h_frames = 2
+		material.particles_anim_v_frames = 2
+		emitter.material = material
+		emitter.anim_offset_max = 1.0
+	# se apagan al final de su vida en vez de desaparecer de golpe
+	var fade: Gradient = Gradient.new()
+	fade.set_color(0, Color.WHITE)
+	fade.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
+	fade.add_point(0.7, Color.WHITE)
+	emitter.color_ramp = fade
+	_fx.add_child(emitter)
+	return emitter
+
+
+func _apply_particle_amounts() -> void:
+	for emitter: CPUParticles2D in _chip_emitters:
+		emitter.amount = CHIP_AMOUNT / 2 if reduce_effects else CHIP_AMOUNT
+	for emitter: CPUParticles2D in _gem_emitters:
+		emitter.amount = maxi(GEM_AMOUNT / 2, 1) if reduce_effects else GEM_AMOUNT
 
 
 func _spawn_floater(text: String) -> void:
@@ -210,6 +306,9 @@ func show_biome(id: String) -> void:
 	if _rock != null:
 		_rock.texture = load(SPRITE_DIR + "rock_%s.png" % known) as Texture2D
 	_backdrop_texture = load(SPRITE_DIR + "bg_%s.png" % known) as Texture2D
+	var chips: Texture2D = load(SPRITE_DIR + "chips_%s.png" % known) as Texture2D
+	for emitter: CPUParticles2D in _chip_emitters:
+		emitter.texture = chips
 	queue_redraw()
 
 

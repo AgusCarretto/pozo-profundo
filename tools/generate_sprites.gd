@@ -43,6 +43,7 @@ func _initialize() -> void:
 	for id: String in BiomePalette.IDS:
 		_save(_rock(id), "rock_%s.png" % id)
 		_save(_background(id), "bg_%s.png" % id)
+		_save(_chips(id), "chips_%s.png" % id)
 	_save(_drill(), "drill.png")
 	_save(_golem(), "golem.png")
 	_save(_dynamite(), "dynamite.png")
@@ -479,6 +480,33 @@ func _pick() -> Image:
 			Vector2i(10, 5), Vector2i(11, 6), Vector2i(11, 7), Vector2i(3, 6)]:
 		img.set_pixelv(point, Palette.STEEL)
 	img.set_pixel(7, 3, Palette.WHITE)
+	_outline(img)
+	return img
+
+
+## Astillas que saltan de la roca al golpear: 4 dibujos de 4x4 en una hoja de 16x16 (uno en el medio de cada
+## cuarto de 8x8), con las tres sombras de la roca del bioma y contorno. La escena corta la hoja en 2x2
+## cuadros y a cada partícula le toca uno al azar. El contorno no llega a los bordes de cada cuarto.
+const CHIPS: Array = [
+	[".LL.", "LRRD", "RRDD", ".DD."],
+	["..L.", ".LRR", "LRRD", ".RD."],
+	["....", "LLRR", ".RDD", "...."],
+	[".L..", "LRR.", ".RDD", "..D."],
+]
+
+
+func _chips(id: String) -> Image:
+	var colors: Dictionary = BiomePalette.of(id)
+	var keys: Dictionary = { "L": colors["rock_light"], "R": colors["rock"], "D": colors["rock_dark"] }
+	var img: Image = _blank()
+	for index: int in range(CHIPS.size()):
+		var origin: Vector2i = Vector2i((index % 2) * 8 + 2, (index / 2) * 8 + 2)
+		var rows: Array = CHIPS[index]
+		for y: int in range(rows.size()):
+			for x: int in range(str(rows[y]).length()):
+				var key: String = str(rows[y])[x]
+				if keys.has(key):
+					img.set_pixel(origin.x + x, origin.y + y, keys[key])
 	_outline(img)
 	return img
 

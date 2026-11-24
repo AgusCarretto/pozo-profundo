@@ -45,6 +45,7 @@ func _initialize() -> void:
 	_test_cracks_branch()
 	_test_floor_is_seen_from_above()
 	_test_background_is_low_contrast()
+	_test_rock_chips()
 	_test_tiny_dungeon_tiles()
 	_test_ui_pack_and_font()
 	_test_credits()
@@ -335,6 +336,50 @@ func _test_background_is_low_contrast() -> void:
 					count += 1
 		var gap: float = absf(total / maxi(count, 1) - base.get_luminance())
 		_check(gap >= 0.1, "rock_%s: la roca se despega del fondo (diferencia de luminancia %.3f, mín 0.1)" % [id, gap])
+
+
+## Astillas de roca (partículas del golpe): una hoja de 16x16 por bioma con 4 astillas de 8x8 (una por
+## cuarto), pintadas con las sombras de la roca de ese bioma y el contorno. Los bordes entre cuartos quedan
+## transparentes: al cortar la hoja en 2x2 cuadros, una astilla no se mete en otra.
+func _test_rock_chips() -> void:
+	_section("Astillas de roca por bioma")
+	for id: String in BiomePalette.IDS:
+		var path: String = GENERATED_DIR + "chips_%s.png" % id
+		var img: Image = _load_image(path)
+		if img == null:
+			_check(false, "existe chips_%s.png" % id)
+			continue
+		_check_eq(img.get_size(), Vector2i(16, 16), "chips_%s es una hoja de 16x16" % id)
+		var colors: Dictionary = BiomePalette.of(id)
+		var allowed: Array[Color] = [colors["rock_light"], colors["rock"], colors["rock_dark"], Palette.OUTLINE]
+		var foreign: int = 0
+		var used: Dictionary = {}
+		var per_quadrant: Array[int] = [0, 0, 0, 0]
+		var on_seams: int = 0
+		for y: int in range(16):
+			for x: int in range(16):
+				var pixel: Color = img.get_pixel(x, y)
+				if pixel.a == 0.0:
+					continue
+				if not allowed.has(pixel) or pixel.a < 1.0:
+					foreign += 1
+				used[pixel.to_html()] = true
+				per_quadrant[(x / 8) + 2 * (y / 8)] += 1
+				if x in [0, 7, 8, 15] or y in [0, 7, 8, 15]:
+					on_seams += 1
+		_check_eq(foreign, 0, "chips_%s usa solo las sombras de la roca del bioma y el contorno" % id)
+		_check(used.size() >= 3, "chips_%s tiene volumen (%d colores)" % [id, used.size()])
+		_check(per_quadrant.all(func(count: int) -> bool: return count >= 4 and count <= 30), "chips_%s tiene una astilla en cada cuarto (%s)" % [id, str(per_quadrant)])
+		_check_eq(on_seams, 0, "chips_%s deja libres los bordes de cada cuarto" % id)
+	var sheets: Array[Image] = []
+	for id: String in BiomePalette.IDS:
+		sheets.append(_load_image(GENERATED_DIR + "chips_%s.png" % id))
+	var distinct: bool = true
+	for i: int in range(sheets.size()):
+		for j: int in range(i):
+			if sheets[i] != null and sheets[j] != null and _same_pixels(sheets[i], sheets[j]):
+				distinct = false
+	_check(distinct, "las astillas de cada bioma son de su color (todas distintas)")
 
 
 func _test_tiny_dungeon_tiles() -> void:

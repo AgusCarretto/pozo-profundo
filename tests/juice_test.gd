@@ -29,6 +29,7 @@ func _initialize() -> void:
 	await _test_rock_squash()
 	await _test_shake()
 	await _test_reduce_effects()
+	await _test_particles()
 	_scene.get_parent().queue_free()
 	await process_frame
 	_settings.from_dict(_saved_settings)
@@ -187,4 +188,63 @@ func _test_reduce_effects() -> void:
 	_check_eq(int(mine.get("vibrations")), vibrations, "ni vibración")
 	_check(_floaters().size() >= 1, "pero el número sigue saliendo (es información, no adorno)")
 	_settings.reduce_effects = false
+	await _wait(1.2)
+
+
+func _emitters(texture_prefix: String) -> Array[CPUParticles2D]:
+	var found: Array[CPUParticles2D] = []
+	for node: Node in _fx().find_children("*", "CPUParticles2D", true, false):
+		var emitter: CPUParticles2D = node as CPUParticles2D
+		if emitter.texture != null and emitter.texture.resource_path.get_file().begins_with(texture_prefix):
+			found.append(emitter)
+	return found
+
+
+func _emitting(emitters: Array[CPUParticles2D]) -> int:
+	return emitters.filter(func(emitter: CPUParticles2D) -> bool: return emitter.emitting).size()
+
+
+func _test_particles() -> void:
+	_section("Astillas y gemas al golpear")
+	var mine: Control = _mine()
+	(mine.get("rng") as RandomNumberGenerator).seed = 7
+	await _wait(1.0)
+	var chips: Array[CPUParticles2D] = _emitters("chips_")
+	var gems: Array[CPUParticles2D] = _emitters("gem")
+	_check(chips.size() >= 2, "hay emisores de astillas (%d)" % chips.size())
+	_check(gems.size() >= 1, "y de gemas (%d)" % gems.size())
+	if chips.is_empty() or gems.is_empty():
+		return
+	_check_eq(_emitting(chips), 0, "en reposo no sale nada")
+	_check(chips.all(func(e: CPUParticles2D) -> bool: return e.texture.resource_path.ends_with("chips_earth.png")), "las astillas son del color de la roca de Tierra")
+	_tap()
+	_check_eq(_emitting(chips), 1, "un golpe larga una tanda de astillas")
+	var emitter: CPUParticles2D = chips.filter(func(e: CPUParticles2D) -> bool: return e.emitting)[0]
+	var full_amount: int = emitter.amount
+	_check(full_amount >= 6, "de varias astillas (%d)" % full_amount)
+	_check(emitter.one_shot and emitter.explosiveness >= 0.8, "todas de golpe, una sola vez")
+	_check(emitter.direction.y < 0.0 and emitter.gravity.y > 0.0, "saltan para arriba y caen")
+	var rock_rect: Rect2 = _rock().get_rect()
+	_check(rock_rect.grow(4.0).has_point(emitter.position), "salen de la roca")
+	var material: CanvasItemMaterial = emitter.material as CanvasItemMaterial
+	_check(material != null and material.particles_animation and emitter.texture.get_width() == 16, "cada astilla es uno de los 4 dibujos de la hoja (animación de partículas 2x2)")
+	_check(material != null and material.particles_anim_h_frames == 2 and material.particles_anim_v_frames == 2 and emitter.anim_offset_max >= 0.75, "elegido al azar")
+	var bursts_before: int = int(mine.get("gem_bursts"))
+	for index: int in range(20):
+		_tap()
+		await process_frame
+	var gem_bursts: int = int(mine.get("gem_bursts")) - bursts_before
+	_check(_emitting(gems) >= 1, "las gemas salen de sus propios emisores")
+	_check(gem_bursts >= 1, "de vez en cuando también saltan gemas (%d en 20 golpes)" % gem_bursts)
+	_check(gem_bursts <= 15, "pero no siempre")
+	_check_eq(_emitters("chips_").size(), chips.size(), "muchos golpes no crean emisores nuevos (se reusan)")
+	(_scene.get_node("%MineView") as Node).call("show_biome", "magma")
+	_check(chips.all(func(e: CPUParticles2D) -> bool: return e.texture.resource_path.ends_with("chips_magma.png")), "en Magma las astillas son de la roca de Magma")
+	_settings.reduce_effects = true
+	await process_frame
+	_check(chips.all(func(e: CPUParticles2D) -> bool: return e.amount <= full_amount / 2), "con reducir efectos salen la mitad de astillas")
+	_settings.reduce_effects = false
+	await process_frame
+	_check(chips.all(func(e: CPUParticles2D) -> bool: return e.amount == full_amount), "y vuelven a ser todas")
+	(_scene.get_node("%MineView") as Node).call("show_biome", "earth")
 	await _wait(1.2)
