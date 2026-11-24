@@ -1,8 +1,8 @@
 extends SceneTree
-## Smoke test headless de F0.
+## Smoke test headless del proyecto.
 ##
 ## Verifica la configuración del proyecto, los autoloads, la regla de independencia
-## de core/ y que la escena principal cargue y responda al botón.
+## de core/ y que la escena principal cargue con sus controles clave.
 ##
 ## Uso (desde la raíz del proyecto):
 ##   godot --headless --path . --script res://tests/smoke_test.gd
@@ -84,11 +84,9 @@ func _test_main_scene() -> void:
 		return
 	root.add_child(scene)
 	await process_frame
-	var rect: TextureRect = scene.get_node("%PixelRect") as TextureRect
-	_check(rect.texture != null, "la textura pixelada se generó")
-	var button: Button = scene.get_node("%PickButton") as Button
-	button.pressed.emit()
-	_check(scene.call("get_hits") == 1, "el botón suma un golpe")
-	var counter: Label = scene.get_node("%CounterLabel") as Label
-	_check(counter.text == "Golpes: 1", "el contador muestra 'Golpes: 1'")
+	# El comportamiento de la escena se prueba a fondo en tests/main_scene_test.gd.
+	var tap: Button = scene.get_node_or_null("%TapButton") as Button
+	_check(tap != null, "la escena tiene el botón de golpe (%TapButton)")
+	var gold_label: Label = scene.get_node_or_null("%GoldLabel") as Label
+	_check(gold_label != null, "la escena tiene el cartel de oro (%GoldLabel)")
 	scene.queue_free()
