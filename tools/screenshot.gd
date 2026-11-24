@@ -11,7 +11,8 @@ extends SceneTree
 
 const SIZES: Array[Vector2i] = [Vector2i(360, 640), Vector2i(412, 915)]
 
-## Estados de muestra: nombre, pestaña (0 Cuadrilla, 1 Botín, 2 Reliquias) y partida.
+## Estados de muestra: nombre, pestaña (0 Cuadrilla, 1 Botín, 2 Reliquias) y partida. Con "options": true la
+## captura sale con el panel de Opciones abierto.
 ## `owned` sigue el orden del balance: Minero, Taladro, Dinamita, Gólem, Excavadora.
 const SHOTS: Array[Dictionary] = [
 	{ "name": "1_inicio", "tab": 0, "gold": 22.0, "run_gold": 22.0, "pick": 0, "owned": [], "loot": 0.0, "relics": 0 },
@@ -19,6 +20,7 @@ const SHOTS: Array[Dictionary] = [
 	{ "name": "3_cristal_botin", "tab": 1, "gold": 52000.0, "run_gold": 60000.0, "pick": 5, "owned": [8, 3, 1, 1], "loot": 0.45, "relics": 0 },
 	{ "name": "4_magma_reliquias", "tab": 2, "gold": 4.0e6, "run_gold": 5.0e6, "pick": 7, "owned": [30, 8, 5, 2, 0], "loot": 1.1, "relics": 3 },
 	{ "name": "5_abismo", "tab": 0, "gold": 9.0e8, "run_gold": 2.0e9, "pick": 9, "owned": [60, 25, 12, 6, 2], "loot": 2.0, "relics": 5 },
+	{ "name": "6_opciones", "tab": 0, "gold": 8.88e15, "run_gold": 1.0e15, "pick": 9, "owned": [60, 25, 12, 6, 2], "loot": 2.0, "relics": 40, "options": true },
 ]
 
 var _out_dir: String = ""
@@ -55,6 +57,11 @@ func _run() -> void:
 			(scene.get_node("%" + ["TabCrewButton", "TabLootButton", "TabRelicsButton"][shot["tab"]]) as Button).button_pressed = true
 			if shot["name"].begins_with("1_"):
 				scene.get_node("%Mode1Button").button_pressed = true
+			var options: Node = scene.get_node("OptionsPanel")
+			if shot.get("options", false):
+				options.call("open")
+			else:
+				options.set("visible", false)
 			await _settle()
 			var image: Image = root.get_texture().get_image()
 			var path: String = "%s/%dx%d_%s.png" % [_out_dir, size.x, size.y, shot["name"]]

@@ -249,6 +249,7 @@ func _test_hud(packed: PackedScene) -> void:
 	await process_frame
 	_check((_node(scene, "CoinIcon") as TextureRect).texture != null, "el oro lleva su moneda")
 	_check_eq(_label_in(scene, "GoldLabel").text, "0", "oro: 0")
+	_check_eq(_label_in(scene, "GoldLabel").get_theme_font_size("font_size"), 80, "con poco oro, el oro se ve a 80 px")
 	_check_eq(_label_in(scene, "RateLabel").text, "0 oro/s", "oro/s: 0 oro/s (%s)" % _label_in(scene, "RateLabel").text)
 	# el oro por segundo es un dato principal: grande y justo debajo del oro
 	var gold_label: Label = _label_in(scene, "GoldLabel")
@@ -300,6 +301,18 @@ func _test_hud(packed: PackedScene) -> void:
 	await process_frame
 	_check_near(bar.value, 1.0, "en el último bioma la barra está llena", 1e-9)
 	_check(_label_in(scene, "NextBiomeLabel").text.contains("Fondo"), "y avisa que llegaste al fondo (%s)" % _label_in(scene, "NextBiomeLabel").text)
+
+	# El oro comparte fila con el multiplicador y los botones de sonido y opciones: si el número no entra,
+	# la fuente se achica (sin bajar de 48 px), y vuelve a 80 px cuando entra.
+	_economy.gold = 8.88e15
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	var shrunk: int = gold_label.get_theme_font_size("font_size")
+	_check(shrunk < 80 and shrunk >= 48, "con '%s' el oro achica la fuente para entrar, sin bajar de 48 px (%d)" % [gold_label.text, shrunk])
+	_economy.gold = 12.0
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	_check_eq(gold_label.get_theme_font_size("font_size"), 80, "y con un número corto vuelve a 80 px")
 	_economy.reset()
 	await _free_host(scene)
 
@@ -330,6 +343,9 @@ func _test_text_is_not_cut(packed: PackedScene) -> void:
 		{ "run_gold": 5.0e6, "gold": 999.0e6, "relics": 88 },
 		{ "run_gold": 2.0e9, "gold": 999.0e9, "relics": 40 },
 		{ "run_gold": 1.0e15, "gold": 999.0e12, "relics": 400 },
+		# los textos de oro más anchos que da el formato: 8.88M y 8.88Qa (dígitos anchos y sufijo de dos letras)
+		{ "run_gold": 5.0e6, "gold": 8.88e6, "relics": 0 },
+		{ "run_gold": 1.0e15, "gold": 8.88e15, "relics": 400 },
 	]
 	for phone: Vector2 in PHONE_SIZES:
 		var scene: Control = await _mount_host(packed, phone)

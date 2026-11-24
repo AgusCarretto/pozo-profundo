@@ -12,8 +12,9 @@ Cada fila dice dónde vive el asset con una ruta entre comillas invertidas; `tes
 | Impact Sounds 1.0 (golpes de pico, metal y campana) | Kenney | CC0 1.0 | https://kenney.nl/assets/impact-sounds | `assets/audio/impact_sounds/` (solo los usados): golpe a la roca, mejora del pico, cofre legendario |
 | Interface Sounds 1.0 (clicks, cristales y avisos) | Kenney | CC0 1.0 | https://kenney.nl/assets/interface-sounds | `assets/audio/interface_sounds/` (solo los usados): pestañas, modos, carteles, cofres, prestigio y bioma nuevo |
 | RPG Audio (monedas) | Kenney | CC0 1.0 | https://kenney.nl/assets/rpg-audio | `assets/audio/rpg_audio/` (solo los usados): compra de la cuadrilla |
+| Game Icons (íconos blancos 2x) | Kenney | CC0 1.0 | https://kenney.nl/assets/game-icons | `assets/ui/game_icons/` (solo los usados): silencio (parlante encendido y tachado) y opciones (engranaje) del HUD |
 
-Ya descargados en `assets_src/` pero **todavía sin usar** (se registran acá cuando se importen): Kenney Game Icons y Particle Pack (CC0).
+Ya descargados en `assets_src/` pero **todavía sin usar** (se registra acá cuando se importe): Kenney Particle Pack (CC0).
 
 ## Motor
 

@@ -12,6 +12,7 @@ const GeneratorRow := preload("res://game/generator_row.gd")
 const Modal := preload("res://game/modal.gd")
 const MineView := preload("res://game/mine_view.gd")
 const NumberFormat := preload("res://core/number_format.gd")
+const OptionsPanel := preload("res://game/options_panel.gd")
 const PickRow := preload("res://game/pick_row.gd")
 const SoundCues := preload("res://game/sound_cues.gd")
 
@@ -24,6 +25,9 @@ const RARITY_COLORS: Dictionary = {
 }
 const DEFAULT_RARITY_COLOR: Color = Color(0.9, 0.9, 0.9)
 
+const SOUND_ON_ICON: Texture2D = preload("res://assets/ui/game_icons/audioOn.png")
+const SOUND_OFF_ICON: Texture2D = preload("res://assets/ui/game_icons/audioOff.png")
+
 const CHEST_ICON: String = "res://assets/sprites/tiny_dungeon/tile_0089.png"
 const RUNE_ICONS: Array[String] = [
 	"res://assets/sprites/generated/rune_1.png",
@@ -33,6 +37,9 @@ const RUNE_ICONS: Array[String] = [
 ## Cuántas runas se dibujan como máximo en la pestaña de reliquias (el contador dice el total real).
 const MAX_RUNES_SHOWN: int = 8
 const RUNE_SIZE: float = 80.0
+## El oro achica su fuente de a este paso cuando el número no entra en su lugar, sin bajar del mínimo.
+const GOLD_FONT_STEP: int = 4
+const GOLD_FONT_MIN: int = 48
 const CHEST_SIZE: float = 64.0
 
 enum Tab { CREW, LOOT, RELICS }
@@ -42,6 +49,7 @@ var _rows: Array[GeneratorRow] = []
 ## Se marca cuando Economy cambia; la pantalla se refresca una vez por frame, no por señal.
 var _dirty: bool = true
 var _modal: Modal
+var _options: OptionsPanel
 var _pick_row: PickRow
 var _shown_runes: int = -1
 ## El último cofre que salió en esta partida ({rarity, bonus}); vacío si todavía no salió ninguno (o si el
@@ -52,11 +60,15 @@ var _shown_biome: int = -1
 ## Se prende al final de _ready: lo que se marca mientras se arma la escena no suena. (is_node_ready() no sirve:
 ## ya es true adentro de _ready.)
 var _built: bool = false
+## Tamaño de fuente del oro según el tema (el que se usa cuando el número entra).
+var _gold_font_size: int = 0
 
 @onready var _gold_label: Label = %GoldLabel
 @onready var _rate_label: Label = %RateLabel
 @onready var _hit_label: Label = %HitLabel
 @onready var _mult_label: Label = %MultLabel
+@onready var _sound_button: Button = %SoundButton
+@onready var _options_button: Button = %OptionsButton
 @onready var _depth_label: Label = %DepthLabel
 @onready var _next_biome_label: Label = %NextBiomeLabel
 @onready var _depth_bar: ProgressBar = %DepthBar
@@ -80,6 +92,8 @@ var _built: bool = false
 
 
 func _ready() -> void:
+	_gold_font_size = _gold_label.get_theme_font_size("font_size")
+	_gold_label.resized.connect(_fit_gold_label)
 	for index: int in range(Economy.generator_count()):
 		var row: GeneratorRow = GeneratorRow.new()
 		_generator_list.add_child(row)
@@ -121,6 +135,13 @@ func _ready() -> void:
 
 	# Solo en builds de debug; en un export de release no se crea (ver debug_panel.gd).
 	DebugPanel.attach_if_debug(self, OS.is_debug_build())
+	# Opciones: encima del juego y del panel de debug, debajo del cartel.
+	_options = OptionsPanel.new()
+	add_child(_options)
+	_options_button.pressed.connect(_options.open)
+	_sound_button.pressed.connect(_on_sound_pressed)
+	Settings.changed.connect(_refresh_sound_icon)
+	_refresh_sound_icon()
 	# El cartel va último entre los hijos: se dibuja encima de todo (también del panel de debug).
 	_modal = Modal.new()
 	add_child(_modal)
@@ -152,6 +173,16 @@ func _on_tap() -> void:
 	Economy.hit()
 
 
+## Silencia todo o devuelve el sonido. El click suena solo al devolverlo (silenciado no suena nada).
+func _on_sound_pressed() -> void:
+	Settings.muted = not Settings.muted
+	Audio.play_sfx("toggle")
+
+
+func _refresh_sound_icon() -> void:
+	_sound_button.icon = SOUND_OFF_ICON if Settings.muted else SOUND_ON_ICON
+
+
 # Los toggles que se marcan al armar la escena (en _ready) no suenan: solo los que toca el jugador.
 func _on_mode_toggled(pressed: bool, mode: int) -> void:
 	if pressed:
@@ -176,6 +207,7 @@ func _show_page(tab: int) -> void:
 func _refresh() -> void:
 	_dirty = false
 	_gold_label.text = NumberFormat.format_number(Economy.gold)
+	_fit_gold_label()
 	_rate_label.text = "%s oro/s" % NumberFormat.format_number(Economy.gold_per_second())
 	_hit_label.text = "Golpe %s" % NumberFormat.format_number(Economy.hit_value())
 	_mult_label.text = "×%.2f" % Economy.multiplier
@@ -188,6 +220,22 @@ func _refresh() -> void:
 	_refresh_prestige()
 	for row: GeneratorRow in _rows:
 		row.refresh(_mode)
+
+
+## El oro comparte fila con el multiplicador y los botones de sonido y opciones: si el número no entra,
+## se achica la fuente (de a GOLD_FONT_STEP, sin bajar de GOLD_FONT_MIN); si entra, vuelve al tamaño del tema.
+func _fit_gold_label() -> void:
+	var width: float = _gold_label.size.x
+	if width <= 0.0:
+		return
+	var font: Font = _gold_label.get_theme_font("font")
+	var font_size: int = _gold_font_size
+	while font_size > GOLD_FONT_MIN and font.get_string_size(_gold_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > width:
+		font_size -= GOLD_FONT_STEP
+	if font_size == _gold_font_size:
+		_gold_label.remove_theme_font_size_override("font_size")
+	else:
+		_gold_label.add_theme_font_size_override("font_size", font_size)
 
 
 # --- Profundidad y mina ------------------------------------------------------

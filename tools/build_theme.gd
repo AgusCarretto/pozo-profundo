@@ -44,6 +44,8 @@ func _initialize() -> void:
 	_build_panels()
 	_build_progress_bar()
 	_build_scroll()
+	_build_slider()
+	_build_switch()
 
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://ui"))
 	var error: Error = ResourceSaver.save(_theme, OUT_PATH)
@@ -263,3 +265,70 @@ func _build_scroll() -> void:
 		_theme.set_stylebox("grabber_highlight", type_name, grabber)
 		_theme.set_stylebox("grabber_pressed", type_name, grabber)
 		_theme.set_stylebox("scroll", type_name, track)
+
+
+# --- Opciones: slider de volumen e interruptor ------------------------------------------------------
+
+## Slider de volumen (panel de Opciones): riel oscuro, la parte llena en dorado (el mismo acento que la
+## barra de profundidad) y una perilla clara grande. El alto de 96 px lo pone la escena: el riel se dibuja
+## centrado y toda la franja responde al toque.
+const KNOB_SIZE: int = 48
+const SWITCH_SIZE: Vector2i = Vector2i(88, 48)
+
+
+func _build_slider() -> void:
+	var track: StyleBoxFlat = _flat(Palette.OUTLINE, Palette.SLATE, 3, 10, 0)
+	track.content_margin_top = 9
+	track.content_margin_bottom = 9
+	var filled: StyleBoxFlat = _flat(Palette.GOLD, Palette.GOLD, 0, 10, 0)
+	filled.content_margin_top = 9
+	filled.content_margin_bottom = 9
+	var filled_hover: StyleBoxFlat = _flat(Palette.YELLOW, Palette.YELLOW, 0, 10, 0)
+	filled_hover.content_margin_top = 9
+	filled_hover.content_margin_bottom = 9
+	_theme.set_stylebox("slider", "HSlider", track)
+	_theme.set_stylebox("grabber_area", "HSlider", filled)
+	_theme.set_stylebox("grabber_area_highlight", "HSlider", filled_hover)
+	_theme.set_icon("grabber", "HSlider", _knob(Palette.FROST))
+	_theme.set_icon("grabber_highlight", "HSlider", _knob(Palette.WHITE))
+	_theme.set_icon("grabber_disabled", "HSlider", _knob(Palette.STEEL))
+	_theme.set_constant("center_grabber", "HSlider", 1)
+
+
+## Interruptor del CheckButton (reducir efectos): apagado = riel oscuro con la perilla a la izquierda;
+## prendido = riel dorado con la perilla a la derecha. El botón en sí usa el estilo neutro de Button.
+func _build_switch() -> void:
+	_theme.set_icon("unchecked", "CheckButton", _switch(false))
+	_theme.set_icon("checked", "CheckButton", _switch(true))
+	_theme.set_icon("unchecked_disabled", "CheckButton", _switch(false))
+	_theme.set_icon("checked_disabled", "CheckButton", _switch(true))
+	_theme.set_icon("unchecked_mirrored", "CheckButton", _switch(false))
+	_theme.set_icon("checked_mirrored", "CheckButton", _switch(true))
+
+
+func _knob(fill: Color) -> ImageTexture:
+	var img: Image = Image.create(KNOB_SIZE, KNOB_SIZE, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	_rounded_rect(img, Rect2i(0, 0, KNOB_SIZE, KNOB_SIZE), 12, Palette.OUTLINE)
+	_rounded_rect(img, Rect2i(4, 4, KNOB_SIZE - 8, KNOB_SIZE - 8), 9, fill)
+	return ImageTexture.create_from_image(img)
+
+
+func _switch(on: bool) -> ImageTexture:
+	var img: Image = Image.create(SWITCH_SIZE.x, SWITCH_SIZE.y, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	_rounded_rect(img, Rect2i(Vector2i.ZERO, SWITCH_SIZE), 22, Palette.OUTLINE)
+	_rounded_rect(img, Rect2i(4, 4, SWITCH_SIZE.x - 8, SWITCH_SIZE.y - 8), 18, Palette.GOLD if on else Palette.SLATE)
+	var knob_x: int = SWITCH_SIZE.x - 44 if on else 4
+	_rounded_rect(img, Rect2i(knob_x, 4, 40, 40), 18, Palette.FROST)
+	return ImageTexture.create_from_image(img)
+
+
+## Pinta en `img` un rectángulo con esquinas redondeadas de radio `radius`.
+func _rounded_rect(img: Image, rect: Rect2i, radius: int, color: Color) -> void:
+	for y: int in range(rect.position.y, rect.end.y):
+		for x: int in range(rect.position.x, rect.end.x):
+			var dx: int = maxi(maxi(rect.position.x + radius - x, x - (rect.end.x - 1 - radius)), 0)
+			var dy: int = maxi(maxi(rect.position.y + radius - y, y - (rect.end.y - 1 - radius)), 0)
+			if dx * dx + dy * dy <= radius * radius:
+				img.set_pixel(x, y, color)

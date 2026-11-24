@@ -1,10 +1,11 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://game/main.gd" id="1_main"]
 [ext_resource type="Theme" path="res://ui/theme.tres" id="2_theme"]
 [ext_resource type="Script" path="res://game/mine_view.gd" id="3_mine"]
 [ext_resource type="Texture2D" path="res://assets/sprites/generated/coin.png" id="4_coin"]
 [ext_resource type="Texture2D" path="res://assets/sprites/generated/rock_earth.png" id="5_rock"]
+[ext_resource type="Texture2D" path="res://assets/ui/game_icons/gear.png" id="6_gear"]
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_tap"]
 
@@ -84,6 +85,7 @@ vertical_alignment = 1
 clip_text = true
 
 [node name="MultBadge" type="PanelContainer" parent="Layout/HudPanel/HudBox/GoldRow"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 4
 theme_type_variation = &"BadgePanel"
@@ -105,6 +107,27 @@ layout_mode = 2
 theme_type_variation = &"MultLabel"
 text = "×1.00"
 horizontal_alignment = 1
+
+[node name="SoundButton" type="Button" parent="Layout/HudPanel/HudBox/GoldRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 96)
+layout_mode = 2
+size_flags_vertical = 4
+focus_mode = 0
+theme_type_variation = &"ButtonNeutral"
+icon_alignment = 1
+expand_icon = true
+
+[node name="OptionsButton" type="Button" parent="Layout/HudPanel/HudBox/GoldRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 96)
+layout_mode = 2
+size_flags_vertical = 4
+focus_mode = 0
+theme_type_variation = &"ButtonNeutral"
+icon = ExtResource("6_gear")
+icon_alignment = 1
+expand_icon = true
 
 [node name="RateRow" type="HBoxContainer" parent="Layout/HudPanel/HudBox"]
 layout_mode = 2
