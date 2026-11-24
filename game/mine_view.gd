@@ -13,6 +13,7 @@ const Palette := preload("res://game/palette.gd")
 const BiomePalette := preload("res://game/biome_palette.gd")
 const Juice := preload("res://game/juice.gd")
 const GLOW_TEXTURE: Texture2D = preload("res://assets/particles/particle_pack/circle_05.png")
+const STAR_TEXTURE: Texture2D = preload("res://assets/particles/particle_pack/star_06.png")
 
 ## Explotó un cartucho de dinamita en t (coordenadas de la mina). main.gd le pone el sonido.
 signal dynamite_exploded(at: Vector2)
@@ -103,6 +104,21 @@ const ORBIT_BACK_ALPHA: float = 0.5
 const ORBIT_GLOW_SIZE: float = 2.6
 const ORBIT_GLOW_ALPHA: float = 0.75
 
+## Cofre: cae desde arriba de la mina y se apoya sobre la roca con un rebote, con un brillo y estrellas del color
+## de su rareza; al rato sube un poco y se desvanece. Más de MAX_CHESTS a la vez no: se va el más viejo. El
+## especial (legendario) es más grande y brilla más.
+const MAX_CHESTS: int = 3
+const CHEST_SCALE: int = 5
+const CHEST_FALL_TIME: float = 0.55
+const CHEST_STAY_TIME: float = 1.4
+const CHEST_FADE_TIME: float = 0.4
+const CHEST_GLOW_SIZE: float = 2.6
+## Aviso del cofre: arriba de la mina, entra deslizando, queda TOAST_TIME y se desvanece. Uno solo a la vez.
+const TOAST_TIME: float = 2.2
+const TOAST_SLIDE_TIME: float = 0.25
+const TOAST_TOP: float = 16.0
+const TOAST_ICON: float = 48.0
+
 ## Mineros picando: cada uno tiene un pico (pick.png, a escala PICK_SCALE) en la mano del lado de la roca
 ## y lo usa en loop: lo levanta despacio, lo baja de golpe y vuelve. Cada minero tiene su fase y un período
 ## apenas distinto: nunca pican todos juntos.
@@ -155,6 +171,8 @@ var vibrations: int = 0
 var gem_bursts: int = 0
 ## Cuántas veces explotó la dinamita (para los tests).
 var explosions: int = 0
+## Cuántos cofres cayeron (para los tests).
+var chests_dropped: int = 0
 
 var _rock: TextureRect
 var _tap_button: Button
@@ -267,6 +285,152 @@ func _apply_shake() -> void:
 	for sprite: Variant in _base_positions:
 		(sprite as Control).position = _base_positions[sprite] + shake_offset
 	queue_redraw()
+
+
+# --- Cofre -------------------------------------------------------------------
+
+## Un cofre (`texture`) cae sobre la roca con un brillo y estrellas de `color`. `special` (legendario): más
+## grande, más brillo y más estrellas.
+func drop_chest(texture: Texture2D, color: Color, special: bool) -> void:
+	var alive: Array[Node] = []
+	for child: Node in _fx.get_children():
+		if child.has_meta(&"chest") and not child.is_queued_for_deletion():
+			alive.append(child)
+	while alive.size() >= MAX_CHESTS:
+		alive.pop_front().queue_free()
+	chests_dropped += 1
+	var chest: TextureRect = TextureRect.new()
+	chest.set_meta(&"chest", true)
+	chest.texture = texture
+	chest.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	chest.stretch_mode = TextureRect.STRETCH_SCALE
+	chest.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var pixel: float = maxf(roundf((CHEST_SCALE + (1 if special else 0)) * _unit), 1.0)
+	chest.size = Vector2(16.0, 16.0) * pixel
+	var rock_rect: Rect2 = Rect2(_base_positions.get(_rock, _rock.position), _rock.size)
+	var x: float = rock_rect.get_center().x + rng.randf_range(-0.15, 0.15) * rock_rect.size.x - chest.size.x * 0.5
+	var landing_y: float = rock_rect.position.y - chest.size.y * 0.6
+	chest.position = Vector2(x, -chest.size.y).round()
+	chest.pivot_offset = chest.size * 0.5
+	_add_chest_glow(chest, color, special)
+	_add_chest_stars(chest, color, special)
+	_fx.add_child(chest)
+	var tween: Tween = chest.create_tween()
+	tween.tween_property(chest, "position:y", roundf(landing_y), CHEST_FALL_TIME).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	tween.tween_interval(CHEST_STAY_TIME)
+	tween.tween_property(chest, "position:y", roundf(landing_y - 40.0 * _unit), CHEST_FADE_TIME).set_ease(Tween.EASE_IN)
+	tween.parallel().tween_property(chest, "modulate:a", 0.0, CHEST_FADE_TIME)
+	tween.tween_callback(chest.queue_free)
+
+
+func _add_chest_glow(chest: TextureRect, color: Color, special: bool) -> void:
+	var glow: TextureRect = TextureRect.new()
+	glow.name = "Glow"
+	glow.texture = GLOW_TEXTURE
+	glow.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	glow.stretch_mode = TextureRect.STRETCH_SCALE
+	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	glow.show_behind_parent = true
+	var additive: CanvasItemMaterial = CanvasItemMaterial.new()
+	additive.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	glow.material = additive
+	glow.modulate = Color(color, 0.95 if special else 0.8)
+	glow.size = chest.size * (CHEST_GLOW_SIZE * (1.4 if special else 1.0))
+	glow.position = (chest.size - glow.size) * 0.5
+	glow.pivot_offset = glow.size * 0.5
+	chest.add_child(glow)
+	# late despacio: el brillo respira
+	var pulse: Tween = glow.create_tween().set_loops()
+	pulse.tween_property(glow, "scale", Vector2.ONE * 1.12, 0.45).set_trans(Tween.TRANS_SINE)
+	pulse.tween_property(glow, "scale", Vector2.ONE * 0.92, 0.45).set_trans(Tween.TRANS_SINE)
+
+
+func _add_chest_stars(chest: TextureRect, color: Color, special: bool) -> void:
+	var stars: CPUParticles2D = CPUParticles2D.new()
+	stars.name = "Stars"
+	stars.texture = STAR_TEXTURE
+	stars.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	var additive: CanvasItemMaterial = CanvasItemMaterial.new()
+	additive.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	stars.material = additive
+	stars.amount = 16 if special else 8
+	if reduce_effects:
+		stars.amount = maxi(stars.amount / 2, 1)
+	stars.lifetime = 0.9
+	stars.position = chest.size * 0.5
+	stars.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	stars.emission_sphere_radius = chest.size.x * 0.7
+	stars.direction = Vector2.UP
+	stars.spread = 40.0
+	stars.gravity = Vector2.ZERO
+	stars.initial_velocity_min = 20.0 * _unit
+	stars.initial_velocity_max = 60.0 * _unit
+	var star_size: float = 48.0 * _unit / float(STAR_TEXTURE.get_width())
+	stars.scale_amount_min = star_size * 0.5
+	stars.scale_amount_max = star_size
+	stars.color = Color(color, 1.0)
+	var fade: Gradient = Gradient.new()
+	fade.set_color(0, Color(1.0, 1.0, 1.0, 0.0))
+	fade.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
+	fade.add_point(0.3, Color.WHITE)
+	stars.color_ramp = fade
+	stars.emitting = true
+	chest.add_child(stars)
+
+
+## Aviso arriba de la mina, en una línea: `icon`, `title` en `color` y `detail`. Entra deslizando y se va solo;
+## uno nuevo reemplaza al anterior.
+func show_toast(icon: Texture2D, title: String, detail: String, color: Color) -> void:
+	# El anterior sale del árbol ya mismo (no al final del frame): así el nuevo puede llamarse igual.
+	for child: Node in _fx.get_children():
+		if str(child.name).begins_with("ChestToast"):
+			_fx.remove_child(child)
+			child.queue_free()
+	var toast: PanelContainer = PanelContainer.new()
+	toast.name = "ChestToast"
+	toast.theme_type_variation = &"CardPanel"
+	toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style: StyleBox = toast.get_theme_stylebox("panel", &"CardPanel")
+	if style is StyleBoxFlat:
+		var bordered: StyleBoxFlat = (style as StyleBoxFlat).duplicate()
+		bordered.border_color = color
+		bordered.set_border_width_all(4)
+		toast.add_theme_stylebox_override("panel", bordered)
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	toast.add_child(row)
+	var picture: TextureRect = TextureRect.new()
+	picture.texture = icon
+	picture.custom_minimum_size = Vector2.ONE * TOAST_ICON
+	picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	picture.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(picture)
+	# Una sola línea (ícono, título y bonus): tapa lo menos posible de la mina.
+	var texts: HBoxContainer = row
+	var title_label: Label = Label.new()
+	title_label.theme_type_variation = &"RowNameLabel"
+	title_label.text = title
+	title_label.add_theme_color_override("font_color", color)
+	title_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	texts.add_child(title_label)
+	var detail_label: Label = Label.new()
+	detail_label.theme_type_variation = &"HudLabel"
+	detail_label.text = detail
+	detail_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	texts.add_child(detail_label)
+	_fx.add_child(toast)
+	toast.size = toast.get_combined_minimum_size()
+	var target: Vector2 = Vector2(((size.x - toast.size.x) * 0.5), TOAST_TOP * _unit).round()
+	toast.position = Vector2(target.x, -toast.size.y)
+	var tween: Tween = toast.create_tween()
+	tween.tween_property(toast, "position:y", target.y, TOAST_SLIDE_TIME).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_interval(TOAST_TIME)
+	tween.tween_property(toast, "modulate:a", 0.0, CHEST_FADE_TIME)
+	tween.tween_callback(toast.queue_free)
 
 
 ## Corta todo lo que está en el aire (números, astillas, gemas, sacudida, aplastado): para un cambio de

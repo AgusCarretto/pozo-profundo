@@ -21,12 +21,13 @@ func _initialize() -> void:
 	_settings = root.get_node("Settings")
 	_saved_settings = _settings.to_dict()
 	_settings.reduce_effects = false
-	_economy.load_balance(_real_balance_without_loot())
+	_economy.load_balance(_balance())
 	await _mount()
 	await _run_tests()
 	_scene.get_parent().queue_free()
 	await process_frame
 	_settings.from_dict(_saved_settings)
+	Engine.time_scale = 1.0
 	_economy.load_balance(JSON.parse_string(FileAccess.get_file_as_string("res://data/balance.json")))
 	_economy.reset()
 	_finish()
@@ -35,6 +36,12 @@ func _initialize() -> void:
 ## Lo implementa cada test.
 func _run_tests() -> void:
 	pass
+
+
+## El balance con el que se arma la escena: el real sin botín (un cofre al azar movería lo que se mide). Un test
+## que necesite botín lo redefine.
+func _balance() -> Dictionary:
+	return _real_balance_without_loot()
 
 
 ## El balance real sin botín: un cofre al azar movería lo que estos tests miran.

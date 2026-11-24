@@ -13,7 +13,8 @@ const SIZES: Array[Vector2i] = [Vector2i(360, 640), Vector2i(412, 915)]
 
 ## Estados de muestra: nombre, pestaña (0 Cuadrilla, 1 Botín, 2 Reliquias) y partida. Con "options": true la
 ## captura sale con el panel de Opciones abierto; con "hits": N, se golpea N veces justo antes (números flotantes,
-## roca aplastada); con "wait": s, se esperan s segundos antes de capturar (para agarrar una explosión).
+## roca aplastada); con "chest": i, cae un cofre de la rareza i; con "wait": s, se esperan s segundos antes de
+## capturar (para agarrar una explosión o el cofre ya apoyado).
 ## `owned` sigue el orden del balance: Minero, Taladro, Dinamita, Gólem, Excavadora.
 const SHOTS: Array[Dictionary] = [
 	{ "name": "1_inicio", "tab": 0, "gold": 22.0, "run_gold": 22.0, "pick": 0, "owned": [], "loot": 0.0, "relics": 0 },
@@ -24,6 +25,8 @@ const SHOTS: Array[Dictionary] = [
 	{ "name": "6_opciones", "tab": 0, "gold": 8.88e15, "run_gold": 1.0e15, "pick": 9, "owned": [60, 25, 12, 6, 2], "loot": 2.0, "relics": 40, "options": true },
 	{ "name": "7_golpe", "tab": 0, "gold": 3400.0, "run_gold": 4200.0, "pick": 3, "owned": [4, 1], "loot": 0.12, "relics": 0, "hits": 6 },
 	{ "name": "8_dinamita", "tab": 0, "gold": 52000.0, "run_gold": 60000.0, "pick": 5, "owned": [8, 3, 400, 1], "loot": 0.45, "relics": 0, "wait": 1.12 },
+	{ "name": "9_cofre", "tab": 1, "gold": 52000.0, "run_gold": 60000.0, "pick": 5, "owned": [8, 3, 1, 1], "loot": 1.0, "relics": 0, "chest": 1, "wait": 0.7 },
+	{ "name": "10_legendario", "tab": 1, "gold": 4.0e6, "run_gold": 5.0e6, "pick": 7, "owned": [30, 8, 5, 2, 0], "loot": 1.1, "relics": 3, "chest": 3, "wait": 1.2 },
 ]
 
 var _out_dir: String = ""
@@ -67,6 +70,8 @@ func _run() -> void:
 				options.call("open")
 			else:
 				options.set("visible", false)
+			if shot.has("chest"):
+				economy.drop_loot(int(shot["chest"]))
 			for hit: int in range(int(shot.get("hits", 0))):
 				(scene.get_node("%TapButton") as Button).button_down.emit()
 				await create_timer(0.1).timeout # como alguien que golpea rápido, no todo en el mismo frame

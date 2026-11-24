@@ -13,6 +13,8 @@ const Modal := preload("res://game/modal.gd")
 const MineView := preload("res://game/mine_view.gd")
 const NumberFormat := preload("res://core/number_format.gd")
 const OptionsPanel := preload("res://game/options_panel.gd")
+const ScreenFx := preload("res://game/screen_fx.gd")
+const EconomyMath := preload("res://core/economy_math.gd")
 const Juice := preload("res://game/juice.gd")
 const PickRow := preload("res://game/pick_row.gd")
 const SoundCues := preload("res://game/sound_cues.gd")
@@ -25,6 +27,12 @@ const RARITY_COLORS: Dictionary = {
 	"legendary": Color(1.0, 0.72, 0.2),
 }
 const DEFAULT_RARITY_COLOR: Color = Color(0.9, 0.9, 0.9)
+## El cofre de esta rareza tiene su momento: una pausa breve (cámara lenta) y un destello de pantalla.
+const SPECIAL_RARITY: String = "legendary"
+const SPECIAL_PAUSE: float = 0.3
+const SPECIAL_SLOW: float = 0.05
+const SPECIAL_FLASH: Color = Color(1.0, 0.97, 0.85, 0.85)
+const SPECIAL_FLASH_FADE: float = 0.5
 
 const SOUND_ON_ICON: Texture2D = preload("res://assets/ui/game_icons/audioOn.png")
 const SOUND_OFF_ICON: Texture2D = preload("res://assets/ui/game_icons/audioOff.png")
@@ -51,6 +59,7 @@ var _rows: Array[GeneratorRow] = []
 var _dirty: bool = true
 var _modal: Modal
 var _options: OptionsPanel
+var _screen_fx: ScreenFx
 var _pick_row: PickRow
 var _shown_runes: int = -1
 ## El último cofre que salió en esta partida ({rarity, bonus}); vacío si todavía no salió ninguno (o si el
@@ -140,6 +149,9 @@ func _ready() -> void:
 	# Opciones: encima del juego y del panel de debug, debajo del cartel.
 	_options = OptionsPanel.new()
 	add_child(_options)
+	# Efectos de pantalla completa (destello del legendario): encima de todo, debajo del cartel.
+	_screen_fx = ScreenFx.new()
+	add_child(_screen_fx)
 	_options_button.pressed.connect(func() -> void:
 		Juice.bounce(_options_button)
 		_options.open())
@@ -359,6 +371,23 @@ func _on_loot_dropped(rarity: int, bonus: float) -> void:
 		return
 	_last_chest = { "rarity": rarity, "bonus": bonus }
 	_refresh_last_loot() # ya mismo: no hace falta esperar al próximo refresco
+	_celebrate_chest(table[rarity], bonus)
+
+
+## El cofre cae en la mina con el brillo de su rareza y sale un aviso con lo que suma: el bonus del cofre y lo que
+## de verdad sube el efectivo (rinde cada vez menos). El legendario además pausa un momento y destella.
+func _celebrate_chest(entry: Dictionary, bonus: float) -> void:
+	var color: Color = _rarity_color(entry["id"])
+	var special: bool = entry["id"] == SPECIAL_RARITY
+	var chest_icon: Texture2D = load(CHEST_ICON) as Texture2D
+	_mine_view.drop_chest(chest_icon, color, special)
+	var cap: float = Economy.loot_bonus_cap()
+	var gain: float = Economy.loot_bonus_effective() - EconomyMath.loot_bonus_effective(Economy.loot_bonus - bonus, cap)
+	_mine_view.show_toast(chest_icon, "¡Cofre %s!" % entry["name"], "+%s → +%s" % [NumberFormat.format_percent(bonus), NumberFormat.format_percent(gain)], color)
+	if special:
+		_screen_fx.hit_stop(SPECIAL_PAUSE, SPECIAL_SLOW)
+		if not Settings.reduce_effects:
+			_screen_fx.flash(SPECIAL_FLASH, SPECIAL_FLASH_FADE)
 
 
 ## El aviso del último cofre sale del estado, no solo de la señal del cofre: sin bonus dice que todavía no
