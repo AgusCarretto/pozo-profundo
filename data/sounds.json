@@ -94,6 +94,11 @@
 			"pitch": [0.8, 1.0],
 			"volume_db": -10
 		},
+		"coins": {
+			"files": ["res://assets/audio/rpg_audio/handleCoins.ogg"],
+			"pitch": [0.85, 0.95],
+			"volume_db": 0
+		},
 		"biome": {
 			"files": ["res://assets/audio/interface_sounds/bong_001.ogg"],
 			"volume_db": -2

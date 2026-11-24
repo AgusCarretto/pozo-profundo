@@ -15,7 +15,7 @@ const SIZES: Array[Vector2i] = [Vector2i(360, 640), Vector2i(412, 915)]
 ## captura sale con el panel de Opciones abierto; con "hits": N, se golpea N veces justo antes (números flotantes,
 ## roca aplastada); con "chest": i, cae un cofre de la rareza i; con "wait": s, se esperan s segundos antes de
 ## capturar (para agarrar una explosión o el cofre ya apoyado); con "descend": oro, después de armar el estado se baja
-## a esa profundidad (cambio de bioma con fundido y cartel).
+## a esa profundidad (cambio de bioma con fundido y cartel); con "offline": s, se vuelve de s segundos fuera.
 ## `owned` sigue el orden del balance: Minero, Taladro, Dinamita, Gólem, Excavadora.
 const SHOTS: Array[Dictionary] = [
 	{ "name": "1_inicio", "tab": 0, "gold": 22.0, "run_gold": 22.0, "pick": 0, "owned": [], "loot": 0.0, "relics": 0 },
@@ -29,6 +29,7 @@ const SHOTS: Array[Dictionary] = [
 	{ "name": "9_cofre", "tab": 1, "gold": 52000.0, "run_gold": 60000.0, "pick": 5, "owned": [8, 3, 1, 1], "loot": 1.0, "relics": 0, "chest": 1, "wait": 0.7 },
 	{ "name": "10_legendario", "tab": 1, "gold": 4.0e6, "run_gold": 5.0e6, "pick": 7, "owned": [30, 8, 5, 2, 0], "loot": 1.1, "relics": 3, "chest": 3, "wait": 1.2 },
 	{ "name": "11_bioma_nuevo", "tab": 0, "gold": 900.0, "run_gold": 600.0, "pick": 2, "owned": [4, 1], "loot": 0.0, "relics": 0, "descend": 700.0, "wait": 0.3 },
+	{ "name": "12_vuelta", "tab": 0, "gold": 3400.0, "run_gold": 4200.0, "pick": 3, "owned": [12, 2], "loot": 0.12, "relics": 0, "offline": 11520.0, "wait": 0.6 },
 ]
 
 var _out_dir: String = ""
@@ -76,6 +77,8 @@ func _run() -> void:
 				await _settle()
 				economy.run_gold = float(shot["descend"])
 				economy.gold_changed.emit(economy.gold)
+			if shot.has("offline"):
+				economy.apply_offline(float(shot["offline"]))
 			if shot.has("chest"):
 				economy.drop_loot(int(shot["chest"]))
 			for hit: int in range(int(shot.get("hits", 0))):
@@ -87,6 +90,7 @@ func _run() -> void:
 			var image: Image = root.get_texture().get_image()
 			var path: String = "%s/%dx%d_%s.png" % [_out_dir, size.x, size.y, shot["name"]]
 			image.save_png(path)
+			scene.get_node("Modal").call("close")
 			print("%s  (%dx%d)" % [path, image.get_width(), image.get_height()])
 	economy.reset()
 	# Al salir no tiene que quedar nada vivo: los números flotantes con sus tweens y el último sonido (si no,

@@ -38,6 +38,7 @@ const SOUND_ON_ICON: Texture2D = preload("res://assets/ui/game_icons/audioOn.png
 const SOUND_OFF_ICON: Texture2D = preload("res://assets/ui/game_icons/audioOff.png")
 
 const CHEST_ICON: String = "res://assets/sprites/tiny_dungeon/tile_0089.png"
+const COIN_ICON: String = "res://assets/sprites/generated/coin.png"
 const RUNE_ICONS: Array[String] = [
 	"res://assets/sprites/generated/rune_1.png",
 	"res://assets/sprites/generated/rune_2.png",
@@ -497,3 +498,4 @@ func _show_offline_notice(report: Dictionary) -> void:
 		body = "Estuviste fuera %s. Tu cuadrilla siguió minando y juntó %s de oro." % [
 			NumberFormat.format_duration(report["seconds"]), gold_text]
 	_modal.open("¡Bienvenido de vuelta!", body, "¡A seguir!", "", Economy.dismiss_offline_report)
+	_modal.celebrate(report["gold"], NumberFormat.format_number, load(COIN_ICON) as Texture2D, Settings.reduce_effects)

@@ -9,11 +9,20 @@ extends Control
 const PANEL_WIDTH: float = 620.0
 const BUTTON_HEIGHT: float = 96.0
 const DEFAULT_CONFIRM_STYLE: StringName = &"ButtonNeutral"
+## Festejo (celebrate): el contador sube de 0 al monto en COUNT_TIME y llueven monedas detrás del cartel.
+const COUNT_TIME: float = 1.4
+const COIN_AMOUNT: int = 24
+const COIN_SCALE: float = 4.0
 
 var title_label: Label
 var body_label: Label
 var confirm_button: Button
 var cancel_button: Button
+## El contador del festejo (oculto si el cartel no festeja nada) y la lluvia de monedas.
+var counter_label: Label
+var coins: CPUParticles2D
+
+var _count_tween: Tween
 
 var _on_confirm: Callable = Callable()
 
@@ -29,6 +38,25 @@ func _init() -> void:
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
+
+	# Las monedas caen entre el oscurecido y el cartel: se ven alrededor sin tapar el texto.
+	coins = CPUParticles2D.new()
+	coins.name = "Coins"
+	coins.emitting = false
+	coins.amount = COIN_AMOUNT
+	coins.lifetime = 1.6
+	coins.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	coins.direction = Vector2.DOWN
+	coins.spread = 10.0
+	coins.gravity = Vector2(0.0, 900.0)
+	coins.initial_velocity_min = 80.0
+	coins.initial_velocity_max = 220.0
+	coins.angular_velocity_min = -200.0
+	coins.angular_velocity_max = 200.0
+	coins.scale_amount_min = COIN_SCALE
+	coins.scale_amount_max = COIN_SCALE
+	coins.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	add_child(coins)
 
 	var center: CenterContainer = CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -52,6 +80,12 @@ func _init() -> void:
 	body_label = Label.new()
 	body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(body_label)
+
+	counter_label = Label.new()
+	counter_label.theme_type_variation = &"GoldLabel"
+	counter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	counter_label.visible = false
+	box.add_child(counter_label)
 
 	var buttons: HBoxContainer = HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 14)
@@ -79,6 +113,7 @@ func open(title: String, body: String, confirm_text: String, cancel_text: String
 	cancel_button.text = cancel_text
 	cancel_button.visible = cancel_text != ""
 	_on_confirm = on_confirm
+	_stop_celebration()
 	if not visible:
 		Audio.play_sfx("open")
 	visible = true
@@ -88,7 +123,37 @@ func close() -> void:
 	if visible:
 		Audio.play_sfx("close")
 	visible = false
+	_stop_celebration()
 
+
+## Festeja `amount` en el cartel abierto: un contador grande sube de 0 a `amount` (con `format` para mostrarlo,
+## p. ej. NumberFormat.format_number) y llueven monedas (`coin`) detrás del cartel. `few_coins`: la mitad.
+func celebrate(amount: float, format: Callable, coin: Texture2D, few_coins: bool = false) -> void:
+	counter_label.visible = true
+	_show_count(0.0, format)
+	if _count_tween != null and _count_tween.is_valid():
+		_count_tween.kill()
+	_count_tween = create_tween()
+	_count_tween.tween_method(_show_count.bind(format), 0.0, amount, COUNT_TIME).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	coins.texture = coin
+	coins.amount = COIN_AMOUNT / 2 if few_coins else COIN_AMOUNT
+	coins.position = Vector2(size.x * 0.5, -COIN_SCALE * 16.0)
+	coins.emission_rect_extents = Vector2(size.x * 0.5, 8.0)
+	coins.restart()
+	coins.emitting = true
+	Audio.play_sfx("coins")
+
+
+func _show_count(value: float, format: Callable) -> void:
+	counter_label.text = "+%s" % format.call(value)
+
+
+func _stop_celebration() -> void:
+	if _count_tween != null and _count_tween.is_valid():
+		_count_tween.kill()
+	_count_tween = null
+	counter_label.visible = false
+	coins.emitting = false
 
 func _on_confirm_pressed() -> void:
 	close()

@@ -9,7 +9,7 @@ const MAIN_SCENE: String = "res://game/main.tscn"
 const CATALOG_PATH: String = "res://data/sounds.json"
 const AUDIO_DIR: String = "res://assets/audio"
 ## Los SFX que el juego pide sí o sí (los de los cofres se agregan por rareza del balance).
-const REQUIRED_SFX: Array[String] = ["hit", "buy", "pick", "tab", "mode", "toggle", "open", "close", "prestige", "biome", "dynamite"]
+const REQUIRED_SFX: Array[String] = ["hit", "buy", "pick", "tab", "mode", "toggle", "open", "close", "prestige", "biome", "dynamite", "coins"]
 
 var _economy: Node
 var _audio: Node

@@ -8,6 +8,7 @@ func _run_tests() -> void:
 	await _test_biome_crossfade()
 	await _test_biome_banner()
 	await _test_no_banner_when_going_up()
+	await _test_offline_welcome()
 
 
 func _banners() -> Array[Control]:
@@ -109,4 +110,44 @@ func _test_no_banner_when_going_up() -> void:
 	_check_eq(str(_mine().get("biome_id")), "crystal", "abrir el juego en Cristal muestra Cristal")
 	_check(_banners().is_empty(), "sin cartel de bioma nuevo")
 	_check_near(float(_mine().get("biome_blend")), 1.0, "y sin fundido", 1e-6)
+	_economy.reset()
+
+
+func _test_offline_welcome() -> void:
+	_section("Vuelta offline: el contador sube y llueven monedas")
+	var modal: Control = _scene.get_node("Modal") as Control
+	var heard: Array[String] = []
+	var record: Callable = func(id: String) -> void: heard.append(id)
+	root.get_node("Audio").sfx_played.connect(record)
+	_economy.reset()
+	_economy.owned[0] = 10
+	_economy.apply_offline(11520.0) # 3 h 12 min con 10 oro/s -> 115.200 de oro
+	await process_frame
+	_check(modal.visible, "aparece el aviso de vuelta")
+	var counter: Label = modal.get("counter_label") as Label
+	var coins: CPUParticles2D = modal.get("coins") as CPUParticles2D
+	_check(counter != null and counter.visible, "con un contador de oro")
+	_check(coins != null and coins.emitting and coins.texture.resource_path.ends_with("coin.png"), "y una lluvia de monedas")
+	_check(heard.has("coins"), "que suena")
+	if counter == null or coins == null:
+		return
+	_check(counter.text != "+115K", "el contador arranca de abajo (%s)" % counter.text)
+	var panel: Control = modal.find_children("*", "PanelContainer", true, false)[0] as Control
+	_check(coins.get_index() < panel.get_parent().get_index(), "caen detrás del cartel (se lee igual)")
+	var seen: Dictionary = {}
+	var deadline: int = Time.get_ticks_msec() + 2500
+	while Time.get_ticks_msec() < deadline:
+		await process_frame
+		seen[counter.text] = true
+	_check(seen.size() >= 4, "va subiendo de a poco (%d valores)" % seen.size())
+	_check_eq(counter.text, "+115K", "y termina en lo que juntó la cuadrilla")
+	(modal.get("confirm_button") as Button).pressed.emit()
+	await process_frame
+	_check(not modal.visible, "se cierra con el botón")
+	_check(not coins.emitting, "y dejan de caer monedas")
+	modal.call("open", "Aviso", "Otro cartel", "Listo")
+	await process_frame
+	_check(not counter.visible and not coins.emitting, "otro cartel cualquiera no tiene contador ni monedas")
+	modal.call("close")
+	root.get_node("Audio").sfx_played.disconnect(record)
 	_economy.reset()
