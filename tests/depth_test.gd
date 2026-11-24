@@ -17,6 +17,7 @@ func _initialize() -> void:
 	_test_depth_follows_run_gold()
 	_test_biome_changes_with_depth()
 	_test_last_biome_is_kept()
+	_test_next_biome_progress()
 	_test_biome_multiplier_scales_income()
 	_test_earning_pushes_into_the_next_biome()
 	_test_serialization()
@@ -49,6 +50,9 @@ func _test_initial_state() -> void:
 	_check_eq(e.biome_name(e.biome_index()), "Tierra", "arranca en Tierra")
 	_check_eq(e.biome_multiplier(), 1.0, "Tierra multiplica x1")
 	_check_eq(e.multiplier, 1.0, "multiplicador global x1")
+	_check_eq(e.biome_id(0), "earth", "el id del bioma 0 es earth (la UI elige el arte por id)")
+	_check_eq(e.biome_id(4), "abyss", "y el del 4 es abyss")
+	_check_eq(e.biome_id(5), "", "un id inexistente es vacío")
 	_check_eq(e.biome_name(99), "", "un bioma inexistente no tiene nombre (ni explota)")
 	_check_eq(e.biome_name(-1), "", "un índice negativo tampoco")
 
@@ -111,6 +115,34 @@ func _test_last_biome_is_kept() -> void:
 	_check_eq(e.biome_index(), 4, "sigue siendo el último bioma")
 	_check_eq(e.biome_name(e.biome_index()), "Abismo", "Abismo")
 	_check_near(e.biome_multiplier(), 5.0625, "x1.5^4 = 5.0625")
+
+
+## Lo que necesita la barra de profundidad del HUD: cuánto falta para el próximo bioma y cuál es.
+func _test_next_biome_progress() -> void:
+	_section("Progreso hacia el próximo bioma")
+	var e: EconomyScript = _make()
+	_check_eq(e.biome_progress(), 0.0, "en la superficie el progreso es 0")
+	_check_eq(e.next_biome_index(), 1, "el próximo bioma es el 1")
+	_check_eq(e.biome_name(e.next_biome_index()), "Roca", "Roca")
+	_check_eq(e.next_biome_depth(), 150.0, "y empieza a los 150 m")
+	e.run_gold = 70.0 # 75 m
+	_check_near(e.depth(), 75.0, "con 70 de oro ganado: 75 m")
+	_check_near(e.biome_progress(), 0.5, "mitad del camino a Roca: 0.5")
+	e.run_gold = 700.0 # ~153 m: ya en Roca
+	_check_eq(e.biome_name(e.biome_index()), "Roca", "con 700 de oro ganado ya estás en Roca")
+	_check(e.biome_progress() > 0.0 and e.biome_progress() < 0.05, "el progreso vuelve a casi 0 (%.4f)" % e.biome_progress())
+	_check_eq(e.biome_name(e.next_biome_index()), "Cristal", "ahora el próximo es Cristal")
+	_check_eq(e.next_biome_depth(), 300.0, "a los 300 m")
+	e.run_gold = 1.8e8 # Abismo
+	_check_eq(e.biome_name(e.biome_index()), "Abismo", "en Abismo")
+	_check_eq(e.biome_progress(), 1.0, "la barra queda llena")
+	_check_eq(e.next_biome_index(), -1, "no hay próximo bioma")
+	_check_eq(e.next_biome_depth(), 0.0, "ni profundidad que alcanzar")
+	var no_biomes: EconomyScript = _make(TestBalance.make(["loot", "biomes"]))
+	no_biomes.run_gold = 700.0
+	_check_eq(no_biomes.biome_progress(), 0.0, "sin biomas en el balance: 0")
+	_check_eq(no_biomes.next_biome_index(), -1, "y sin próximo bioma")
+	_check_eq(no_biomes.next_biome_depth(), 0.0, "ni profundidad")
 
 
 func _test_biome_multiplier_scales_income() -> void:

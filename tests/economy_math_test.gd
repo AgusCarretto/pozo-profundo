@@ -17,6 +17,7 @@ func _initialize() -> void:
 	_test_hit_value()
 	_test_depth()
 	_test_biome_index_and_multiplier()
+	_test_biome_progress()
 	_test_relics_for_depth()
 	_test_relic_multiplier()
 	_test_pick_weighted()
@@ -150,6 +151,23 @@ func _test_biome_index_and_multiplier() -> void:
 
 
 ## Reliquias de una subida: 0 bajo la profundidad mínima; desde ahí floor(((prof - 200) / 50)^1.3).
+## Cuánto falta para el bioma siguiente: fracción de 0 a 1 dentro del tramo del bioma actual.
+func _test_biome_progress() -> void:
+	_section("Progreso hasta el próximo bioma")
+	_check_eq(EconomyMath.biome_progress(0.0, 150.0, 5), 0.0, "en la superficie: 0")
+	_check_near(EconomyMath.biome_progress(75.0, 150.0, 5), 0.5, "a mitad del primer tramo (75 m): 0.5")
+	_check(EconomyMath.biome_progress(149.9, 150.0, 5) > 0.99 and EconomyMath.biome_progress(149.9, 150.0, 5) < 1.0, "justo antes de los 150 m: casi 1, sin llegar")
+	_check_eq(EconomyMath.biome_progress(150.0, 150.0, 5), 0.0, "al cruzar los 150 m arranca el tramo siguiente: 0")
+	_check_near(EconomyMath.biome_progress(225.0, 150.0, 5), 0.5, "a 225 m (mitad del segundo tramo): 0.5")
+	_check_near(EconomyMath.biome_progress(525.0, 150.0, 5), 0.5, "a 525 m (mitad del cuarto tramo): 0.5")
+	_check_eq(EconomyMath.biome_progress(600.0, 150.0, 5), 1.0, "en el último bioma la barra está llena (600 m)")
+	_check_eq(EconomyMath.biome_progress(9999.0, 150.0, 5), 1.0, "y se queda llena más allá")
+	_check_eq(EconomyMath.biome_progress(-10.0, 150.0, 5), 0.0, "una profundidad negativa: 0")
+	_check_eq(EconomyMath.biome_progress(NAN, 150.0, 5), 0.0, "NaN: 0")
+	_check_eq(EconomyMath.biome_progress(50.0, 150.0, 1), 1.0, "con un solo bioma ya estás en el último: 1")
+	_check_eq(EconomyMath.biome_progress(50.0, 150.0, 0), 0.0, "sin biomas: 0")
+
+
 func _test_relics_for_depth() -> void:
 	_section("Reliquias según la profundidad")
 	_check_eq(EconomyMath.relics_for_depth(0.0, 300.0, 200.0, 50.0, 1.3), 0, "en la superficie: 0")

@@ -65,6 +65,19 @@ static func biome_index(depth: float, meters_each: float, biome_count: int) -> i
 	return int(minf(floorf(depth / meters_each), float(biome_count - 1)))
 
 
+## Cuánto del tramo del bioma actual ya recorriste, de 0 (recién entraste) a 1 (llegás al
+## siguiente). En el último bioma no hay siguiente: 1. Sin biomas, 0.
+static func biome_progress(depth: float, meters_each: float, biome_count: int) -> float:
+	if biome_count <= 0:
+		return 0.0
+	var index: int = biome_index(depth, meters_each, biome_count)
+	if index >= biome_count - 1:
+		return 1.0
+	if not (depth > 0.0): # 0, negativo o NaN
+		return 0.0
+	return clampf((depth - index * meters_each) / meters_each, 0.0, 1.0)
+
+
 ## Multiplicador de oro del bioma: growth^índice.
 static func biome_multiplier(index: int, growth: float) -> float:
 	return pow(growth, index)

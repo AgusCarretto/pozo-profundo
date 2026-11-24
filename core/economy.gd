@@ -234,6 +234,31 @@ func biome_name(index: int) -> String:
 	return _biomes[index]["name"]
 
 
+## Id del bioma `index` en el balance ("earth", "rock"...), para que la UI elija su arte.
+## "" si el índice no existe.
+func biome_id(index: int) -> String:
+	if index < 0 or index >= _biomes.size():
+		return ""
+	return _biomes[index]["id"]
+
+
+## Cuánto del tramo del bioma actual ya recorriste (0 a 1). En el último bioma, 1.
+func biome_progress() -> float:
+	return EconomyMath.biome_progress(depth(), _biome_meters_each, _biomes.size())
+
+
+## Índice del bioma siguiente, o -1 si ya estás en el último (o no hay biomas).
+func next_biome_index() -> int:
+	var next: int = biome_index() + 1
+	return next if next < _biomes.size() else -1
+
+
+## Profundidad (m) a la que empieza el bioma siguiente; 0 si ya estás en el último.
+func next_biome_depth() -> float:
+	var next: int = next_biome_index()
+	return next * _biome_meters_each if next >= 0 else 0.0
+
+
 ## Multiplicador de oro del bioma actual (x1 si el balance no tiene biomas).
 func biome_multiplier() -> float:
 	if _biomes.is_empty():
