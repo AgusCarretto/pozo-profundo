@@ -1,0 +1,16 @@
+{
+	"cost_growth": 1.15,
+	"generators": [
+		{ "id": "miner", "name": "Minero", "base_rate": 1, "base_cost": 15 },
+		{ "id": "steam_drill", "name": "Taladro a vapor", "base_rate": 8, "base_cost": 120 },
+		{ "id": "dynamite_crew", "name": "Cuadrilla de dinamita", "base_rate": 47, "base_cost": 1300 },
+		{ "id": "stone_golem", "name": "Gólem de piedra", "base_rate": 260, "base_cost": 14000 },
+		{ "id": "rune_excavator", "name": "Excavadora rúnica", "base_rate": 1400, "base_cost": 160000 }
+	],
+	"pick": {
+		"power_base": 2,
+		"cost_base": 50,
+		"cost_growth": 6,
+		"passive_share": 0.03
+	}
+}
