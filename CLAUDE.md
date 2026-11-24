@@ -34,9 +34,13 @@ CREDITS.md     # licencia y autor de CADA asset de terceros (obligatorio)
 - Costo de comprar k unidades: `c * 1.15^n * (1.15^k - 1) / 0.15`
 - Pico: golpe = `2^nivel * mult + 3% del oro/s`; costo = `50 * 6^nivel`
 - Profundidad: `25 * log2(1 + oroDeEstaPartida / 10)` metros; bioma nuevo cada 150 m; multiplicador de bioma `1.5^índice`
+  - `oroDeEstaPartida` es el oro *ganado* en la partida (gastar no te hace retroceder). Pasado Abismo se queda en Abismo.
 - Botín: 4% por golpe, 2%/s pasivo si hay cuadrilla. Rarezas: Común 70% (+1%), Raro 22% (+4%), Épico 7% (+15%), Legendario 1% (+60%) de bonus de oro. Las probabilidades se muestran en el juego.
+  - El bonus es ese % del oro que tenés al caer el cofre, con mínimo de un golpe (si no, con poco oro no daría nada).
 - Reliquias: desde 300 m, `floor(((prof - 200) / 50)^1.3)`; cada una +25% de oro permanente.
+  - Suman (`1 + 0.25 * reliquias`) y se multiplican con el bioma. Volver a la superficie pide confirmación y reinicia oro, cuadrilla, pico y profundidad; las reliquias se conservan.
 - Progreso offline: hasta 8 horas.
+  - Acredita la producción de hoy (bioma y reliquias actuales) por el tiempo fuera, sin sortear cofres. Avisa al volver si estuviste fuera 60 s o más; un hueco largo entre frames en la sesión (pestaña web o app en segundo plano) cuenta igual.
 
 ## Checklist de "jugo"
 Golpe: sacudida de cámara leve, partículas de roca y gemas, número flotante, squash de la roca, sonido con variación de tono, vibración corta en Android.
@@ -57,7 +61,7 @@ Números grandes con sufijos (K, M, B, T...).
 
 ## Hoja de ruta
 - [x] F0 Setup: proyecto, git, estructura, export web funcionando.
-- [ ] F1 Loop principal: golpe, cuadrilla, pico, biomas, botín, prestigio, guardado local y offline.
+- [x] F1 Loop principal: golpe, cuadrilla, pico, biomas, botín, prestigio, guardado local y offline.
 - [ ] F2 Jugo y assets: sprites, partículas, tweens, SFX, música, fuente pixel.
 - [ ] F3 Contenido: logros, eventos, más mejoras.
 - [ ] F4 Validación web: publicar en itch.io, test con familia y la comunidad del bot, medir retención día 1.
