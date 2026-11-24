@@ -27,5 +27,15 @@
 			{ "id": "magma", "name": "Magma" },
 			{ "id": "abyss", "name": "Abismo" }
 		]
+	},
+	"loot": {
+		"chance_per_hit": 0.04,
+		"chance_per_second": 0.02,
+		"rarities": [
+			{ "id": "common", "name": "Común", "weight": 70, "bonus": 0.01 },
+			{ "id": "rare", "name": "Raro", "weight": 22, "bonus": 0.04 },
+			{ "id": "epic", "name": "Épico", "weight": 7, "bonus": 0.15 },
+			{ "id": "legendary", "name": "Legendario", "weight": 1, "bonus": 0.60 }
+		]
 	}
 }

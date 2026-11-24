@@ -11,6 +11,8 @@ signal gold_changed(gold: float)
 signal hit_landed(amount: float)
 signal generator_bought(index: int, count: int)
 signal pick_upgraded(level: int)
+## Cayó un cofre de la rareza `rarity` (índice de loot_table()) y sumó `amount` de oro.
+signal loot_dropped(rarity: int, amount: float)
 
 enum BuyMode { X1, X10, MAX }
 
@@ -30,6 +32,8 @@ var pick_level: int = 0
 ## Oro ganado en la partida actual (producción, golpes y botín). No baja al gastar:
 ## de él sale la profundidad, y por eso un gasto nunca te hace retroceder de bioma.
 var run_gold: float = 0.0
+## Azar del botín. Los tests le fijan la semilla para repetir una tirada.
+var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 ## Multiplicador global de oro: el del bioma actual (y, más adelante, el de las reliquias).
 ## Se calcula en cada lectura; no se asigna.
@@ -50,6 +54,15 @@ var _depth: Dictionary = {}
 var _biomes: Array[Dictionary] = []
 var _biome_meters_each: float = 0.0
 var _biome_growth: float = 1.0
+var _loot_hit_chance: float = 0.0
+var _loot_second_chance: float = 0.0
+## Rarezas de los cofres: {id, name, weight, bonus}. Vacía = no hay botín.
+var _rarities: Array[Dictionary] = []
+var _rarity_weights: Array[float] = []
+
+
+func _init() -> void:
+	rng.randomize()
 
 
 func _ready() -> void:
@@ -120,6 +133,9 @@ func load_balance(balance: Dictionary) -> bool:
 	var parsed_biomes: Variant = _read_biomes(balance)
 	if parsed_biomes == null:
 		return false
+	var parsed_loot: Variant = _read_loot(balance)
+	if parsed_loot == null:
+		return false
 
 	last_error = ""
 	_cost_growth = growth
@@ -133,6 +149,16 @@ func load_balance(balance: Dictionary) -> bool:
 		_biomes.assign(parsed_biomes["list"])
 		_biome_meters_each = parsed_biomes["meters_each"]
 		_biome_growth = parsed_biomes["mult_growth"]
+	_rarities = []
+	_rarity_weights = []
+	_loot_hit_chance = 0.0
+	_loot_second_chance = 0.0
+	if not (parsed_loot as Dictionary).is_empty():
+		_rarities.assign(parsed_loot["rarities"])
+		for rarity: Dictionary in _rarities:
+			_rarity_weights.append(rarity["weight"])
+		_loot_hit_chance = parsed_loot["chance_per_hit"]
+		_loot_second_chance = parsed_loot["chance_per_second"]
 	reset()
 	return true
 
@@ -176,6 +202,56 @@ func biome_multiplier() -> float:
 	if _biomes.is_empty():
 		return 1.0
 	return EconomyMath.biome_multiplier(biome_index(), _biome_growth)
+
+
+# --- Botín -------------------------------------------------------------------
+
+## Probabilidad (0 a 1) de que un golpe suelte un cofre.
+func loot_chance_per_hit() -> float:
+	return _loot_hit_chance
+
+
+## Probabilidad (0 a 1) por segundo de que la cuadrilla encuentre un cofre (solo si produce).
+func loot_chance_per_second() -> float:
+	return _loot_second_chance
+
+
+## Las rarezas con su probabilidad real (peso / suma de pesos) y su bonus, para mostrarlas
+## al jugador: [{id, name, chance, bonus}] en el orden del balance.
+func loot_table() -> Array[Dictionary]:
+	var total: float = 0.0
+	for weight: float in _rarity_weights:
+		total += weight
+	var table: Array[Dictionary] = []
+	for index: int in range(_rarities.size()):
+		var rarity: Dictionary = _rarities[index]
+		table.append({
+			"id": rarity["id"],
+			"name": rarity["name"],
+			"chance": _rarity_weights[index] / total,
+			"bonus": rarity["bonus"],
+		})
+	return table
+
+
+## Oro que da hoy un cofre de la rareza `rarity`: su % del oro que tenés, pero nunca menos
+## que un golpe (si no, con poco oro un cofre no daría nada).
+func loot_amount(rarity: int) -> float:
+	if rarity < 0 or rarity >= _rarities.size():
+		return 0.0
+	return maxf(gold * float(_rarities[rarity]["bonus"]), hit_value())
+
+
+## Tira por un cofre con probabilidad `chance`. Si sale, sortea la rareza y acredita el oro.
+func _roll_loot(chance: float) -> void:
+	if _rarities.is_empty() or chance <= 0.0 or rng.randf() >= chance:
+		return
+	var rarity: int = EconomyMath.pick_weighted(_rarity_weights, rng.randf())
+	if rarity < 0:
+		return
+	var amount: float = loot_amount(rarity)
+	_earn(amount)
+	loot_dropped.emit(rarity, amount)
 
 
 # --- Estado ------------------------------------------------------------------
@@ -226,6 +302,9 @@ func tick(delta: float) -> void:
 	if rate <= 0.0:
 		return
 	_earn(rate * delta)
+	# 2% por segundo: en un tick de `delta` segundos la chance es 1 - (1 - 2%)^delta,
+	# así un frame lento no tira menos cofres que varios rápidos.
+	_roll_loot(1.0 - pow(1.0 - _loot_second_chance, delta))
 	gold_changed.emit(gold)
 
 
@@ -240,6 +319,7 @@ func hit() -> float:
 	var amount: float = hit_value()
 	_earn(amount)
 	hit_landed.emit(amount)
+	_roll_loot(_loot_hit_chance)
 	gold_changed.emit(gold)
 	return amount
 
@@ -331,10 +411,11 @@ func _fail(message: String) -> bool:
 	return false
 
 
-## Lee una sección opcional del balance cuyos valores son números > 0.
+## Lee una sección opcional del balance cuyos valores son números: `positive_keys` tienen
+## que ser > 0 y `non_negative_keys` >= 0 (una clave faltante es inválida).
 ## Devuelve {} si la sección no está (ese sistema queda apagado), null si es inválida
 ## (el motivo queda en last_error) o un Dictionary clave -> float.
-func _read_numbers(balance: Dictionary, section: String, positive_keys: Array[String]) -> Variant:
+func _read_numbers(balance: Dictionary, section: String, positive_keys: Array[String], non_negative_keys: Array[String] = []) -> Variant:
 	if not balance.has(section):
 		return {}
 	var raw: Variant = balance[section]
@@ -346,6 +427,12 @@ func _read_numbers(balance: Dictionary, section: String, positive_keys: Array[St
 		var value: float = _number((raw as Dictionary).get(key), 0.0)
 		if value <= 0.0:
 			_fail("%s.%s tiene que ser > 0" % [section, key])
+			return null
+		numbers[key] = value
+	for key: String in non_negative_keys:
+		var value: float = _number((raw as Dictionary).get(key), -1.0)
+		if value < 0.0:
+			_fail("%s.%s tiene que ser >= 0" % [section, key])
 			return null
 		numbers[key] = value
 	return numbers
@@ -368,6 +455,40 @@ func _read_biomes(balance: Dictionary) -> Variant:
 			return null
 		list.append({ "id": str(entry.get("id", "")), "name": str(entry["name"]) })
 	numbers["list"] = list
+	return numbers
+
+
+## Lee la sección opcional "loot": {chance_per_hit, chance_per_second, rarities: [{id, name, weight, bonus}]}.
+## Mismo contrato que _read_numbers: {} si no está, null si es inválida.
+func _read_loot(balance: Dictionary) -> Variant:
+	var numbers: Variant = _read_numbers(balance, "loot", [], ["chance_per_hit", "chance_per_second"])
+	if numbers == null or (numbers as Dictionary).is_empty():
+		return numbers
+	for key: String in ["chance_per_hit", "chance_per_second"]:
+		if numbers[key] > 1.0:
+			_fail("loot.%s es una probabilidad: tiene que estar entre 0 y 1" % key)
+			return null
+	var raw_rarities: Variant = (balance["loot"] as Dictionary).get("rarities")
+	if not (raw_rarities is Array) or (raw_rarities as Array).is_empty():
+		_fail("loot.rarities necesita al menos una rareza")
+		return null
+	var rarities: Array[Dictionary] = []
+	var total_weight: float = 0.0
+	for entry: Variant in raw_rarities:
+		if not (entry is Dictionary) or str((entry as Dictionary).get("name", "")) == "":
+			_fail("cada rareza de loot.rarities necesita un nombre")
+			return null
+		var weight: float = _number(entry.get("weight"), -1.0)
+		var bonus: float = _number(entry.get("bonus"), -1.0)
+		if weight < 0.0 or bonus < 0.0:
+			_fail("el peso y el bonus de la rareza '%s' tienen que ser >= 0" % str(entry["name"]))
+			return null
+		total_weight += weight
+		rarities.append({ "id": str(entry.get("id", "")), "name": str(entry["name"]), "weight": weight, "bonus": bonus })
+	if total_weight <= 0.0:
+		_fail("loot.rarities necesita al menos un peso > 0")
+		return null
+	numbers["rarities"] = rarities
 	return numbers
 
 

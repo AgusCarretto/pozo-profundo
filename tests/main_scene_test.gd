@@ -21,7 +21,8 @@ func _initialize() -> void:
 		_finish()
 		return
 
-	_economy.reset()
+	# El botín es azar: cualquier cofre movería el oro que estos tests cuentan golpe a golpe.
+	_check(_economy.load_balance(_balance_without_loot()), "carga el balance real sin botín (%s)" % _economy.last_error)
 	_scene = packed.instantiate() as Control
 	root.add_child(_scene)
 	await process_frame
@@ -36,6 +37,13 @@ func _initialize() -> void:
 	await process_frame
 	_economy.reset()
 	_finish()
+
+
+## El balance real de data/ sin la sección "loot".
+func _balance_without_loot() -> Dictionary:
+	var balance: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/balance.json"))
+	balance.erase("loot")
+	return balance
 
 
 func _button(node_name: String) -> Button:
