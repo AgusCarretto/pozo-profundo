@@ -17,6 +17,7 @@ enum BuyMode { X1, X10, MAX }
 const EconomyMath := preload("res://core/economy_math.gd")
 
 const DEFAULT_BALANCE_PATH: String = "res://data/balance.json"
+const SAVE_SECTION: String = "economy"
 const X10_COUNT: int = 10
 ## Topes para datos de partida dañados o editados a mano (evitan desbordes a infinito).
 const MAX_LOADED_OWNED: float = 1000000.0
@@ -39,7 +40,12 @@ var _pick: Dictionary = {}
 
 func _ready() -> void:
 	if not load_balance_file(DEFAULT_BALANCE_PATH):
+		# Sin balance no se registra en Save: si no, el autosave pisaría la partida con un estado vacío.
 		push_error("Economy: no se pudo cargar %s (%s)" % [DEFAULT_BALANCE_PATH, last_error])
+		return
+	var save: Node = get_node_or_null("/root/Save")
+	if save != null and save.has_method("register_section"):
+		save.register_section(SAVE_SECTION, to_dict, from_dict)
 
 
 func _process(delta: float) -> void:
