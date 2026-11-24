@@ -5,6 +5,8 @@ extends "res://tests/test_base.gd"
 ## Usan el autoload Economy real (se reinicia antes de cada test). Save no persiste en
 ## headless, así que no se toca ninguna partida guardada.
 
+const NumberFormat := preload("res://core/number_format.gd")
+
 const MAIN_SCENE: String = "res://game/main.tscn"
 
 var _economy: Node
@@ -233,7 +235,7 @@ func _test_prestige_flow() -> void:
 	_check(_modal().visible, "apretar abre la confirmación")
 	var body: String = _modal().body_label.text
 	_check(body.contains("2 reliquias") and body.contains("+50%"), "que dice cuánto ganás (%s)" % body.replace("\n", " | "))
-	_check(body.contains("oro") and body.contains("cuadrilla") and body.contains("pico"), "y qué perdés")
+	_check(body.contains("oro") and body.contains("cuadrilla") and body.contains("pico") and body.contains("botín"), "y qué perdés: oro, cuadrilla, pico y bonus de botín")
 	# El juego sigue andando con el cartel abierto (la cuadrilla produce unos centavos por frame):
 	# lo que no puede pasar es que se reinicie algo.
 	_check_eq(_economy.relics, 0, "todavía no se ganó ninguna reliquia")
@@ -248,11 +250,13 @@ func _test_prestige_flow() -> void:
 	_check_eq(_economy.pick_level, 4, "y el pico intacto")
 	_check(_economy.run_gold >= 41000.0 and _economy.run_gold < 41010.0, "y la profundidad intacta (%s)" % str(_economy.run_gold))
 
+	_economy.loot_bonus = 0.5
 	button.pressed.emit()
 	_check(_modal().visible, "se puede volver a abrir")
 	_modal().confirm_button.pressed.emit()
 	_check(not _modal().visible, "confirmar cierra el cartel")
 	_check_eq(_economy.relics, 2, "y da 2 reliquias")
+	_check_eq(_economy.loot_bonus, 0.0, "y reinicia el bonus de botín")
 	_check_eq(_economy.gold, 0.0, "el oro vuelve a 0")
 	_check_eq(_economy.owned_count(0), 0, "sin cuadrilla")
 	_check_eq(_economy.pick_level, 0, "pico en 0")
@@ -310,6 +314,7 @@ func _test_offline_notice() -> void:
 func _test_loot_hidden_without_loot() -> void:
 	_section("Sin botín en el balance")
 	_check(not (_scene.get_node("%LootBox") as Control).visible, "el panel de cofres no se muestra si no hay botín")
+	_check(not _label("LootBonusLabel").is_visible_in_tree(), "ni el bonus de botín")
 
 
 func _test_loot_odds_are_visible() -> void:
@@ -321,6 +326,7 @@ func _test_loot_odds_are_visible() -> void:
 	var texts: Array[String] = []
 	for child: Node in _scene.get_node("%OddsRow").get_children():
 		texts.append((child as Label).text.replace("\n", " "))
+	_check_eq(_label("LootBonusLabel").text, "Bonus de botín: +0%", "arranca en 'Bonus de botín: +0%%' (%s)" % _label("LootBonusLabel").text)
 	_check_eq(texts.size(), 4, "una etiqueta por rareza (4)")
 	var expected: Array = [
 		["Común", "70%", "+1%"],
@@ -350,7 +356,23 @@ func _test_chest_message() -> void:
 	_button("TapButton").button_down.emit()
 	_check_eq(seen.size(), 1, "con 100%% por golpe, el golpe suelta un cofre")
 	if seen.size() == 1:
-		var rarity_name: String = _economy.loot_table()[seen[0]]["name"]
+		var entry: Dictionary = _economy.loot_table()[seen[0]]
 		var text: String = _label("LastLootLabel").text
-		_check(text.contains("Cofre") and text.contains(rarity_name), "el cartel dice 'Cofre %s' (%s)" % [rarity_name, text])
-		_check(text.contains("+1"), "y cuánto oro dio (%s)" % text)
+		_check(text.contains("Cofre") and text.contains(entry["name"]), "el cartel dice 'Cofre %s' (%s)" % [entry["name"], text])
+		_check(text.contains("+%s" % NumberFormat.format_percent(entry["bonus"])), "y cuánto bonus sumó (%s)" % text)
+		_check(not text.contains("oro"), "no habla de oro: el cofre no da oro (%s)" % text)
+	_check_eq(_economy.gold, 1.0, "el golpe sumó 1 de oro y el cofre ninguno")
+	await process_frame
+	var expected_bonus: String = "Bonus de botín: +%s" % NumberFormat.format_percent(_economy.loot_bonus)
+	_check_eq(_label("LootBonusLabel").text, expected_bonus, "el bonus total se actualiza (%s)" % _label("LootBonusLabel").text)
+	_button("TapButton").button_down.emit()
+	_button("TapButton").button_down.emit()
+	await process_frame
+	_check_eq(seen.size(), 3, "3 golpes, 3 cofres")
+	expected_bonus = "Bonus de botín: +%s" % NumberFormat.format_percent(_economy.loot_bonus)
+	_check_eq(_label("LootBonusLabel").text, expected_bonus, "y acumula los 3 cofres (%s)" % _label("LootBonusLabel").text)
+	var summed: float = 0.0
+	for rarity: int in seen:
+		summed += _economy.loot_table()[rarity]["bonus"]
+	_check_near(_economy.loot_bonus, summed, "la suma coincide con los bonus de cada cofre")
+	_check(_economy.loot_bonus > 0.0, "y es mayor que 0 (%s)" % str(_economy.loot_bonus))

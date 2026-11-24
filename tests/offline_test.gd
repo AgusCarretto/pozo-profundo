@@ -178,6 +178,7 @@ func _test_offline_does_not_roll_loot() -> void:
 	e.loot_dropped.connect(func(rarity: int, _amount: float) -> void: drops.append(rarity))
 	e.apply_offline(8.0 * HOUR)
 	_check_eq(drops.size(), 0, "ningún cofre, aunque la probabilidad sea 100%")
+	_check_eq(e.loot_bonus, 0.0, "ni bonus de botín")
 	_check_eq(e.gold, 288000.0, "el oro es exactamente la producción")
 
 

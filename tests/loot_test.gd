@@ -14,13 +14,16 @@ func _initialize() -> void:
 	_test_probability_table()
 	_test_chances_are_exposed()
 	_test_hit_drops_a_chest()
-	_test_chest_is_never_empty()
+	_test_bonus_accumulates()
+	_test_drop_loot_directly()
+	_test_bonus_stacks_with_biome_and_relics()
 	_test_hit_without_chest()
 	_test_passive_chest_needs_a_crew()
 	_test_passive_chance_scales_with_time()
 	_test_hit_chance_statistics()
 	_test_rarity_distribution()
-	_test_loot_amount()
+	_test_bonus_serialization()
+	_test_reset_clears_the_bonus()
 	_test_no_loot_section()
 	_test_balance_validation()
 	_test_real_balance_file()
@@ -89,64 +92,119 @@ func _test_chances_are_exposed() -> void:
 func _test_hit_drops_a_chest() -> void:
 	_section("Un golpe con cofre seguro")
 	var e: EconomyScript = _make(_always(1.0, 0.0))
-	# Se anota en Dictionary y no en Vector2: Vector2 guarda float32 y degrada el monto.
+	# Se anota en Dictionary y no en Vector2: Vector2 guarda float32 y degrada los montos.
 	var drops: Array[Dictionary] = []
 	var golds: Array[float] = []
 	var hits: Array[float] = []
-	e.loot_dropped.connect(func(rarity: int, amount: float) -> void: drops.append({ "rarity": rarity, "amount": amount }))
+	e.loot_dropped.connect(func(rarity: int, bonus: float) -> void: drops.append({ "rarity": rarity, "bonus": bonus }))
 	e.gold_changed.connect(func(gold: float) -> void: golds.append(gold))
 	e.hit_landed.connect(func(amount: float) -> void: hits.append(amount))
 	e.gold = 1000.0
 	var gained: float = e.hit()
-	_check_eq(gained, 1.0, "hit() devuelve solo lo del golpe (1), no el cofre")
+	_check_eq(gained, 1.0, "hit() devuelve el oro del golpe (1): el cofre no da oro")
 	_check_eq(hits, [1.0] as Array[float], "hit_landed(1)")
 	_check_eq(drops.size(), 1, "cae 1 cofre")
 	_check_eq(drops[0]["rarity"], 0, "de la rareza 0")
-	_check_near(drops[0]["amount"], 100.1, "vale 10% del oro que tenés (1001) = 100.1")
-	_check_near(e.gold, 1101.1, "el oro incluye golpe + cofre")
-	_check_near(e.run_gold, 101.1, "y lo ganado en la partida suma golpe + cofre (cuenta para la profundidad)")
+	_check_eq(drops[0]["bonus"], 0.10, "y trae su bonus: +10%")
+	_check_eq(e.gold, 1001.0, "el oro es solo el del golpe: el cofre no suma oro")
+	_check_eq(e.run_gold, 1.0, "ni lo ganado en la partida")
+	_check_near(e.loot_bonus, 0.10, "el bonus de botín de la partida pasó a +10%")
+	_check_near(e.loot_multiplier(), 1.10, "que multiplica el oro x1.10")
+	_check_near(e.multiplier, 1.10, "y el multiplicador global también")
 	_check_eq(golds.size(), 1, "gold_changed se emite una sola vez por golpe")
-	_check_near(golds[0], 1101.1, "con el oro final")
+	_check_eq(golds[0], 1001.0, "con el oro final")
 
 
-## Con poco oro el % no alcanza ni a un golpe: el cofre vale al menos un golpe.
-func _test_chest_is_never_empty() -> void:
-	_section("Un cofre nunca viene vacío")
+## Cada cofre suma a lo que ya había (acumulable): el oro de ahí en más rinde más.
+func _test_bonus_accumulates() -> void:
+	_section("Los cofres acumulan bonus")
 	var e: EconomyScript = _make(_always(1.0, 0.0))
-	var amounts: Array[float] = []
-	e.loot_dropped.connect(func(_rarity: int, amount: float) -> void: amounts.append(amount))
-	e.hit() # oro 1 -> 10% = 0.1, pero un golpe vale 1
-	_check_eq(amounts, [1.0] as Array[float], "el cofre vale 1 (un golpe), no 0.1")
-	_check_eq(e.gold, 2.0, "golpe + cofre = 2")
+	var hits: Array[float] = []
+	e.hit_landed.connect(func(amount: float) -> void: hits.append(amount))
+	for i: int in range(3):
+		e.hit()
+	_check_near(e.loot_bonus, 0.30, "3 cofres de +10% = +30%")
+	_check_near(e.multiplier, 1.30, "multiplicador x1.30")
+	_check_eq(hits.size(), 3, "3 golpes")
+	_check_near(hits[0], 1.0, "el primer golpe vale 1 (todavía sin bonus)")
+	_check_near(hits[1], 1.1, "el segundo ya vale 1.1 (con el cofre del primero)")
+	_check_near(hits[2], 1.2, "el tercero 1.2")
+	e.owned[0] = 10 # 10 oro/s base
+	_check_near(e.gold_per_second(), 13.0, "10 oro/s base -> 13 oro/s")
+	_check_near(e.generator_output(0), 13.0, "el generador aporta 13/s")
+	var before: float = e.gold
+	e.tick(2.0)
+	_check_near(e.gold - before, 26.0, "2 s de producción = 26")
+	e.pick_level = 3
+	_check_near(e.hit_value(), 8.0 * 1.3 + 0.03 * 13.0, "el bonus escala la parte del pico: 8 * 1.3 + 3% de 13")
+
+
+## drop_loot() fuerza un cofre de una rareza (lo usan el sorteo y el panel de debug).
+func _test_drop_loot_directly() -> void:
+	_section("drop_loot(): cofre de una rareza")
+	var e: EconomyScript = _make()
+	var drops: Array[Dictionary] = []
+	var golds: Array[float] = []
+	e.loot_dropped.connect(func(rarity: int, bonus: float) -> void: drops.append({ "rarity": rarity, "bonus": bonus }))
+	e.gold_changed.connect(func(gold: float) -> void: golds.append(gold))
+	e.drop_loot(3)
+	_check_eq(drops.size(), 1, "emite loot_dropped una vez")
+	_check_eq(drops[0]["rarity"], 3, "de la rareza 3 (Legendario)")
+	_check_eq(drops[0]["bonus"], 0.60, "con su bonus +60%")
+	_check_near(e.loot_bonus, 0.60, "el bonus de la partida es +60%")
+	_check_eq(e.gold, 0.0, "no da oro")
+	_check_eq(golds.size(), 0, "ni emite gold_changed")
+	e.drop_loot(0)
+	_check_near(e.loot_bonus, 0.61, "un Común más: +61%")
+	e.drop_loot(99)
+	e.drop_loot(-1)
+	_check_eq(drops.size(), 2, "una rareza inexistente no hace nada (ni explota)")
+	_check_near(e.loot_bonus, 0.61, "y no cambia el bonus")
+
+
+func _test_bonus_stacks_with_biome_and_relics() -> void:
+	_section("Multiplicador final: bioma x (1 + botín) x (1 + 0.25 x reliquias)")
+	var e: EconomyScript = _make()
+	e.run_gold = 700.0 # Roca, x1.5
+	e.relics = 4 # x2
+	e.drop_loot(3) # +60% -> x1.6
+	_check_near(e.biome_multiplier(), 1.5, "bioma x1.5")
+	_check_near(e.loot_multiplier(), 1.6, "botín x1.6")
+	_check_near(e.relic_multiplier(), 2.0, "reliquias x2")
+	_check_near(e.multiplier, 1.5 * 1.6 * 2.0, "todo junto: x4.8")
+	e.owned[0] = 10
+	_check_near(e.gold_per_second(), 48.0, "10 oro/s base -> 48 oro/s")
 
 
 func _test_hit_without_chest() -> void:
 	_section("Golpe sin cofre")
 	var e: EconomyScript = _make(_always(0.0, 0.0))
 	var drops: Array[int] = []
-	e.loot_dropped.connect(func(rarity: int, _amount: float) -> void: drops.append(rarity))
+	e.loot_dropped.connect(func(rarity: int, _bonus: float) -> void: drops.append(rarity))
 	for i: int in range(500):
 		e.hit()
 	_check_eq(drops.size(), 0, "con probabilidad 0 nunca cae un cofre (500 golpes)")
 	_check_eq(e.gold, 500.0, "el oro es solo de los golpes")
+	_check_eq(e.loot_bonus, 0.0, "y no hay bonus de botín")
 
 
 func _test_passive_chest_needs_a_crew() -> void:
 	_section("Cofre pasivo: solo si hay cuadrilla")
 	var e: EconomyScript = _make(_always(0.0, 1.0))
 	var drops: Array[Dictionary] = []
-	e.loot_dropped.connect(func(rarity: int, amount: float) -> void: drops.append({ "rarity": rarity, "amount": amount }))
+	e.loot_dropped.connect(func(rarity: int, bonus: float) -> void: drops.append({ "rarity": rarity, "bonus": bonus }))
 	e.tick(1.0)
 	_check_eq(drops.size(), 0, "sin cuadrilla no hay cofres pasivos")
 	_check_eq(e.gold, 0.0, "ni oro")
+	_check_eq(e.loot_bonus, 0.0, "ni bonus")
 	e.owned[0] = 10 # 10 oro/s
 	var golds: Array[float] = []
 	e.gold_changed.connect(func(gold: float) -> void: golds.append(gold))
 	e.tick(1.0)
 	_check_eq(drops.size(), 1, "con cuadrilla y 100% por segundo cae 1 cofre")
-	# 10 de producción + cofre de 10% de 10 (=1) -> mínimo un golpe (1 + 3% de 10 = 1.3)
-	_check_near(drops[0]["amount"], 1.3, "vale al menos un golpe (1.3 con 10 oro/s)")
-	_check_near(e.gold, 11.3, "oro = producción 10 + cofre 1.3")
+	_check_eq(drops[0]["bonus"], 0.10, "con su bonus (+10%)")
+	_check_eq(e.gold, 10.0, "el oro es solo la producción (10): el cofre no da oro")
+	_check_near(e.loot_bonus, 0.10, "y el bonus de la partida es +10%")
 	_check_eq(golds.size(), 1, "una sola señal gold_changed por tick")
 	e.tick(0.0)
 	_check_eq(drops.size(), 1, "un tick de 0 s no tira ningún cofre")
@@ -158,7 +216,7 @@ func _test_passive_chance_scales_with_time() -> void:
 	var e: EconomyScript = _make(_always(0.0, 0.02))
 	e.owned[0] = 1
 	var drops: Array[int] = []
-	e.loot_dropped.connect(func(rarity: int, _amount: float) -> void: drops.append(rarity))
+	e.loot_dropped.connect(func(rarity: int, _bonus: float) -> void: drops.append(rarity))
 	for i: int in range(100000): # 10.000 s en ticks de 0.1 s -> ~202 cofres esperados
 		e.tick(0.1)
 	var expected: float = 100000.0 * (1.0 - pow(0.98, 0.1))
@@ -166,7 +224,7 @@ func _test_passive_chance_scales_with_time() -> void:
 	var slow: EconomyScript = _make(_always(0.0, 0.02))
 	slow.owned[0] = 1
 	var slow_drops: Array[int] = []
-	slow.loot_dropped.connect(func(rarity: int, _amount: float) -> void: slow_drops.append(rarity))
+	slow.loot_dropped.connect(func(rarity: int, _bonus: float) -> void: slow_drops.append(rarity))
 	for i: int in range(1000): # los mismos 10.000 s, en ticks de 10 s (un frame muy lento)
 		slow.tick(10.0)
 	var slow_expected: float = 1000.0 * (1.0 - pow(0.98, 10.0))
@@ -177,7 +235,7 @@ func _test_hit_chance_statistics() -> void:
 	_section("4% de cofre por golpe")
 	var e: EconomyScript = _make()
 	var chests: Array[int] = []
-	e.loot_dropped.connect(func(rarity: int, _amount: float) -> void: chests.append(rarity))
+	e.loot_dropped.connect(func(rarity: int, _bonus: float) -> void: chests.append(rarity))
 	var total: int = 20000
 	for i: int in range(total):
 		e.hit()
@@ -189,7 +247,7 @@ func _test_rarity_distribution() -> void:
 	_section("Distribución de rarezas 70 / 22 / 7 / 1")
 	var e: EconomyScript = _make(func(loot: Dictionary) -> void: loot["chance_per_hit"] = 1.0)
 	var counts: Array[int] = [0, 0, 0, 0]
-	e.loot_dropped.connect(func(rarity: int, _amount: float) -> void: counts[rarity] += 1)
+	e.loot_dropped.connect(func(rarity: int, _bonus: float) -> void: counts[rarity] += 1)
 	var total: int = 20000
 	for i: int in range(total):
 		e.hit()
@@ -200,18 +258,38 @@ func _test_rarity_distribution() -> void:
 	_check(absf(counts[3] - 200.0) < 60.0, "Legendario ~1%% (%d de %d)" % [counts[3], total])
 
 
-func _test_loot_amount() -> void:
-	_section("Bonus de cada rareza")
+func _test_bonus_serialization() -> void:
+	_section("loot_bonus en to_dict / from_dict")
+	var a: EconomyScript = _make()
+	a.loot_bonus = 1.2345678901234567
+	var data: Dictionary = a.to_dict()
+	_check(data.has("loot_bonus"), "to_dict incluye loot_bonus")
+	var b: EconomyScript = _make()
+	b.from_dict(data)
+	_check_eq(b.loot_bonus, a.loot_bonus, "se conserva exacto")
+	var c: EconomyScript = _make()
+	c.from_dict(JSON.parse_string(JSON.stringify(data)))
+	_check_near(c.loot_bonus, a.loot_bonus, "también después de ir y volver por JSON")
+	var old: EconomyScript = _make()
+	old.loot_bonus = 0.5
+	old.from_dict({ "gold": 10.0 })
+	_check_eq(old.loot_bonus, 0.0, "un save sin 'loot_bonus' deja 0 (no conserva el de la sesión)")
+	var garbage: Array = [-0.5, "mucho", NAN, INF]
+	for value: Variant in garbage:
+		old.from_dict({ "loot_bonus": value })
+		_check_eq(old.loot_bonus, 0.0, "loot_bonus %s -> 0" % str(value))
+	old.from_dict({ "loot_bonus": 1.0e30 })
+	_check(old.loot_bonus > 0.0 and old.loot_bonus <= EconomyScript.MAX_LOADED_LOOT_BONUS, "un valor absurdo se topa (%s)" % str(old.loot_bonus))
+	_check(is_finite(old.multiplier), "y el multiplicador sigue siendo finito")
+
+
+func _test_reset_clears_the_bonus() -> void:
+	_section("reset() borra el bonus")
 	var e: EconomyScript = _make()
-	e.gold = 10000.0
-	_check_near(e.loot_amount(0), 100.0, "Común: +1% de 10.000 = 100")
-	_check_near(e.loot_amount(1), 400.0, "Raro: +4% = 400")
-	_check_near(e.loot_amount(2), 1500.0, "Épico: +15% = 1.500")
-	_check_near(e.loot_amount(3), 6000.0, "Legendario: +60% = 6.000")
-	e.gold = 0.0
-	_check_eq(e.loot_amount(3), 1.0, "sin oro vale un golpe (1)")
-	_check_eq(e.loot_amount(99), 0.0, "una rareza inexistente vale 0 (y no explota)")
-	_check_eq(e.loot_amount(-1), 0.0, "un índice negativo vale 0")
+	e.drop_loot(3)
+	e.reset()
+	_check_eq(e.loot_bonus, 0.0, "reset() vuelve el bonus de botín a 0")
+	_check_eq(e.multiplier, 1.0, "y el multiplicador a x1")
 
 
 func _test_no_loot_section() -> void:
@@ -226,7 +304,9 @@ func _test_no_loot_section() -> void:
 	_check_eq(e.loot_table().size(), 0, "tabla vacía")
 	_check_eq(e.loot_chance_per_hit(), 0.0, "0% por golpe")
 	_check_eq(e.loot_chance_per_second(), 0.0, "0% por segundo")
-	_check_near(e.gold, e.run_gold, "no entró oro de cofres (todo el oro es ganado)")
+	_check_eq(e.loot_bonus, 0.0, "sin bonus de botín")
+	e.drop_loot(0)
+	_check_eq(e.loot_bonus, 0.0, "y drop_loot() no hace nada sin tabla")
 
 
 func _test_balance_validation() -> void:

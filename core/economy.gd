@@ -11,8 +11,9 @@ signal gold_changed(gold: float)
 signal hit_landed(amount: float)
 signal generator_bought(index: int, count: int)
 signal pick_upgraded(level: int)
-## Cayó un cofre de la rareza `rarity` (índice de loot_table()) y sumó `amount` de oro.
-signal loot_dropped(rarity: int, amount: float)
+## Cayó un cofre de la rareza `rarity` (índice de loot_table()) y sumó `bonus` (0.04 = +4%)
+## al bonus de botín de la partida.
+signal loot_dropped(rarity: int, bonus: float)
 ## Volviste a la superficie y ganaste `relics_gained` reliquias.
 signal prestiged(relics_gained: int)
 ## Se acreditó progreso offline y hay un aviso para el jugador: `report` = {seconds, gold, capped}
@@ -32,6 +33,7 @@ const X10_COUNT: int = 10
 const MAX_LOADED_OWNED: float = 1000000.0
 const MAX_LOADED_PICK_LEVEL: float = 300.0
 const MAX_LOADED_RELICS: float = 1000000.0
+const MAX_LOADED_LOOT_BONUS: float = 1000000.0
 
 var gold: float = 0.0
 ## Unidades compradas de cada generador (mismo orden que en el balance).
@@ -40,6 +42,9 @@ var pick_level: int = 0
 ## Oro ganado en la partida actual (producción, golpes y botín). No baja al gastar:
 ## de él sale la profundidad, y por eso un gasto nunca te hace retroceder de bioma.
 var run_gold: float = 0.0
+## Bonus de botín acumulado en la partida (0.27 = +27%): cada cofre suma el suyo. Se reinicia
+## al volver a la superficie.
+var loot_bonus: float = 0.0
 ## Reliquias acumuladas: sobreviven al prestigio y dan oro permanente.
 var relics: int = 0
 ## Aviso del progreso offline que el jugador todavía no vio ({} = ninguno). No se guarda.
@@ -47,10 +52,11 @@ var pending_offline_report: Dictionary = {}
 ## Azar del botín. Los tests le fijan la semilla para repetir una tirada.
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
-## Multiplicador global de oro: bioma actual x reliquias. Se calcula en cada lectura; no se asigna.
+## Multiplicador global de oro: bioma x (1 + botín) x (1 + 0.25 x reliquias).
+## Se calcula en cada lectura; no se asigna.
 var multiplier: float:
 	get:
-		return biome_multiplier() * relic_multiplier()
+		return biome_multiplier() * loot_multiplier() * relic_multiplier()
 
 ## Motivo por el que se rechazó el último balance ("" si cargó bien).
 var last_error: String = ""
@@ -260,12 +266,20 @@ func loot_table() -> Array[Dictionary]:
 	return table
 
 
-## Oro que da hoy un cofre de la rareza `rarity`: su % del oro que tenés, pero nunca menos
-## que un golpe (si no, con poco oro un cofre no daría nada).
-func loot_amount(rarity: int) -> float:
+## Multiplicador de oro del botín acumulado en la partida: 1 + loot_bonus.
+func loot_multiplier() -> float:
+	return 1.0 + loot_bonus
+
+
+## Suelta un cofre de la rareza `rarity` (índice de loot_table()): su bonus se suma al bonus de
+## botín de la partida. No da oro. Un índice inexistente no hace nada. Lo usan el sorteo y las
+## herramientas de debug.
+func drop_loot(rarity: int) -> void:
 	if rarity < 0 or rarity >= _rarities.size():
-		return 0.0
-	return maxf(gold * float(_rarities[rarity]["bonus"]), hit_value())
+		return
+	var bonus: float = _rarities[rarity]["bonus"]
+	loot_bonus = minf(loot_bonus + bonus, MAX_LOADED_LOOT_BONUS)
+	loot_dropped.emit(rarity, bonus)
 
 
 # --- Reliquias y prestigio ---------------------------------------------------
@@ -304,7 +318,7 @@ func can_prestige() -> bool:
 
 
 ## Vuelve a la superficie: suma las reliquias de esta bajada y reinicia la partida (oro,
-## profundidad, cuadrilla y pico). Devuelve las reliquias ganadas; si todavía no se puede,
+## profundidad, bonus de botín, cuadrilla y pico). Devuelve las reliquias ganadas; si todavía no se puede,
 ## devuelve 0 y no toca nada. Ejecuta ya mismo: la confirmación al jugador la pide la UI antes.
 func prestige() -> int:
 	var gained: int = prestige_relics()
@@ -318,16 +332,11 @@ func prestige() -> int:
 
 # --- Botín (tirada) -----------------------------------------------------------
 
-## Tira por un cofre con probabilidad `chance`. Si sale, sortea la rareza y acredita el oro.
+## Tira por un cofre con probabilidad `chance`. Si sale, sortea la rareza y lo suelta.
 func _roll_loot(chance: float) -> void:
 	if _rarities.is_empty() or chance <= 0.0 or rng.randf() >= chance:
 		return
-	var rarity: int = EconomyMath.pick_weighted(_rarity_weights, rng.randf())
-	if rarity < 0:
-		return
-	var amount: float = loot_amount(rarity)
-	_earn(amount)
-	loot_dropped.emit(rarity, amount)
+	drop_loot(EconomyMath.pick_weighted(_rarity_weights, rng.randf()))
 
 
 # --- Estado ------------------------------------------------------------------
@@ -339,11 +348,12 @@ func reset() -> void:
 	_reset_run()
 
 
-## Reinicia solo la partida en curso: oro, oro ganado (profundidad), cuadrilla y pico.
-## Las reliquias no se tocan.
+## Reinicia solo la partida en curso: oro, oro ganado (profundidad), bonus de botín,
+## cuadrilla y pico. Las reliquias no se tocan.
 func _reset_run() -> void:
 	gold = 0.0
 	run_gold = 0.0
+	loot_bonus = 0.0
 	pick_level = 0
 	owned.resize(_generators.size())
 	owned.fill(0)
@@ -382,6 +392,15 @@ func tick_realtime(now_usec: int) -> void:
 		else:
 			tick(gap)
 	_last_tick_usec = now_usec
+
+
+## Oro que entra de afuera (un anuncio con recompensa, herramientas de debug): suma al oro y
+## cuenta como ganado en la partida (la profundidad sube). Se ignora lo no positivo o inválido.
+func grant_gold(amount: float) -> void:
+	if not (amount > 0.0):
+		return
+	_earn(amount)
+	gold_changed.emit(gold)
 
 
 ## Producción pasiva: suma oro/s * delta. Se ignora un delta no positivo.
@@ -523,6 +542,7 @@ func to_dict() -> Dictionary:
 		"owned": owned.duplicate(),
 		"pick_level": pick_level,
 		"run_gold": run_gold,
+		"loot_bonus": loot_bonus,
 		"relics": relics,
 	}
 
@@ -535,6 +555,7 @@ func from_dict(data: Dictionary) -> void:
 	# Lo ganado nunca puede ser menos que lo que tenés: cubre saves anteriores a la
 	# profundidad (sin run_gold) y datos editados a mano.
 	run_gold = maxf(_number(data.get("run_gold"), 0.0), gold)
+	loot_bonus = clampf(_number(data.get("loot_bonus"), 0.0), 0.0, MAX_LOADED_LOOT_BONUS)
 	relics = int(clampf(_number(data.get("relics"), 0.0), 0.0, MAX_LOADED_RELICS))
 	pick_level = int(clampf(_number(data.get("pick_level"), 0.0), 0.0, MAX_LOADED_PICK_LEVEL))
 	owned.fill(0)

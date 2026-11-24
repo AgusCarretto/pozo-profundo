@@ -32,6 +32,7 @@ var _modal: Modal
 @onready var _loot_info_label: Label = %LootInfoLabel
 @onready var _odds_row: HBoxContainer = %OddsRow
 @onready var _last_loot_label: Label = %LastLootLabel
+@onready var _loot_bonus_label: Label = %LootBonusLabel
 @onready var _pick_button: Button = %PickButton
 @onready var _relics_label: Label = %RelicsLabel
 @onready var _prestige_button: Button = %PrestigeButton
@@ -114,6 +115,7 @@ func _refresh() -> void:
 		NumberFormat.format_number(Economy.gold_per_second()),
 	]
 	_refresh_depth()
+	_loot_bonus_label.text = "Bonus de botín: +%s" % NumberFormat.format_percent(Economy.loot_bonus)
 	var cost: float = Economy.pick_cost()
 	_pick_button.text = "Mejorar pico (nivel %d)\nCosto: %s" % [Economy.pick_level, NumberFormat.format_cost(cost)]
 	_pick_button.disabled = cost > Economy.gold
@@ -152,12 +154,13 @@ func _build_loot_panel() -> void:
 		_odds_row.add_child(label)
 
 
-func _on_loot_dropped(rarity: int, amount: float) -> void:
+func _on_loot_dropped(rarity: int, bonus: float) -> void:
+	_mark_dirty() # el bonus total cambió, aunque el oro no
 	var table: Array[Dictionary] = Economy.loot_table()
 	if rarity < 0 or rarity >= table.size():
 		return
 	var entry: Dictionary = table[rarity]
-	_last_loot_label.text = "¡Cofre %s! +%s de oro" % [entry["name"], NumberFormat.format_number(amount)]
+	_last_loot_label.text = "¡Cofre %s! +%s de bonus" % [entry["name"], NumberFormat.format_percent(bonus)]
 	_last_loot_label.add_theme_color_override("font_color", _rarity_color(entry["id"]))
 
 
@@ -190,7 +193,7 @@ func _on_prestige_pressed() -> void:
 	if not Economy.can_prestige():
 		return
 	var gain: int = Economy.prestige_relics()
-	var body: String = "Estás a %d m (%s).\n\nGanás %s: +%s de oro permanente (en total ×%.2f).\n\nVolvés a la superficie sin oro, sin cuadrilla y con el pico en nivel 0. Las reliquias te quedan para siempre." % [
+	var body: String = "Estás a %d m (%s).\n\nGanás %s: +%s de oro permanente (en total ×%.2f).\n\nVolvés a la superficie sin oro, sin cuadrilla, sin bonus de botín y con el pico en nivel 0. Las reliquias te quedan para siempre." % [
 		int(floorf(Economy.depth())),
 		Economy.biome_name(Economy.biome_index()),
 		_relics_phrase(gain),

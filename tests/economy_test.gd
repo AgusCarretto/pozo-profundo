@@ -31,6 +31,7 @@ func _initialize() -> void:
 	_test_gold_never_negative()
 	_test_gold_per_second_and_hit_value()
 	_test_pick_upgrade()
+	_test_grant_gold()
 	_test_tick()
 	_test_serialization_round_trip()
 	_test_from_dict_tolerates_garbage()
@@ -202,6 +203,25 @@ func _test_pick_upgrade() -> void:
 	_check_eq(e.pick_cost(), 300.0, "el siguiente cuesta 300")
 	_check_eq(e.hit_value(), 2.0, "el golpe vale 2")
 	_check_eq(levels, [1] as Array[int], "emite pick_upgraded(1)")
+
+
+## Oro que entra de afuera (anuncio con recompensa, herramientas de debug): cuenta como ganado.
+func _test_grant_gold() -> void:
+	_section("grant_gold")
+	var e: EconomyScript = _make()
+	e.load_balance(TestBalance.make(["loot"])) # con profundidad, para ver que baja
+	var golds: Array[float] = []
+	e.gold_changed.connect(func(gold: float) -> void: golds.append(gold))
+	e.grant_gold(1000.0)
+	_check_eq(e.gold, 1000.0, "suma al oro")
+	_check_eq(e.run_gold, 1000.0, "y al oro ganado de la partida (cuenta para la profundidad)")
+	_check_eq(golds, [1000.0] as Array[float], "emite gold_changed una vez con el oro final")
+	_check(e.depth() > 150.0, "y te hace bajar (%.0f m)" % e.depth())
+	e.grant_gold(0.0)
+	e.grant_gold(-50.0)
+	e.grant_gold(NAN)
+	_check_eq(e.gold, 1000.0, "0, negativos y NaN no hacen nada")
+	_check_eq(golds.size(), 1, "ni emiten señales")
 
 
 func _test_tick() -> void:

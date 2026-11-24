@@ -36,9 +36,10 @@ CREDITS.md     # licencia y autor de CADA asset de terceros (obligatorio)
 - Profundidad: `25 * log2(1 + oroDeEstaPartida / 10)` metros; bioma nuevo cada 150 m; multiplicador de bioma `1.5^índice`
   - `oroDeEstaPartida` es el oro *ganado* en la partida (gastar no te hace retroceder). Pasado Abismo se queda en Abismo.
 - Botín: 4% por golpe, 2%/s pasivo si hay cuadrilla. Rarezas: Común 70% (+1%), Raro 22% (+4%), Épico 7% (+15%), Legendario 1% (+60%) de bonus de oro. Las probabilidades se muestran en el juego.
-  - El bonus es ese % del oro que tenés al caer el cofre, con mínimo de un golpe (si no, con poco oro no daría nada).
+  - El cofre no da oro en el momento: su bonus se *suma* a un bonus de botín acumulable de la partida (Común +1%, Raro +4%, Épico +15%, Legendario +60%), que multiplica el oro. Se muestra en pantalla ("Bonus de botín: +27%") y se reinicia al volver a la superficie.
 - Reliquias: desde 300 m, `floor(((prof - 200) / 50)^1.3)`; cada una +25% de oro permanente.
-  - Suman (`1 + 0.25 * reliquias`) y se multiplican con el bioma. Volver a la superficie pide confirmación y reinicia oro, cuadrilla, pico y profundidad; las reliquias se conservan.
+  - Suman (`1 + 0.25 * reliquias`). Volver a la superficie pide confirmación y reinicia oro, cuadrilla, pico, profundidad y bonus de botín; las reliquias se conservan.
+- Multiplicador final de oro: `bioma × (1 + botín) × (1 + 0.25 × reliquias)`.
 - Progreso offline: hasta 8 horas.
   - Acredita la producción de hoy (bioma y reliquias actuales) por el tiempo fuera, sin sortear cofres. Avisa al volver si estuviste fuera 60 s o más; un hueco largo entre frames en la sesión (pestaña web o app en segundo plano) cuenta igual.
 

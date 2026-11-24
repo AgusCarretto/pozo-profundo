@@ -55,6 +55,7 @@ func _loaded_run(run_gold: float) -> EconomyScript:
 	e.owned[0] = 3
 	e.owned[1] = 2
 	e.pick_level = 4
+	e.loot_bonus = 0.5
 	return e
 
 
@@ -83,6 +84,7 @@ func _test_not_available_before_300m() -> void:
 	_check_eq(e.run_gold, GOLD_BEFORE_300M, "la profundidad sigue igual")
 	_check_eq(e.owned_count(0), 3, "la cuadrilla sigue igual")
 	_check_eq(e.pick_level, 4, "el pico sigue igual")
+	_check_eq(e.loot_bonus, 0.5, "el bonus de botín sigue igual")
 	_check_eq(golds.size(), 0, "y no emite señales")
 	var shallow: EconomyScript = _make()
 	shallow.run_gold = 630.0 # 150 m: la fórmula sola daría 0 de todos modos, pero 250 m daría 1
@@ -131,8 +133,11 @@ func _test_prestige_resets_the_run_and_keeps_relics() -> void:
 	_section("Volver a la superficie")
 	var e: EconomyScript = _loaded_run(GOLD_AT_300M)
 	_check_eq(e.biome_name(e.biome_index()), "Cristal", "se parte desde Cristal")
+	_check_near(e.multiplier, 2.25 * 1.5, "antes de subir: Cristal x2.25 por botín +50% x1.5 = x3.375")
 	_check_eq(e.prestige(), 2, "prestige() devuelve las reliquias ganadas (2)")
 	_check_eq(e.relics, 2, "ahora hay 2 reliquias")
+	_check_eq(e.loot_bonus, 0.0, "el bonus de botín se reinicia con la partida")
+	_check_near(e.multiplier, 1.5, "y el multiplicador queda solo con las reliquias: x1.5")
 	_check_eq(e.gold, 0.0, "el oro vuelve a 0")
 	_check_eq(e.run_gold, 0.0, "el oro ganado de la partida vuelve a 0")
 	_check_eq(e.depth(), 0.0, "profundidad 0 m")
