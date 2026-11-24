@@ -22,6 +22,36 @@ static func format_cost(value: float) -> String:
 	return _format(value, true)
 
 
+## Una fracción como porcentaje: 0.7 -> "70%", 0.125 -> "12.5%". Un decimal solo si hace falta.
+static func format_percent(fraction: float) -> String:
+	if is_nan(fraction):
+		return "NaN%"
+	var percent: float = snappedf(fraction * 100.0, 0.1)
+	if absf(percent) >= 1.0e6:
+		return _format(percent, false) + "%"
+	if is_equal_approx(percent, roundf(percent)):
+		return "%d%%" % int(roundf(percent))
+	return "%.1f%%" % percent
+
+
+## Una duración en segundos, para avisos como "estuviste fuera 3 h 12 min".
+## Menos de un minuto en segundos, menos de una hora en minutos y el resto en horas.
+static func format_duration(seconds: float) -> String:
+	if not is_finite(seconds) or seconds <= 0.0:
+		return "0 s"
+	var total: int = int(minf(floorf(seconds), 1.0e12))
+	if total < 60:
+		return "%d s" % total
+	var minutes: int = int(floorf(total / 60.0))
+	if minutes < 60:
+		return "%d min" % minutes
+	var hours: int = int(floorf(minutes / 60.0))
+	var rest: int = minutes - hours * 60
+	if rest == 0:
+		return "%d h" % hours
+	return "%d h %d min" % [hours, rest]
+
+
 static func _format(value: float, round_up: bool) -> String:
 	if is_nan(value):
 		return "NaN"

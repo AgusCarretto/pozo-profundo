@@ -12,7 +12,46 @@ func _initialize() -> void:
 	_test_scientific_notation()
 	_test_special_values()
 	_test_never_shows_four_digits()
+	_test_percent()
+	_test_duration()
 	_finish()
+
+
+func _test_percent() -> void:
+	_section("Porcentajes (probabilidades y bonus)")
+	_check_eq(NumberFormat.format_percent(0.70), "70%", "0.70 -> 70%")
+	_check_eq(NumberFormat.format_percent(0.22), "22%", "0.22 -> 22% (sin el 22.000000000000004 del float)")
+	_check_eq(NumberFormat.format_percent(0.07), "7%", "0.07 -> 7%")
+	_check_eq(NumberFormat.format_percent(0.01), "1%", "0.01 -> 1%")
+	_check_eq(NumberFormat.format_percent(0.60), "60%", "0.60 -> 60%")
+	_check_eq(NumberFormat.format_percent(0.29), "29%", "0.29 -> 29% (29 * 100 da 28.999999999999996)")
+	_check_eq(NumberFormat.format_percent(0.125), "12.5%", "0.125 -> 12.5% (un decimal si hace falta)")
+	_check_eq(NumberFormat.format_percent(0.0033), "0.3%", "0.0033 -> 0.3%")
+	_check_eq(NumberFormat.format_percent(0.0), "0%", "0 -> 0%")
+	_check_eq(NumberFormat.format_percent(1.0), "100%", "1 -> 100%")
+	_check_eq(NumberFormat.format_percent(12.5), "1250%", "12.5 -> 1250%")
+	_check_eq(NumberFormat.format_percent(-0.05), "-5%", "negativo -> -5%")
+	_check_eq(NumberFormat.format_percent(NAN), "NaN%", "NaN no explota")
+	_check(NumberFormat.format_percent(1.0e30).ends_with("%"), "un valor enorme sigue terminando en %% (%s)" % NumberFormat.format_percent(1.0e30))
+
+
+## Duración de una ausencia, para el aviso offline.
+func _test_duration() -> void:
+	_section("Duraciones")
+	_check_eq(NumberFormat.format_duration(0.0), "0 s", "0 -> 0 s")
+	_check_eq(NumberFormat.format_duration(45.0), "45 s", "45 s")
+	_check_eq(NumberFormat.format_duration(59.9), "59 s", "59.9 s se trunca a 59 s")
+	_check_eq(NumberFormat.format_duration(60.0), "1 min", "60 s -> 1 min")
+	_check_eq(NumberFormat.format_duration(119.0), "1 min", "119 s -> 1 min")
+	_check_eq(NumberFormat.format_duration(1800.0), "30 min", "30 min")
+	_check_eq(NumberFormat.format_duration(3599.0), "59 min", "3599 s -> 59 min")
+	_check_eq(NumberFormat.format_duration(3600.0), "1 h", "1 h exacta -> 1 h")
+	_check_eq(NumberFormat.format_duration(3660.0), "1 h 1 min", "1 h 1 min")
+	_check_eq(NumberFormat.format_duration(11520.0), "3 h 12 min", "3 h 12 min")
+	_check_eq(NumberFormat.format_duration(28800.0), "8 h", "8 h (el tope offline)")
+	_check_eq(NumberFormat.format_duration(90000.0), "25 h", "más de un día se cuenta en horas")
+	_check_eq(NumberFormat.format_duration(-5.0), "0 s", "negativo -> 0 s")
+	_check_eq(NumberFormat.format_duration(NAN), "0 s", "NaN -> 0 s")
 
 
 func _test_small_numbers() -> void:
