@@ -12,5 +12,20 @@
 		"cost_base": 50,
 		"cost_growth": 6,
 		"passive_share": 0.03
+	},
+	"depth": {
+		"meters_scale": 25,
+		"gold_scale": 10
+	},
+	"biomes": {
+		"meters_each": 150,
+		"mult_growth": 1.5,
+		"list": [
+			{ "id": "earth", "name": "Tierra" },
+			{ "id": "rock", "name": "Roca" },
+			{ "id": "crystal", "name": "Cristal" },
+			{ "id": "magma", "name": "Magma" },
+			{ "id": "abyss", "name": "Abismo" }
+		]
 	}
 }

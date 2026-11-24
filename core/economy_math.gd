@@ -42,3 +42,73 @@ static func pick_cost(level: int, cost_base: float, cost_growth: float) -> float
 ## `mult` (biomas, reliquias) escala solo la parte del pico; el oro/s ya viene multiplicado.
 static func hit_value(level: int, power_base: float, mult: float, gold_per_second: float, passive_share: float) -> float:
 	return pow(power_base, level) * mult + passive_share * gold_per_second
+
+
+## Tope de seguridad para cantidades enteras calculadas con pow() (evita que un infinito
+## se convierta en un entero basura).
+const MAX_COUNT: float = 1.0e12
+
+
+## Profundidad en metros: meters_scale * log2(1 + oro_de_la_partida / gold_scale).
+## Sin oro ganado (o con un valor inválido) es 0 m.
+static func depth(run_gold: float, meters_scale: float, gold_scale: float) -> float:
+	if not (run_gold > 0.0):
+		return 0.0
+	return meters_scale * log(1.0 + run_gold / gold_scale) / log(2.0)
+
+
+## Índice (desde 0) del bioma en el que está `depth`: uno nuevo cada `meters_each` metros.
+## El último bioma se mantiene más allá de su tramo.
+static func biome_index(depth: float, meters_each: float, biome_count: int) -> int:
+	if biome_count <= 1 or not (depth > 0.0):
+		return 0
+	return int(minf(floorf(depth / meters_each), float(biome_count - 1)))
+
+
+## Multiplicador de oro del bioma: growth^índice.
+static func biome_multiplier(index: int, growth: float) -> float:
+	return pow(growth, index)
+
+
+## Reliquias que da volver a la superficie desde `depth`: 0 bajo `min_depth`; desde ahí
+## floor(((depth - offset) / step)^exponent).
+static func relics_for_depth(depth: float, min_depth: float, offset: float, step: float, exponent: float) -> int:
+	if not (depth >= min_depth):
+		return 0
+	var raw: float = pow(maxf(depth - offset, 0.0) / step, exponent)
+	return int(minf(floorf(raw), MAX_COUNT))
+
+
+## Multiplicador de oro permanente de las reliquias: 1 + reliquias * bonus_each.
+static func relic_multiplier(relics: int, bonus_each: float) -> float:
+	return 1.0 + maxi(relics, 0) * bonus_each
+
+
+## Sorteo por pesos. `roll` está en [0, 1) y cada peso ocupa un tramo proporcional.
+## Devuelve el índice elegido, o -1 si no hay ningún peso positivo. Un peso 0 nunca sale.
+static func pick_weighted(weights: Array[float], roll: float) -> int:
+	var total: float = 0.0
+	for weight: float in weights:
+		if weight > 0.0:
+			total += weight
+	if total <= 0.0:
+		return -1
+	var target: float = clampf(roll, 0.0, 1.0) * total
+	var cumulative: float = 0.0
+	var chosen: int = -1
+	for index: int in range(weights.size()):
+		if weights[index] <= 0.0:
+			continue
+		cumulative += weights[index]
+		chosen = index
+		if target < cumulative:
+			return index
+	return chosen # roll >= 1 (o NaN): el último con peso
+
+
+## Segundos de ausencia que se acreditan: el tiempo fuera, entre 0 y `max_seconds`.
+## Un reloj atrasado (negativo) o inválido no acredita nada.
+static func offline_seconds(elapsed: float, max_seconds: float) -> float:
+	if is_nan(elapsed) or elapsed <= 0.0:
+		return 0.0
+	return minf(elapsed, maxf(max_seconds, 0.0))

@@ -7,6 +7,7 @@ extends "res://tests/test_base.gd"
 const EconomyScript := preload("res://core/economy.gd")
 const EconomyMath := preload("res://core/economy_math.gd")
 const BuyMode := EconomyScript.BuyMode
+const TestBalance := preload("res://tests/test_balance.gd")
 
 ## Balance chico y fijo, independiente de data/balance.json (que se puede ajustar libremente).
 const TEST_BALANCE: Dictionary = {
@@ -174,9 +175,15 @@ func _test_gold_per_second_and_hit_value() -> void:
 	_check_eq(e.gold_per_second(), 50.0, "10*1 + 5*8 = 50 oro/s")
 	_check_eq(e.generator_output(1), 40.0, "el generador 1 aporta 40/s")
 	_check_near(e.hit_value(), 2.5, "golpe = 1 + 3% de 50")
-	e.multiplier = 2.0
-	_check_eq(e.gold_per_second(), 100.0, "el multiplicador duplica el oro/s")
-	_check_near(e.hit_value(), 2.0 + 3.0, "golpe con mult 2 = 2*1 + 3% de 100")
+	# El multiplicador global ya no se asigna: lo da el bioma (acá, Roca = x1.5).
+	var rocky: EconomyScript = _make()
+	rocky.load_balance(TestBalance.make(["loot"]))
+	rocky.owned[0] = 10
+	rocky.owned[1] = 5
+	rocky.run_gold = 700.0
+	_check_eq(rocky.multiplier, 1.5, "en Roca el multiplicador es x1.5")
+	_check_eq(rocky.gold_per_second(), 75.0, "el multiplicador escala el oro/s: 50 * 1.5")
+	_check_near(rocky.hit_value(), 1.5 + 0.03 * 75.0, "golpe con mult 1.5 = 1*1.5 + 3% de 75")
 
 
 func _test_pick_upgrade() -> void:

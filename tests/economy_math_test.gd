@@ -15,6 +15,12 @@ func _initialize() -> void:
 	_test_max_affordable_degenerate_inputs()
 	_test_pick_cost()
 	_test_hit_value()
+	_test_depth()
+	_test_biome_index_and_multiplier()
+	_test_relics_for_depth()
+	_test_relic_multiplier()
+	_test_pick_weighted()
+	_test_offline_seconds()
 	_test_balance_file()
 	_finish()
 
@@ -105,6 +111,107 @@ func _test_hit_value() -> void:
 	_check_eq(EconomyMath.hit_value(3, 2.0, 1.0, 0.0, 0.03), 8.0, "nivel 3 sin cuadrilla = 2^3 = 8")
 	_check_near(EconomyMath.hit_value(3, 2.0, 1.0, 100.0, 0.03), 11.0, "nivel 3 con 100 oro/s = 8 + 3% de 100")
 	_check_near(EconomyMath.hit_value(3, 2.0, 2.0, 100.0, 0.03), 19.0, "el multiplicador solo escala la parte del pico: 16 + 3")
+
+
+## Profundidad = meters_scale * log2(1 + oro_de_la_partida / gold_scale), con 25 y 10 del balance.
+func _test_depth() -> void:
+	_section("Profundidad")
+	_check_eq(EconomyMath.depth(0.0, 25.0, 10.0), 0.0, "sin oro ganado: 0 m")
+	_check_near(EconomyMath.depth(10.0, 25.0, 10.0), 25.0, "10 de oro: log2(2) = 1 -> 25 m")
+	_check_near(EconomyMath.depth(30.0, 25.0, 10.0), 50.0, "30 de oro: log2(4) = 2 -> 50 m")
+	_check_near(EconomyMath.depth(630.0, 25.0, 10.0), 150.0, "630 de oro: log2(64) = 6 -> 150 m (entra a Roca)")
+	_check_near(EconomyMath.depth(40950.0, 25.0, 10.0), 300.0, "40.950 de oro: log2(4096) = 12 -> 300 m", 1e-6)
+	_check(EconomyMath.depth(100.0, 25.0, 10.0) < EconomyMath.depth(200.0, 25.0, 10.0), "más oro ganado -> más profundo")
+	_check_near(EconomyMath.depth(1.0e300, 25.0, 10.0), 25.0 * log(1.0e299) / log(2.0), "con oro astronómico sigue siendo finito y creciente", 1e-6)
+	_check_eq(EconomyMath.depth(-5.0, 25.0, 10.0), 0.0, "oro negativo no da profundidad negativa")
+	_check_eq(EconomyMath.depth(NAN, 25.0, 10.0), 0.0, "oro NaN -> 0 m")
+
+
+## Un bioma nuevo cada 150 m; el último bioma se mantiene más allá de su tramo.
+func _test_biome_index_and_multiplier() -> void:
+	_section("Bioma por profundidad")
+	_check_eq(EconomyMath.biome_index(0.0, 150.0, 5), 0, "0 m -> Tierra (0)")
+	_check_eq(EconomyMath.biome_index(149.9, 150.0, 5), 0, "149.9 m sigue en Tierra")
+	_check_eq(EconomyMath.biome_index(150.0, 150.0, 5), 1, "150 m -> Roca (1)")
+	_check_eq(EconomyMath.biome_index(299.0, 150.0, 5), 1, "299 m -> Roca")
+	_check_eq(EconomyMath.biome_index(300.0, 150.0, 5), 2, "300 m -> Cristal (2)")
+	_check_eq(EconomyMath.biome_index(450.0, 150.0, 5), 3, "450 m -> Magma (3)")
+	_check_eq(EconomyMath.biome_index(600.0, 150.0, 5), 4, "600 m -> Abismo (4)")
+	_check_eq(EconomyMath.biome_index(9000.0, 150.0, 5), 4, "más allá del último bioma se queda en Abismo")
+	_check_eq(EconomyMath.biome_index(-10.0, 150.0, 5), 0, "profundidad negativa -> Tierra")
+	_check_eq(EconomyMath.biome_index(500.0, 150.0, 1), 0, "con un solo bioma siempre es el 0")
+	_section("Multiplicador de bioma (1.5^índice)")
+	_check_eq(EconomyMath.biome_multiplier(0, 1.5), 1.0, "Tierra x1")
+	_check_eq(EconomyMath.biome_multiplier(1, 1.5), 1.5, "Roca x1.5")
+	_check_eq(EconomyMath.biome_multiplier(2, 1.5), 2.25, "Cristal x2.25")
+	_check_near(EconomyMath.biome_multiplier(3, 1.5), 3.375, "Magma x3.375")
+	_check_near(EconomyMath.biome_multiplier(4, 1.5), 5.0625, "Abismo x5.0625")
+
+
+## Reliquias de una subida: 0 bajo la profundidad mínima; desde ahí floor(((prof - 200) / 50)^1.3).
+func _test_relics_for_depth() -> void:
+	_section("Reliquias según la profundidad")
+	_check_eq(EconomyMath.relics_for_depth(0.0, 300.0, 200.0, 50.0, 1.3), 0, "en la superficie: 0")
+	_check_eq(EconomyMath.relics_for_depth(250.0, 300.0, 200.0, 50.0, 1.3), 0, "250 m: la fórmula daría 1, pero no llega a los 300 m mínimos -> 0")
+	_check_eq(EconomyMath.relics_for_depth(299.99, 300.0, 200.0, 50.0, 1.3), 0, "299.99 m: todavía 0")
+	_check_eq(EconomyMath.relics_for_depth(300.0, 300.0, 200.0, 50.0, 1.3), 2, "300 m: floor(2^1.3 = 2.46) = 2")
+	_check_eq(EconomyMath.relics_for_depth(350.0, 300.0, 200.0, 50.0, 1.3), 4, "350 m: floor(3^1.3 = 4.17) = 4")
+	_check_eq(EconomyMath.relics_for_depth(400.0, 300.0, 200.0, 50.0, 1.3), 6, "400 m: floor(4^1.3 = 6.06) = 6")
+	_check_eq(EconomyMath.relics_for_depth(600.0, 300.0, 200.0, 50.0, 1.3), 14, "600 m: floor(8^1.3 = 14.93) = 14")
+	_check_eq(EconomyMath.relics_for_depth(1000.0, 300.0, 200.0, 50.0, 1.3), 36, "1000 m: floor(16^1.3 = 36.76) = 36")
+	var monotonic: bool = true
+	var previous: int = 0
+	for meters: int in range(300, 1500, 7):
+		var relics: int = EconomyMath.relics_for_depth(float(meters), 300.0, 200.0, 50.0, 1.3)
+		if relics < previous:
+			monotonic = false
+		previous = relics
+	_check(monotonic, "más profundo nunca da menos reliquias (300 a 1500 m)")
+	_check_eq(EconomyMath.relics_for_depth(NAN, 300.0, 200.0, 50.0, 1.3), 0, "profundidad NaN -> 0")
+
+
+func _test_relic_multiplier() -> void:
+	_section("Multiplicador de reliquias (+25% cada una)")
+	_check_eq(EconomyMath.relic_multiplier(0, 0.25), 1.0, "sin reliquias x1")
+	_check_eq(EconomyMath.relic_multiplier(1, 0.25), 1.25, "1 reliquia x1.25")
+	_check_eq(EconomyMath.relic_multiplier(4, 0.25), 2.0, "4 reliquias x2")
+	_check_eq(EconomyMath.relic_multiplier(10, 0.25), 3.5, "10 reliquias x3.5")
+	_check_eq(EconomyMath.relic_multiplier(-3, 0.25), 1.0, "reliquias negativas no restan")
+
+
+## Sorteo por pesos: `roll` es un número en [0, 1) y cada peso ocupa un tramo proporcional.
+func _test_pick_weighted() -> void:
+	_section("Sorteo ponderado de rareza (70 / 22 / 7 / 1)")
+	var weights: Array[float] = [70.0, 22.0, 7.0, 1.0]
+	_check_eq(EconomyMath.pick_weighted(weights, 0.0), 0, "roll 0 -> Común")
+	_check_eq(EconomyMath.pick_weighted(weights, 0.69), 0, "roll 0.69 -> Común")
+	_check_eq(EconomyMath.pick_weighted(weights, 0.71), 1, "roll 0.71 -> Raro")
+	_check_eq(EconomyMath.pick_weighted(weights, 0.91), 1, "roll 0.91 -> Raro")
+	_check_eq(EconomyMath.pick_weighted(weights, 0.93), 2, "roll 0.93 -> Épico")
+	_check_eq(EconomyMath.pick_weighted(weights, 0.985), 2, "roll 0.985 -> Épico")
+	_check_eq(EconomyMath.pick_weighted(weights, 0.995), 3, "roll 0.995 -> Legendario")
+	_check_eq(EconomyMath.pick_weighted(weights, 1.0), 3, "roll 1 (fuera de rango) -> el último, sin explotar")
+	_check_eq(EconomyMath.pick_weighted(weights, -1.0), 0, "roll negativo -> el primero")
+	var sparse: Array[float] = [0.0, 5.0, 0.0]
+	_check_eq(EconomyMath.pick_weighted(sparse, 0.0), 1, "un peso 0 nunca sale (roll 0)")
+	_check_eq(EconomyMath.pick_weighted(sparse, 0.999), 1, "un peso 0 nunca sale (roll 0.999)")
+	var empty: Array[float] = []
+	_check_eq(EconomyMath.pick_weighted(empty, 0.5), -1, "sin pesos -> -1")
+	var none: Array[float] = [0.0, 0.0]
+	_check_eq(EconomyMath.pick_weighted(none, 0.5), -1, "todos los pesos en 0 -> -1")
+
+
+func _test_offline_seconds() -> void:
+	_section("Tiempo offline acreditable (tope de 8 h)")
+	var cap: float = 8.0 * 3600.0
+	_check_eq(EconomyMath.offline_seconds(0.0, cap), 0.0, "0 s -> 0")
+	_check_eq(EconomyMath.offline_seconds(90.0, cap), 90.0, "90 s -> 90")
+	_check_eq(EconomyMath.offline_seconds(cap, cap), cap, "justo 8 h -> 8 h")
+	_check_eq(EconomyMath.offline_seconds(cap + 1.0, cap), cap, "8 h y 1 s -> se corta en 8 h")
+	_check_eq(EconomyMath.offline_seconds(30.0 * 86400.0, cap), cap, "30 días fuera -> 8 h")
+	_check_eq(EconomyMath.offline_seconds(-500.0, cap), 0.0, "reloj atrasado (negativo) -> 0")
+	_check_eq(EconomyMath.offline_seconds(NAN, cap), 0.0, "NaN -> 0")
+	_check_eq(EconomyMath.offline_seconds(INF, cap), cap, "infinito -> tope")
 
 
 ## Valida la estructura y la coherencia del balance, no los valores exactos:
