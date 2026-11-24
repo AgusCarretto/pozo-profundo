@@ -50,6 +50,9 @@ Botín: cofre que cae con brillo del color de la rareza; el legendario tiene mom
 Cambio de bioma: transición de paleta, cartel, música que cambia.
 Números grandes con sufijos (K, M, B, T...).
 
+## Panel de debug
+Solo existe en builds de debug (`OS.is_debug_build()`): el export release (el default de `tools/export_web.ps1`) no lo crea; con `-DebugBuild` sí. Botón DBG arriba a la izquierda, con: **Oro ×1000** (multiplica por 1000 el oro que tenés, desde 0 deja 1.000; cuenta como oro ganado, así sube la profundidad), **Adelantar 1 h** (mismo cálculo que el progreso offline, con su aviso) y **forzar un cofre** de cada rareza. Con tres pulsaciones de Oro ×1000 llegás a Abismo y con dos ya se puede volver a la superficie. Código en `game/debug_panel.gd`.
+
 ## Reglas para Claude
 - Antes de cambios grandes, proponé el plan en pocas líneas y esperá el OK.
 - Commits chicos y descriptivos, uno por funcionalidad.

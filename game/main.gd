@@ -5,6 +5,7 @@ extends Control
 ## Visuales provisorios (rectángulos y texto); el arte y el "jugo" llegan en F2.
 ## Toda la lógica está en el autoload Economy: acá solo se conecta la UI.
 
+const DebugPanel := preload("res://game/debug_panel.gd")
 const GeneratorRow := preload("res://game/generator_row.gd")
 const Modal := preload("res://game/modal.gd")
 const NumberFormat := preload("res://core/number_format.gd")
@@ -70,6 +71,8 @@ func _ready() -> void:
 	# El cartel va último entre los hijos: se dibuja encima de todo.
 	_modal = Modal.new()
 	add_child(_modal)
+	# Solo en builds de debug; en un export de release no se crea (ver debug_panel.gd).
+	DebugPanel.attach_if_debug(self, OS.is_debug_build())
 
 	Economy.gold_changed.connect(_mark_dirty.unbind(1))
 	Economy.generator_bought.connect(_mark_dirty.unbind(2))

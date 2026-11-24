@@ -8,6 +8,7 @@ extends "res://tests/test_base.gd"
 const NumberFormat := preload("res://core/number_format.gd")
 
 const MAIN_SCENE: String = "res://game/main.tscn"
+const DEBUG_PANEL_SCRIPT: String = "res://game/debug_panel.gd"
 
 var _economy: Node
 var _scene: Control
@@ -43,9 +44,11 @@ func _initialize() -> void:
 	await _test_prestige_flow()
 	await _test_offline_notice()
 	await _test_loot_hidden_without_loot()
+	await _test_debug_panel_only_in_debug_builds()
 	# Las pruebas de botín necesitan una escena nueva: arma sus carteles al cargar.
 	await _mount_scene(packed, _real_balance())
 	await _test_loot_odds_are_visible()
+	await _test_debug_panel_tools()
 	var always_chest: Dictionary = _real_balance()
 	always_chest["loot"]["chance_per_hit"] = 1.0
 	await _mount_scene(packed, always_chest)
@@ -315,6 +318,72 @@ func _test_loot_hidden_without_loot() -> void:
 	_section("Sin botín en el balance")
 	_check(not (_scene.get_node("%LootBox") as Control).visible, "el panel de cofres no se muestra si no hay botín")
 	_check(not _label("LootBonusLabel").is_visible_in_tree(), "ni el bonus de botín")
+
+
+func _test_debug_panel_only_in_debug_builds() -> void:
+	_section("Panel de debug: solo en builds de debug")
+	# Se carga en tiempo de ejecución (no con preload): el panel usa el autoload Economy, que
+	# en modo --script no existe todavía cuando se compila este test.
+	var debug_panel_script: GDScript = load(DEBUG_PANEL_SCRIPT) as GDScript
+	var host: Control = Control.new()
+	root.add_child(host)
+	_check_eq(debug_panel_script.attach_if_debug(host, false), null, "en un build de release no se crea")
+	_check_eq(host.get_child_count(), 0, "y no queda nada colgado")
+	var panel: Control = debug_panel_script.attach_if_debug(host, true)
+	_check(panel != null, "en un build de debug sí")
+	_check_eq(host.get_child_count(), 1, "y queda colgado del padre")
+	host.free()
+	_check_eq(OS.is_debug_build(), true, "estos tests corren con un build de debug")
+	_check(_scene.has_node("DebugPanel"), "la escena principal trae el panel en este build")
+	var scene_panel: Control = _scene.get_node("DebugPanel")
+	_check_eq(scene_panel.chest_buttons.size(), 0, "sin botín en el balance, no hay botones de cofre")
+	_check(not scene_panel.body.visible, "arranca cerrado: no tapa la pantalla")
+
+
+func _test_debug_panel_tools() -> void:
+	_section("Panel de debug: herramientas")
+	var panel: Control = _scene.get_node("DebugPanel")
+	panel.toggle_button.pressed.emit()
+	_check(panel.body.visible, "el botón DBG abre el panel")
+	panel.toggle_button.pressed.emit()
+	_check(not panel.body.visible, "y lo cierra")
+
+	await _set_gold(0.0)
+	panel.gold_button.pressed.emit()
+	_check_eq(_economy.gold, 1000.0, "'Oro ×1000' desde 0 deja 1.000")
+	_check_eq(_economy.run_gold, 1000.0, "y cuenta como oro ganado (la profundidad sube)")
+	_check_eq(_economy.biome_name(_economy.biome_index()), "Roca", "con 1.000 ya estás en Roca (%.0f m)" % _economy.depth())
+	panel.gold_button.pressed.emit()
+	_check_eq(_economy.gold, 1000000.0, "otra vez: el oro que tenés × 1000 = 1.000.000")
+	_check_eq(_economy.can_prestige(), true, "con dos pulsaciones ya se puede volver a la superficie (%.0f m)" % _economy.depth())
+	await process_frame
+	_check(not _button("PrestigeButton").disabled, "y el botón de prestigio se habilita")
+	panel.gold_button.pressed.emit()
+	_check_eq(_economy.biome_name(_economy.biome_index()), "Abismo", "con tres pulsaciones llegás a Abismo (%.0f m)" % _economy.depth())
+
+	await _set_gold(0.0)
+	_economy.owned[0] = 10 # 10 oro/s
+	panel.time_button.pressed.emit()
+	_check_eq(_economy.gold, 36000.0, "'Adelantar 1 h' con 10 oro/s suma 36.000")
+	_check(_modal().visible, "y avisa con el cartel de bienvenida")
+	_check(_modal().body_label.text.contains("1 h"), "de 1 h (%s)" % _modal().body_label.text.replace("\n", " | "))
+	_modal().confirm_button.pressed.emit()
+
+	await _set_gold(0.0)
+	_check_eq(panel.chest_buttons.size(), 4, "un botón de cofre por rareza (4)")
+	var table: Array[Dictionary] = _economy.loot_table()
+	var expected_bonus: float = 0.0
+	for index: int in range(mini(panel.chest_buttons.size(), table.size())):
+		var button: Button = panel.chest_buttons[index]
+		_check(button.text.contains(table[index]["name"]), "el botón %d dice %s (%s)" % [index, table[index]["name"], button.text])
+		button.pressed.emit()
+		expected_bonus += table[index]["bonus"]
+		_check_near(_economy.loot_bonus, expected_bonus, "forzar %s suma su bonus (+%s)" % [table[index]["name"], NumberFormat.format_percent(table[index]["bonus"])])
+	_check_eq(_economy.gold, 0.0, "los cofres forzados no dan oro")
+	await process_frame
+	_check_eq(_label("LootBonusLabel").text, "Bonus de botín: +80%", "el bonus total en pantalla suma los cuatro (+80%%) (%s)" % _label("LootBonusLabel").text)
+	_check(_label("LastLootLabel").text.contains("Legendario"), "y el último cofre es el Legendario (%s)" % _label("LastLootLabel").text)
+	_economy.reset()
 
 
 func _test_loot_odds_are_visible() -> void:
