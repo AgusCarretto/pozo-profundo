@@ -18,7 +18,7 @@ Juego incremental (idle/clicker) de minería para celular. Primer juego del cat�
 ## Estructura de carpetas
 ```
 res://
-  core/        # código reutilizable entre juegos (autoloads: Save, Audio, Economy, Analytics)
+  core/        # código reutilizable entre juegos (autoloads, en este orden: Save, Settings, Audio, Economy, Analytics)
   game/        # código específico de este juego (escenas, scripts)
   data/        # balance en archivos de datos (generadores, biomas, rarezas); nada de números mágicos en el código
   ui/          # tema de interfaz (theme.tres, generado por tools/build_theme.gd)
@@ -42,6 +42,10 @@ CREDITS.md     # licencia y autor de CADA asset de terceros (obligatorio)
 - **Tema**: `ui/theme.tres` (botones del UI Pack + Pixelify Sans) lo arma `tools/build_theme.gd`; las escenas eligen estilos con `theme_type_variation` (`ButtonGreen`, `ButtonRed`, `ButtonNeutral`, `TabButton`, `CardPanel`...). Del UI Pack solo se importan los colores con rol (amarillo, verde, rojo, gris).
 - **No usar `z_index`** en la mina: pondría los sprites por encima del cartel modal y del panel de debug. El orden de dibujo es el orden de los hijos (el cartel va último).
 - Comandos útiles (desde la raíz): tests `powershell -File tools/run_tests.ps1`; sprites `godot --headless --path . --script res://tools/generate_sprites.gd` y luego `godot --headless --path . --import`; tema `godot --headless --path . --script res://tools/build_theme.gd`; capturas `godot --path . --windowed --script res://tools/screenshot.gd -- <carpeta>` (abre una ventana; no toca la partida guardada).
+
+## Sonido y opciones (F2-B)
+- **Settings** (`core/settings.gd`): volumen de música y de SFX (0 a 1), silencio y "reducir efectos" (sin sacudidas, destellos ni vibración, y menos partículas). Se guarda en la sección `settings` de Save y avisa con `changed`.
+- **Audio** (`core/audio.gd`): buses `Music` y `SFX` (los crea si no están) que siguen a Settings; volumen 0 mutea el bus. Qué suena con cada evento lo dice `data/sounds.json` (`sfx.<id>.files`, `pitch: [mín, máx]`, `volume_db`; `music.<id>`), validado al cargar. `play_sfx(id)` elige una variante al azar (nunca la misma dos seguidas) y un tono en el rango; hay 8 voces y se corta la más vieja. Un id sin sonido no es error. `play_music(id)` cambia de tema con fundido cruzado.
 
 ## Balance inicial (viene de la demo web, ajustable)
 - Generadores (oro/s base, costo base, crecimiento de costo ×1.15 por unidad):
