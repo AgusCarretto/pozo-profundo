@@ -9,12 +9,12 @@ Cada fila dice dónde vive el asset con una ruta entre comillas invertidas; `tes
 | Tiny Dungeon 1.0 (personajes y cofre) | Kenney | CC0 1.0 | https://kenney.nl/assets/tiny-dungeon | `assets/sprites/tiny_dungeon/` (solo las 7 tiles usadas, sin tocar): mineros, cofre. Los mineros además se recolorean en `assets/sprites/generated/miner_*.png` |
 | UI Pack 2.0 (botones rectangulares) | Kenney | CC0 1.0 | https://kenney.nl/assets/ui-pack | `assets/ui/ui_pack/` (solo los botones usados): tema de la interfaz (`ui/theme.tres`) |
 | Pixelify Sans (fuente) | The Pixelify Sans Project Authors | SIL Open Font License 1.1 | https://github.com/eifetx/Pixelify-Sans · https://fonts.google.com/specimen/Pixelify+Sans | `assets/fonts/PixelifySans.ttf` (licencia en `assets/fonts/OFL.txt`): toda la interfaz |
-| Impact Sounds 1.0 (golpes de pico, metal y campana) | Kenney | CC0 1.0 | https://kenney.nl/assets/impact-sounds | `assets/audio/impact_sounds/` (solo los usados): golpe a la roca, mejora del pico, cofre legendario |
+| Impact Sounds 1.0 (golpes de pico, metal y campana) | Kenney | CC0 1.0 | https://kenney.nl/assets/impact-sounds | `assets/audio/impact_sounds/` (solo los usados): golpe a la roca, mejora del pico, cofre legendario, dinamita |
 | Interface Sounds 1.0 (clicks, cristales y avisos) | Kenney | CC0 1.0 | https://kenney.nl/assets/interface-sounds | `assets/audio/interface_sounds/` (solo los usados): pestañas, modos, carteles, cofres, prestigio y bioma nuevo |
 | RPG Audio (monedas) | Kenney | CC0 1.0 | https://kenney.nl/assets/rpg-audio | `assets/audio/rpg_audio/` (solo los usados): compra de la cuadrilla |
 | Game Icons (íconos blancos 2x) | Kenney | CC0 1.0 | https://kenney.nl/assets/game-icons | `assets/ui/game_icons/` (solo los usados): silencio (parlante encendido y tachado) y opciones (engranaje) del HUD |
+| Particle Pack 1.1 (brillos) | Kenney | CC0 1.0 | https://kenney.nl/assets/particle-pack | `assets/particles/particle_pack/` (solo los brillos usados, sin tocar): destello de la dinamita. Las astillas y gemas son propias (pixel art) |
 
-Ya descargados en `assets_src/` pero **todavía sin usar** (se registra acá cuando se importe): Kenney Particle Pack (CC0).
 
 ## Motor
 

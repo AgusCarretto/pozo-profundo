@@ -34,6 +34,7 @@ func _initialize() -> void:
 	await _test_crew_pops_in()
 	await _test_miners_swing()
 	await _test_clear_effects()
+	await _test_dynamite()
 	_scene.get_parent().queue_free()
 	await process_frame
 	_settings.from_dict(_saved_settings)
@@ -400,3 +401,83 @@ func _test_clear_effects() -> void:
 	_check_eq(_floaters().size(), 0, "clear_effects saca los números")
 	_check_eq(_emitting(_emitters("chips_")), 0, "y apaga las astillas")
 	_check((_mine().get("shake_offset") as Vector2).is_zero_approx() and _rock().scale.is_equal_approx(Vector2.ONE), "y deja la roca quieta en su lugar")
+
+func _glows() -> Array[Node]:
+	return _fx().find_children("*", "TextureRect", true, false).filter(func(node: Node) -> bool:
+		return (node as TextureRect).texture != null and (node as TextureRect).texture.resource_path.ends_with("circle_05.png") and not node.is_queued_for_deletion())
+
+
+func _test_dynamite() -> void:
+	_section("Dinamita: explosiones en el borde de la roca")
+	var mine: Control = _mine()
+	var interval: Callable = Callable(mine, "dynamite_interval")
+	_check(float(interval.call(0)) == INF, "sin cuadrillas de dinamita no explota nada")
+	var one: float = float(interval.call(1))
+	var five: float = float(interval.call(5))
+	var many: float = float(interval.call(500))
+	_check(one >= 2.0 and one <= 8.0, "con una, cada tanto (%.1f s)" % one)
+	_check(five < one, "con más, más seguido (5: %.1f s)" % five)
+	_check(many >= 0.5 and is_equal_approx(many, float(interval.call(5000))), "con un tope: nunca más de una cada %.1f s" % many)
+
+	_economy.reset()
+	_economy.owned[2] = 0
+	_economy.gold_changed.emit(_economy.gold)
+	var before: int = int(mine.get("explosions"))
+	await _wait(1.0)
+	_check_eq(int(mine.get("explosions")), before, "sin dinamita, ninguna explosión")
+
+	var points: Array[Vector2] = []
+	var record: Callable = func(at: Vector2) -> void: points.append(at)
+	mine.connect("dynamite_exploded", record)
+	_economy.owned[2] = 400
+	_economy.gold_changed.emit(_economy.gold)
+	var saw_stick: bool = false
+	var saw_glow: bool = false
+	# En headless los frames corren sin límite: se espera por tiempo real, no por cantidad de frames.
+	var deadline: int = Time.get_ticks_msec() + 4000
+	while Time.get_ticks_msec() < deadline:
+		await process_frame
+		if _fx().find_children("*", "TextureRect", true, false).any(func(n: Node) -> bool: return (n as TextureRect).texture != null and (n as TextureRect).texture.resource_path.ends_with("dynamite.png")):
+			saw_stick = true
+		if not _glows().is_empty():
+			saw_glow = true
+		if points.size() >= 2:
+			break
+	await _wait(0.1)
+	_check(points.size() >= 2, "con mucha dinamita explota seguido (%d)" % points.size())
+	_check(saw_stick, "antes de explotar se ve el cartucho con la mecha")
+	_check(saw_glow, "y explota con un destello")
+	var rock_rect: Rect2 = _rock().get_rect()
+	var on_edge: bool = true
+	for point: Vector2 in points:
+		var relative: Vector2 = (point - rock_rect.get_center()) / rock_rect.size
+		if relative.length() < 0.3 or relative.length() > 0.62:
+			on_edge = false
+	_check(on_edge, "en el borde de la roca (%s)" % str(points))
+	var glow_nodes: Array[Node] = _glows()
+	if not glow_nodes.is_empty():
+		var glow: TextureRect = glow_nodes[0] as TextureRect
+		_check_eq(glow.texture_filter, CanvasItem.TEXTURE_FILTER_LINEAR, "el destello es suave (filtro lineal, no pixel art)")
+		_check(glow.material is CanvasItemMaterial and (glow.material as CanvasItemMaterial).blend_mode == CanvasItemMaterial.BLEND_MODE_ADD, "y suma luz (mezcla aditiva)")
+		_check_eq(glow.mouse_filter, Control.MOUSE_FILTER_IGNORE, "y no come toques")
+
+	# Que se apague el destello de la última explosión antes de mirar con reducir efectos.
+	await _wait(0.6)
+	_settings.reduce_effects = true
+	await process_frame
+	points.clear()
+	var glow_with_reduce: bool = false
+	deadline = Time.get_ticks_msec() + 3000
+	while Time.get_ticks_msec() < deadline:
+		await process_frame
+		if not _glows().is_empty():
+			glow_with_reduce = true
+		if points.size() >= 1:
+			break
+	_check(points.size() >= 1, "con reducir efectos sigue explotando")
+	_check(not glow_with_reduce, "pero sin destello")
+	_settings.reduce_effects = false
+	mine.disconnect("dynamite_exploded", record)
+	_economy.reset()
+	_economy.gold_changed.emit(_economy.gold)
+	await _wait(0.8)

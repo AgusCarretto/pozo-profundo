@@ -12,6 +12,10 @@ extends Control
 const Palette := preload("res://game/palette.gd")
 const BiomePalette := preload("res://game/biome_palette.gd")
 const Juice := preload("res://game/juice.gd")
+const GLOW_TEXTURE: Texture2D = preload("res://assets/particles/particle_pack/circle_05.png")
+
+## Explotó un cartucho de dinamita en t (coordenadas de la mina). main.gd le pone el sonido.
+signal dynamite_exploded(at: Vector2)
 
 const SPRITE_DIR: String = "res://assets/sprites/generated/"
 const DEFAULT_BIOME: String = "earth"
@@ -72,6 +76,17 @@ const GEM_AMOUNT: int = 3
 const GEM_SCALE: float = 2.0
 const GEM_CHANCE: float = 0.3
 
+## Dinamita: cada tanto aparece un cartucho en el borde de la roca, la mecha dura DYNAMITE_FUSE y explota
+## (astillas hacia afuera y un destello). Más cuadrillas = más seguido: DYNAMITE_BASE_INTERVAL / raíz de la
+## cantidad, sin bajar de DYNAMITE_MIN_INTERVAL. Con reduce_effects no hay destello.
+const DYNAMITE_BASE_INTERVAL: float = 4.0
+const DYNAMITE_MIN_INTERVAL: float = 0.7
+const DYNAMITE_FUSE: float = 0.35
+const DYNAMITE_SCALE: int = 3
+const BLAST_SIZE: float = 220.0
+const BLAST_TIME: float = 0.35
+const BLAST_COLOR: Color = Color(1.0, 0.68, 0.2)
+
 ## Mineros picando: cada uno tiene un pico (pick.png, a escala PICK_SCALE) en la mano del lado de la roca
 ## y lo usa en loop: lo levanta despacio, lo baja de golpe y vuelve. Cada minero tiene su fase y un período
 ## apenas distinto: nunca pican todos juntos.
@@ -122,6 +137,8 @@ var shake_offset: Vector2 = Vector2.ZERO:
 var vibrations: int = 0
 ## Cuántas tandas de gemas salieron (para los tests).
 var gem_bursts: int = 0
+## Cuántas veces explotó la dinamita (para los tests).
+var explosions: int = 0
 
 var _rock: TextureRect
 var _tap_button: Button
@@ -139,6 +156,10 @@ var _next_lane: int = 0
 var _chip_emitters: Array[CPUParticles2D] = []
 var _gem_emitters: Array[CPUParticles2D] = []
 var _next_chip: int = 0
+## Cuadrillas de dinamita y excavadoras rúnicas compradas (set_machines) y el reloj de la próxima explosión.
+var _dynamite_count: int = 0
+var _excavator_count: int = 0
+var _dynamite_clock: float = 0.0
 ## El pico de cada minero y para qué lado lo usa (1 = la roca está a su derecha, -1 = a su izquierda).
 var _picks: Array[TextureRect] = []
 var _pick_sides: Array[float] = []
@@ -231,8 +252,9 @@ func _apply_shake() -> void:
 ## escena (volver a la superficie) o una captura limpia.
 func clear_effects() -> void:
 	for child: Node in _fx.get_children():
-		if child is Label:
+		if not (child is CPUParticles2D):
 			child.queue_free()
+	_dynamite_clock = 0.0
 	for emitter: CPUParticles2D in _chip_emitters + _gem_emitters:
 		emitter.emitting = false
 		emitter.restart()
@@ -250,17 +272,21 @@ func _burst_particles() -> void:
 	var origin: Vector2 = Vector2(rock_rect.get_center().x, rock_rect.position.y + rock_rect.size.y * 0.3)
 	var chips: CPUParticles2D = _chip_emitters[_next_chip]
 	_next_chip = (_next_chip + 1) % _chip_emitters.size()
-	_fire(chips, origin, rock_rect)
+	var extents: Vector2 = Vector2(rock_rect.size.x * 0.25, rock_rect.size.y * 0.08)
+	_fire(chips, origin, extents, Vector2.UP)
 	if rng.randf() < GEM_CHANCE:
 		var gems: CPUParticles2D = _gem_emitters[_next_gem]
 		_next_gem = (_next_gem + 1) % _gem_emitters.size()
-		_fire(gems, origin, rock_rect)
+		_fire(gems, origin, extents, Vector2.UP)
 		gem_bursts += 1
 
 
-func _fire(emitter: CPUParticles2D, origin: Vector2, rock_rect: Rect2) -> void:
+## Larga la tanda de `emitter` desde un rectángulo centrado en `origin` (medio ancho y medio alto
+## `extents`) hacia `direction` (abierta 70° para cada lado).
+func _fire(emitter: CPUParticles2D, origin: Vector2, extents: Vector2, direction: Vector2) -> void:
 	emitter.position = origin.round()
-	emitter.emission_rect_extents = Vector2(rock_rect.size.x * 0.25, rock_rect.size.y * 0.08)
+	emitter.emission_rect_extents = extents
+	emitter.direction = direction
 	var is_chip: bool = _chip_emitters.has(emitter)
 	var pixel_scale: float = (CHIP_SCALE if is_chip else GEM_SCALE) * _unit
 	emitter.scale_amount_min = pixel_scale
@@ -340,7 +366,83 @@ func _spawn_floater(text: String) -> void:
 	tween.chain().tween_callback(label.queue_free)
 
 
-func _process(_delta: float) -> void:
+## Las máquinas que no tienen sprite propio se ven por lo que hacen: la dinamita explota en el borde de la
+## roca y las excavadoras rúnicas hacen orbitar runas.
+func set_machines(dynamite: int, excavators: int) -> void:
+	_dynamite_count = maxi(dynamite, 0)
+	_excavator_count = maxi(excavators, 0)
+
+
+## Cada cuántos segundos explota un cartucho con `count` cuadrillas de dinamita (INF = nunca).
+func dynamite_interval(count: int) -> float:
+	if count <= 0:
+		return INF
+	return maxf(DYNAMITE_MIN_INTERVAL, DYNAMITE_BASE_INTERVAL / sqrt(float(count)))
+
+
+## Aparece un cartucho en el borde de la roca (arriba o a los costados, donde se ve) y se le prende la mecha.
+func _light_fuse() -> void:
+	var rock_rect: Rect2 = Rect2(_base_positions.get(_rock, _rock.position), _rock.size)
+	var angle: float = rng.randf_range(-PI * 1.1, PI * 0.1)
+	var at: Vector2 = rock_rect.get_center() + Vector2(cos(angle) * rock_rect.size.x * 0.44, sin(angle) * rock_rect.size.y * 0.4)
+	var stick: TextureRect = TextureRect.new()
+	stick.texture = load(SPRITE_DIR + "dynamite.png") as Texture2D
+	stick.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	stick.stretch_mode = TextureRect.STRETCH_SCALE
+	stick.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var pixel: float = maxf(roundf(DYNAMITE_SCALE * _unit), 1.0)
+	stick.size = Vector2(16.0, 16.0) * pixel
+	stick.position = (at - stick.size * 0.5).round()
+	_fx.add_child(stick)
+	Juice.pop_in(stick, stick.size * 0.5)
+	var fuse: Tween = stick.create_tween()
+	fuse.tween_interval(DYNAMITE_FUSE)
+	fuse.tween_callback(_blast.bind(stick, at))
+
+
+func _blast(stick: TextureRect, at: Vector2) -> void:
+	stick.queue_free()
+	explosions += 1
+	var rock_center: Vector2 = Rect2(_base_positions.get(_rock, _rock.position), _rock.size).get_center()
+	var chips: CPUParticles2D = _chip_emitters[_next_chip]
+	_next_chip = (_next_chip + 1) % _chip_emitters.size()
+	_fire(chips, at, Vector2(12.0, 12.0) * _unit, (at - rock_center).normalized())
+	if not reduce_effects:
+		_flash_glow(at)
+	dynamite_exploded.emit(at)
+
+
+## Destello de la explosión: un brillo suave (Particle Pack) que se abre y se apaga, sumando luz.
+func _flash_glow(at: Vector2) -> void:
+	var glow: TextureRect = TextureRect.new()
+	glow.texture = GLOW_TEXTURE
+	glow.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	glow.stretch_mode = TextureRect.STRETCH_SCALE
+	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var additive: CanvasItemMaterial = CanvasItemMaterial.new()
+	additive.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	glow.material = additive
+	glow.modulate = BLAST_COLOR
+	glow.size = Vector2.ONE * BLAST_SIZE * _unit
+	glow.position = at - glow.size * 0.5
+	glow.pivot_offset = glow.size * 0.5
+	glow.scale = Vector2(0.3, 0.3)
+	_fx.add_child(glow)
+	var tween: Tween = glow.create_tween().set_parallel(true)
+	tween.tween_property(glow, "scale", Vector2.ONE, BLAST_TIME * 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(glow, "modulate:a", 0.0, BLAST_TIME).set_ease(Tween.EASE_IN)
+	tween.chain().tween_callback(glow.queue_free)
+
+
+func _process(delta: float) -> void:
+	if _dynamite_count > 0 and is_visible_in_tree():
+		_dynamite_clock += delta
+		if _dynamite_clock >= dynamite_interval(_dynamite_count):
+			_dynamite_clock = 0.0
+			_light_fuse()
+	else:
+		_dynamite_clock = 0.0
 	var now: float = Time.get_ticks_msec() / 1000.0
 	for index: int in range(_picks.size()):
 		if not miner_sprites[index].visible:

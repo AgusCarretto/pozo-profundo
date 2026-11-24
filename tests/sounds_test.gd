@@ -9,7 +9,7 @@ const MAIN_SCENE: String = "res://game/main.tscn"
 const CATALOG_PATH: String = "res://data/sounds.json"
 const AUDIO_DIR: String = "res://assets/audio"
 ## Los SFX que el juego pide sí o sí (los de los cofres se agregan por rareza del balance).
-const REQUIRED_SFX: Array[String] = ["hit", "buy", "pick", "tab", "mode", "toggle", "open", "close", "prestige", "biome"]
+const REQUIRED_SFX: Array[String] = ["hit", "buy", "pick", "tab", "mode", "toggle", "open", "close", "prestige", "biome", "dynamite"]
 
 var _economy: Node
 var _audio: Node
@@ -32,6 +32,7 @@ func _initialize() -> void:
 	await _mount()
 	await _test_economy_cues()
 	await _test_ui_cues()
+	await _test_dynamite_cue()
 	await _test_biome_cue()
 	await _test_prestige_cues()
 	_scene.queue_free()
@@ -207,3 +208,23 @@ func _test_prestige_cues() -> void:
 	var played: Array[String] = _take()
 	_check(played.has("prestige"), "confirmar suena como prestigio (%s)" % str(played))
 	_check(not played.has("biome"), "y volver a Tierra no suena como bioma nuevo")
+
+
+func _test_dynamite_cue() -> void:
+	_section("La dinamita explota con sonido")
+	_economy.reset()
+	_economy.owned[2] = 400
+	_economy.gold_changed.emit(_economy.gold)
+	_take()
+	var heard: bool = false
+	# En headless los frames corren sin límite: se espera por tiempo real.
+	var deadline: int = Time.get_ticks_msec() + 3000
+	while Time.get_ticks_msec() < deadline:
+		await process_frame
+		if _played.has("dynamite"):
+			heard = true
+			break
+	_check(heard, "una explosión suena")
+	_economy.reset()
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame

@@ -156,6 +156,7 @@ func _ready() -> void:
 	Economy.prestiged.connect(_mark_dirty.unbind(1))
 	Economy.loot_dropped.connect(_on_loot_dropped)
 	Economy.hit_landed.connect(_on_hit_landed)
+	_mine_view.dynamite_exploded.connect(func(_at: Vector2) -> void: Audio.play_sfx("dynamite"))
 	Economy.offline_progress.connect(_show_offline_notice)
 	_refresh()
 	_built = true
@@ -298,6 +299,8 @@ func _refresh_mine() -> void:
 	var miners: int = 0
 	var has_drill: bool = false
 	var has_golem: bool = false
+	var dynamite: int = 0
+	var excavators: int = 0
 	for index: int in range(Economy.generator_count()):
 		match Economy.generator_id(index):
 			"miner":
@@ -306,7 +309,12 @@ func _refresh_mine() -> void:
 				has_drill = Economy.owned_count(index) > 0
 			"stone_golem":
 				has_golem = Economy.owned_count(index) > 0
+			"dynamite_crew":
+				dynamite = Economy.owned_count(index)
+			"rune_excavator":
+				excavators = Economy.owned_count(index)
 	_mine_view.set_crew(miners, has_drill, has_golem)
+	_mine_view.set_machines(dynamite, excavators)
 	_hint_label.visible = Economy.run_gold <= 0.0
 
 

@@ -85,6 +85,15 @@
 			"files": ["res://assets/audio/interface_sounds/confirmation_001.ogg"],
 			"volume_db": -6
 		},
+		"dynamite": {
+			"files": [
+				"res://assets/audio/impact_sounds/impactPunch_heavy_000.ogg",
+				"res://assets/audio/impact_sounds/impactPunch_heavy_001.ogg",
+				"res://assets/audio/impact_sounds/impactPunch_heavy_002.ogg"
+			],
+			"pitch": [0.8, 1.0],
+			"volume_db": -10
+		},
 		"biome": {
 			"files": ["res://assets/audio/interface_sounds/bong_001.ogg"],
 			"volume_db": -2
