@@ -63,11 +63,11 @@ CREDITS.md     # licencia y autor de CADA asset de terceros (obligatorio)
 - **Tests y audio**: un sonido que sigue sonando al salir deja "resources still in use at exit" (el runner lo cuenta como falla). `test_base._finish()` llama a `Audio.silence()` y espera 0,3 s antes de `quit()` (un OGG que sonaba tarda más de 0,1 s en soltarse; ojo, con `ignore_time_scale` no alcanza); un test que no herede de `test_base.gd` tiene que hacer lo mismo.
 
 ## Balance (ajustable en data/balance.json)
-Ritmo buscado: **primer reset a los 13–18 min** de juego (con el balance de la demo eran 2–3 min); las bajadas siguientes, 8–14 min. Decisión: la dificultad está en los **precios**; lo que produce cada cosa (generadores, golpe, biomas, reliquias) no se recorta, así cada compra se nota. Medido simulando un jugador que compra lo que más rinde, con 1,5 a 4 golpes/s. Los cofres no se tocaron.
+Ritmo buscado: partidas largas, **primer reset a los 18–25 min** de juego (con el balance de la demo eran 2–3 min); las bajadas siguientes, 10–20 min. Alargar está bien: las ganas de llegar a la próxima mejora son lo que engancha. Decisión: precios altos y **cuadrilla que rinde poco** (baja el oro pasivo y con él el AFK); el pico no se recorta: el golpe suma el 6% del oro/s, y los multiplicadores de bioma y reliquias no se tocan porque también lo multiplican. Así sigue teniendo sentido picar: ~22% del oro del primer tramo jugando activo (4 golpes/s) y ~9% tranquilo (1,5/s). Medido simulando un jugador que compra lo que más rinde. Los cofres no se tocaron.
 - Generadores (oro/s base, costo base, crecimiento de costo ×1.2 por unidad):
-  - Minero 1 / 25 · Taladro a vapor 8 / 600 · Cuadrilla de dinamita 47 / 10.000 · Gólem de piedra 260 / 180.000 · Excavadora rúnica 1.400 / 3.000.000
+  - Minero 1 / 25 · Taladro a vapor 5 / 600 · Cuadrilla de dinamita 25 / 10.000 · Gólem de piedra 120 / 180.000 · Excavadora rúnica 600 / 3.000.000
 - Costo de comprar k unidades: `c * 1.2^n * (1.2^k - 1) / 0.2`
-- Pico: golpe = `2^nivel * mult + 3% del oro/s`; costo = `150 * 12^nivel`
+- Pico: golpe = `2^nivel * mult + 6% del oro/s`; costo = `150 * 12^nivel`
 - Profundidad: `25 * log2(1 + oroDeEstaPartida / 10)` metros; bioma nuevo cada 150 m; multiplicador de bioma `1.5^índice`
   - `oroDeEstaPartida` es el oro *ganado* en la partida (gastar no te hace retroceder). Pasado Abismo se queda en Abismo.
 - Botín: 1,5% por golpe, 0,5%/s pasivo si hay cuadrilla. Rarezas: Común 70% (+1%), Raro 22% (+4%), Épico 7% (+15%), Legendario 1% (+60%) de bonus de oro. Las probabilidades se muestran en el juego.
