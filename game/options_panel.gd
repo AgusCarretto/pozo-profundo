@@ -6,6 +6,10 @@ extends Control
 ## los hijos de la escena después del panel de debug y antes del cartel modal: queda encima del juego y
 ## debajo de un aviso.
 
+## Se abrió o se cerró (solo cuando cambia: abrirlo ya abierto no avisa).
+signal opened
+signal closed
+
 const PANEL_WIDTH: float = 620.0
 ## Alto de todo lo que se toca (96 px de diseño = 48 px en un celular de 360 px de ancho).
 const TOUCH_HEIGHT: float = 96.0
@@ -84,15 +88,19 @@ func _init() -> void:
 ## Abre el panel mostrando lo que hay ahora en Settings.
 func open() -> void:
 	_sync()
-	if not visible:
-		Audio.play_sfx("open")
+	if visible:
+		return
+	Audio.play_sfx("open")
 	visible = true
+	opened.emit()
 
 
 func close() -> void:
-	if visible:
-		Audio.play_sfx("close")
+	if not visible:
+		return
+	Audio.play_sfx("close")
 	visible = false
+	closed.emit()
 
 
 ## Pone los controles como está Settings, sin disparar sus señales (no se vuelve a escribir lo mismo).

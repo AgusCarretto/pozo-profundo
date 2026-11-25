@@ -18,6 +18,7 @@ const EconomyMath := preload("res://core/economy_math.gd")
 const Juice := preload("res://game/juice.gd")
 const PickRow := preload("res://game/pick_row.gd")
 const SoundCues := preload("res://game/sound_cues.gd")
+const MusicDirector := preload("res://game/music_director.gd")
 
 ## Color de cada rareza de cofre, por id del balance. Es presentación, no balance.
 const RARITY_COLORS: Dictionary = {
@@ -70,6 +71,7 @@ var _dirty: bool = true
 var _modal: Modal
 var _options: OptionsPanel
 var _screen_fx: ScreenFx
+var _music: MusicDirector
 var _pick_row: PickRow
 var _shown_runes: int = -1
 ## El último cofre que salió en esta partida ({rarity, bonus}); vacío si todavía no salió ninguno (o si el
@@ -157,12 +159,16 @@ func _ready() -> void:
 
 	_build_loot_panel()
 	add_child(SoundCues.new())
+	_music = MusicDirector.new()
+	add_child(_music)
 
 	# Solo en builds de debug; en un export de release no se crea (ver debug_panel.gd).
 	DebugPanel.attach_if_debug(self, OS.is_debug_build())
 	# Opciones: encima del juego y del panel de debug, debajo del cartel.
 	_options = OptionsPanel.new()
 	add_child(_options)
+	_options.opened.connect(_music.set_options_open.bind(true))
+	_options.closed.connect(_music.set_options_open.bind(false))
 	# Efectos de pantalla completa (destello del legendario): encima de todo, debajo del cartel.
 	_screen_fx = ScreenFx.new()
 	add_child(_screen_fx)
@@ -301,12 +307,12 @@ func _refresh_depth() -> void:
 	else:
 		_next_biome_label.text = "¡Fondo!"
 	# Bajar a un bioma más profundo es una novedad: el piso y la roca se funden al nuevo, sale un cartel y suena.
-	# Abrir el juego o volver a la superficie cambia sin ceremonia. La música sigue al bioma siempre.
+	# Abrir el juego o volver a la superficie cambia sin ceremonia. El director de música sigue al bioma siempre.
 	var biome: int = Economy.biome_index()
 	var deeper: bool = _shown_biome >= 0 and biome > _shown_biome
 	var id: String = Economy.biome_id(biome)
 	if biome != _shown_biome:
-		Audio.play_music(id)
+		_music.set_biome(id)
 	_apply_biome(id, deeper)
 	if deeper:
 		Audio.play_sfx("biome")
@@ -503,6 +509,7 @@ func _confirm_prestige() -> void:
 	if _prestiging:
 		return
 	_prestiging = true
+	_music.begin_prestige()
 	await _screen_fx.cover(PRESTIGE_DARK if Settings.reduce_effects else PRESTIGE_WHITE, PRESTIGE_FADE_IN)
 	var before: int = Economy.relics
 	var gained: int = Economy.prestige()
@@ -513,6 +520,7 @@ func _confirm_prestige() -> void:
 	await _fly_relics(before, gained)
 	_relics_shown = -1
 	_prestiging = false
+	_music.end_prestige()
 	_mark_dirty()
 
 
