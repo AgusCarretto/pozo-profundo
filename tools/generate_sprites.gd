@@ -7,8 +7,9 @@ extends SceneTree
 ##
 ## Todo sale a res://assets/sprites/generated/ como PNG de 16x16 con SOLO los 27 colores de
 ## Tiny Dungeon (game/palette.gd): roca y piso (visto desde arriba) de cada bioma, taladro, gólem,
-## dinamita, runas, moneda, pico, gema y las variantes de los mineros (de color y de mirada: izquierda,
-## derecha y abajo). Cada sprite se dibuja "relleno" y
+## dinamita, runas, moneda, pico (hierro, oro, gema), gema, los mineros con casco (de color y de mirada), los cascos
+## de nivel, dinamiteros, topo y gusano (24x24: es enorme), con sus aspectos por nivel y cuadros de animación.
+## Cada sprite se dibuja "relleno" y
 ## después se le pone el contorno oscuro del pack automáticamente (un píxel alrededor).
 ## Es determinista: correrlo de nuevo reescribe exactamente los mismos archivos.
 
@@ -34,8 +35,14 @@ const MINERS: Array = [
 	["miner_5", "0088", {}],
 	["miner_6", "0099", { Palette.PINK: Palette.MINT, Palette.PURPLE: Palette.GREEN }],
 	["miner_7", "0112", { Palette.MINT: Palette.SALMON, Palette.GREEN: Palette.RED }],
-	["miner_8", "0098", { Palette.STEEL_LIGHT: Palette.YELLOW, Palette.STEEL: Palette.GOLD, Palette.SLATE: Palette.TERRA }],
 ]
+
+## Metal de las herramientas: [claro, medio] (pico y broca).
+const METALS: Dictionary = {
+	"iron": [Palette.STEEL_LIGHT, Palette.STEEL],
+	"gold": [Palette.YELLOW, Palette.GOLD],
+	"gem": [Palette.AQUA, Palette.MINT],
+}
 
 
 func _initialize() -> void:
@@ -45,16 +52,32 @@ func _initialize() -> void:
 		_save(_background(id), "bg_%s.png" % id)
 		_save(_chips(id), "chips_%s.png" % id)
 		_save(_orbit_runes(id), "runes_%s.png" % id)
-	_save(_drill(), "drill.png")
-	_save(_golem(), "golem.png")
+	# Tier 0 a 3 = sin hitos, 25, 50 y 100 unidades.
+	for tier: int in range(4):
+		_save(_drill(tier), "drill.png" if tier == 0 else "drill_%d.png" % tier)
+		for frame: int in range(3):
+			_save(_golem(tier, frame), "golem_%d_%d.png" % [tier, frame])
+			_save(_worm(tier, frame), "worm_%d_%d.png" % [tier, frame])
+		for frame: int in [1, 2]:
+			_save(_mole(tier, frame), "mole_%d_%d.png" % [tier, frame])
+	_save(_golem(0, 0), "golem.png")
+	_save(_mole(0, 0), "mole_hole.png")
+	_save(_steam(), "steam.png")
+	_save(_stick(), "stick.png")
+	_save(_dynamiter(false), "dynamiter_idle.png")
+	_save(_dynamiter(true), "dynamiter_throw.png")
+	_save(_helmet_only([Palette.STEEL_LIGHT, Palette.STEEL], true), "helmet_lamp.png")
+	_save(_helmet_only([Palette.YELLOW, Palette.GOLD], true), "helmet_gold.png")
 	_save(_dynamite(), "dynamite.png")
 	for number: int in range(1, 4):
 		_save(_rune(number), "rune_%d.png" % number)
 	_save(_coin(), "coin.png")
-	_save(_pick(), "pick.png")
+	_save(_pick("iron"), "pick.png")
+	_save(_pick("gold"), "pick_gold.png")
+	_save(_pick("gem"), "pick_gem.png")
 	_save(_gem(), "gem.png")
 	for entry: Array in MINERS:
-		var front: Image = _miner(entry[1], entry[2])
+		var front: Image = _helmet(_miner(entry[1], entry[2]), [Palette.STEEL_LIGHT, Palette.STEEL], false)
 		_save(front, "%s.png" % entry[0])
 		for gaze: String in GAZES:
 			_save(_look(front, GAZES[gaze]), "%s_%s.png" % [entry[0], gaze])
@@ -326,72 +349,278 @@ func _flagstones(img: Image, colors: Dictionary) -> void:
 
 # --- Máquinas y objetos --------------------------------------------------------------------
 
-## Taladro a vapor: caldera con chimenea, mecha de taladro a la izquierda y vapor.
-func _drill() -> Image:
+## Taladro a vapor, con la broca hacia la roca (a la izquierda). Cada hito se nota a simple vista: 1 = broca grande
+## y bandas doradas; 2 = broca y chimenea de oro, cuerpo oscuro; 3 = broca de gema y un núcleo que brilla al costado.
+func _drill(tier: int) -> Image:
 	var img: Image = _blank()
-	# chimenea
-	_rect(img, 10, 3, 3, 4, Palette.SLATE)
-	_rect(img, 9, 2, 5, 1, Palette.STEEL)
-	# caldera
-	_rect(img, 5, 6, 9, 6, Palette.STEEL)
-	_rect(img, 5, 6, 9, 1, Palette.STEEL_LIGHT)
+	var body: Color = Palette.SLATE_LIGHT if tier >= 2 else Palette.STEEL
+	var top: Color = Palette.STEEL if tier >= 2 else Palette.STEEL_LIGHT
+	var band: Color = Palette.GOLD if tier >= 1 else Palette.RED
+	var chimney: Color = Palette.GOLD if tier >= 2 else Palette.SLATE
+	var cap: Color = Palette.YELLOW if tier >= 2 else Palette.STEEL
+	var bit: Array = METALS["gem" if tier >= 3 else ("gold" if tier >= 2 else "iron")]
+	_rect(img, 10, 3, 3, 3, chimney)
+	_rect(img, 9, 2, 5, 1, cap)
+	_rect(img, 5, 6, 9, 6, body)
+	_rect(img, 5, 6, 9, 1, top)
 	_rect(img, 5, 11, 9, 1, Palette.SLATE)
-	_rect(img, 7, 6, 1, 6, Palette.RED)
-	_rect(img, 12, 6, 1, 6, Palette.RED)
-	img.set_pixel(7, 8, Palette.SALMON)
-	img.set_pixel(12, 8, Palette.SALMON)
-	# ruedas
+	_rect(img, 7, 6, 1, 6, band)
+	_rect(img, 12, 6, 1, 6, band)
 	_rect(img, 6, 12, 3, 2, Palette.SLATE)
 	_rect(img, 11, 12, 3, 2, Palette.SLATE)
 	img.set_pixel(7, 13, Palette.STEEL_LIGHT)
 	img.set_pixel(12, 13, Palette.STEEL_LIGHT)
-	# boca y mecha del taladro, que apunta a la roca (a la izquierda)
-	_rect(img, 3, 7, 2, 4, Palette.SLATE)
-	_rect(img, 2, 8, 1, 2, Palette.GOLD)
-	img.set_pixel(3, 7, Palette.GOLD)
-	img.set_pixel(3, 10, Palette.GOLD)
-	img.set_pixel(1, 8, Palette.YELLOW)
-	img.set_pixel(1, 9, Palette.GOLD)
+	if tier == 0:
+		_rect(img, 3, 7, 2, 4, Palette.SLATE)
+		_rect(img, 2, 7, 1, 4, bit[1])
+		_rect(img, 1, 8, 1, 2, bit[0])
+		img.set_pixel(0, 8, bit[0])
+	else: # broca grande: un cono que sobresale, con estrías
+		_rect(img, 4, 6, 1, 6, Palette.SLATE)
+		_rect(img, 3, 5, 1, 8, bit[1])
+		_rect(img, 2, 6, 1, 6, bit[0])
+		_rect(img, 1, 7, 1, 4, bit[1])
+		_rect(img, 0, 8, 1, 2, bit[0])
+		img.set_pixel(3, 6, bit[0])
+		img.set_pixel(3, 9, bit[0])
+		img.set_pixel(1, 8, Palette.WHITE)
+	if tier >= 3: # el núcleo
+		_rect(img, 8, 7, 4, 4, Palette.NAVY)
+		_rect(img, 9, 7, 2, 4, Palette.AQUA)
+		_rect(img, 8, 8, 4, 2, Palette.AQUA)
+		_rect(img, 9, 8, 2, 2, Palette.WHITE)
 	_outline(img)
-	# vapor (sin contorno: es una nube)
-	for point: Vector2i in [Vector2i(10, 1), Vector2i(11, 0), Vector2i(12, 1), Vector2i(13, 0)]:
-		img.set_pixelv(point, Palette.FROST)
-	img.set_pixel(11, 1, Palette.WHITE)
 	return img
 
 
-## Gólem de piedra: cuerpo de bloques de roca con musgo y ojos que brillan.
-func _golem() -> Image:
+## Una nube de vapor (las larga el taladro mientras trabaja).
+func _steam() -> Image:
 	var img: Image = _blank()
-	# cabeza (más angosta que el torso)
-	_rect(img, 5, 1, 6, 4, Palette.STEEL)
-	_rect(img, 5, 1, 6, 1, Palette.STEEL_LIGHT)
-	_rect(img, 10, 2, 1, 3, Palette.SLATE)
-	img.set_pixel(6, 3, Palette.AQUA)
+	_rect(img, 5, 6, 6, 5, Palette.FROST)
+	_rect(img, 6, 5, 4, 7, Palette.FROST)
+	_rect(img, 4, 7, 8, 3, Palette.FROST)
+	_rect(img, 6, 6, 3, 2, Palette.WHITE)
+	return img
+
+
+## Gólem de piedra. frame: 0 quieto, 1 brazo levantado, 2 puñetazo hacia la roca (a la derecha). tier: 1 = runas en
+## los brazos; 2 = puños de oro; 3 = cuerpo de cristal (los ojos siguen turquesa).
+func _golem(tier: int, frame: int) -> Image:
+	var img: Image = _blank()
+	var light: Color = Palette.AQUA if tier >= 3 else Palette.STEEL_LIGHT
+	var mid: Color = Palette.CYAN if tier >= 3 else Palette.STEEL
+	var dark: Color = Palette.BLUE if tier >= 3 else Palette.SLATE
+	var fist: Color = Palette.GOLD if tier >= 2 else dark
+	var knuckle: Color = Palette.YELLOW if tier >= 2 else mid
+	_rect(img, 5, 1, 6, 4, mid)
+	_rect(img, 5, 1, 6, 1, light)
+	_rect(img, 10, 2, 1, 3, dark)
+	if tier >= 3:
+		_rect(img, 6, 3, 5, 1, Palette.NAVY) # la cuenca oscura hace que el turquesa se vea sobre el cristal
+	img.set_pixel(7, 3, Palette.AQUA)
 	img.set_pixel(9, 3, Palette.AQUA)
-	# torso
-	_rect(img, 4, 5, 8, 6, Palette.STEEL)
-	_rect(img, 4, 5, 8, 1, Palette.STEEL_LIGHT)
-	_rect(img, 4, 10, 8, 1, Palette.SLATE)
-	_rect(img, 10, 6, 2, 4, Palette.SLATE)
-	# runa que brilla en el pecho y musgo
-	_rect(img, 7, 7, 2, 2, Palette.CYAN)
-	img.set_pixel(7, 7, Palette.AQUA)
-	img.set_pixel(5, 6, Palette.GREEN)
-	img.set_pixel(6, 6, Palette.GREEN)
-	img.set_pixel(5, 7, Palette.GREEN)
-	img.set_pixel(9, 9, Palette.GREEN)
-	# brazos y puños, separados del torso por un hueco (se ve el contorno entre ambos)
-	_rect(img, 1, 5, 2, 5, Palette.STEEL)
-	_rect(img, 13, 5, 2, 5, Palette.SLATE)
-	_rect(img, 0, 10, 4, 3, Palette.SLATE)
-	_rect(img, 12, 10, 4, 3, Palette.SLATE)
-	_rect(img, 0, 10, 4, 1, Palette.STEEL)
-	_rect(img, 12, 10, 4, 1, Palette.STEEL)
-	# piernas
-	_rect(img, 5, 11, 2, 3, Palette.SLATE)
-	_rect(img, 9, 11, 2, 3, Palette.SLATE)
+	_rect(img, 4, 5, 8, 6, mid)
+	_rect(img, 4, 5, 8, 1, light)
+	_rect(img, 4, 10, 8, 1, dark)
+	_rect(img, 4, 6, 2, 4, dark)
+	_rect(img, 7, 7, 2, 2, Palette.WHITE if tier >= 3 else Palette.CYAN)
+	if tier < 3:
+		for moss: Vector2i in [Vector2i(9, 6), Vector2i(10, 6), Vector2i(10, 7), Vector2i(6, 9)]:
+			img.set_pixelv(moss, Palette.GREEN)
+	_rect(img, 5, 11, 2, 3, dark)
+	_rect(img, 9, 11, 2, 3, dark)
+	_rect(img, 1, 5, 2, 5, dark)
+	_rect(img, 0, 10, 4, 3, fist)
+	_rect(img, 0, 10, 4, 1, knuckle)
+	var runes: Array[Vector2i] = [Vector2i(1, 6), Vector2i(1, 8)]
+	match frame:
+		0:
+			_rect(img, 13, 5, 2, 5, mid)
+			_rect(img, 12, 10, 4, 3, fist)
+			_rect(img, 12, 10, 4, 1, knuckle)
+			runes.append_array([Vector2i(14, 6), Vector2i(14, 8)])
+		1:
+			_rect(img, 13, 2, 2, 5, mid)
+			_rect(img, 12, 0, 4, 3, fist)
+			_rect(img, 12, 0, 4, 1, knuckle)
+			runes.append_array([Vector2i(14, 4), Vector2i(14, 6)])
+		_:
+			_rect(img, 12, 6, 2, 2, mid)
+			_rect(img, 12, 5, 4, 4, fist)
+			_rect(img, 12, 5, 4, 1, knuckle)
+			runes.append_array([Vector2i(12, 6), Vector2i(13, 7)])
+	if tier >= 1:
+		for rune: Vector2i in runes:
+			img.set_pixelv(rune, Palette.WHITE if tier >= 3 else Palette.AQUA)
 	_outline(img)
+	if frame == 2:
+		for spark: Vector2i in [Vector2i(15, 3), Vector2i(15, 10), Vector2i(14, 2)]:
+			img.set_pixelv(spark, Palette.YELLOW)
+	return img
+
+
+## La tierra revuelta de la que sale el topo.
+func _mound(img: Image) -> void:
+	_rect(img, 3, 12, 10, 1, Palette.TERRA)
+	_rect(img, 1, 13, 14, 2, Palette.MAROON)
+	_rect(img, 2, 13, 11, 1, Palette.TERRA)
+	for clod: Vector2i in [Vector2i(2, 12), Vector2i(13, 12), Vector2i(0, 14), Vector2i(15, 14), Vector2i(5, 14), Vector2i(10, 14)]:
+		img.set_pixelv(clod, Palette.TERRA)
+
+
+## Topo excavador. frame: 0 solo tierra, 1 asomando, 2 afuera. Las garras van oscuras y a los costados (claras y
+## abajo del hocico se leían como dientes). tier: 1 = casco con linterna; 2 = garras de oro; 3 = de gema y casco dorado.
+func _mole(tier: int, frame: int) -> Image:
+	var img: Image = _blank()
+	if frame > 0:
+		var top: int = 6 if frame == 1 else 2
+		var body: Image = _ascii([
+			".....mmmm.....",
+			"...mmttttmm...",
+			"..mttttttttm..",
+			".mttttttttttm.",
+			".mttnttttnttm.",
+			".mtttkkkktttm.",
+			"mttttkqqkttttm",
+			"mtttSSkkSStttm",
+			"mttSSSwwSSSttm",
+			"mtSSSSSSSSSStm",
+			"mtSSSSSSSSSStm",
+		] as Array[String], { "m": Palette.MAROON, "t": Palette.TERRA, "n": Palette.NAVY, "k": Palette.PINK, "q": Palette.SALMON, "S": Palette.SAND, "w": Palette.WHITE })
+		img.blend_rect(body, Rect2i(0, 0, 14, 11), Vector2i(1, top))
+		if tier >= 1:
+			var shell: Color = Palette.YELLOW if tier >= 3 else Palette.STEEL_LIGHT
+			var shade: Color = Palette.GOLD if tier >= 3 else Palette.STEEL
+			_rect(img, 5, top, 6, 1, shell)
+			_rect(img, 4, top + 1, 8, 1, shell)
+			_rect(img, 3, top + 2, 10, 1, shade)
+			_rect(img, 7, top - 1, 2, 3, Palette.SLATE)
+			_rect(img, 7, top, 2, 1, Palette.WHITE)
+			_rect(img, 7, top + 1, 2, 1, Palette.YELLOW)
+	_mound(img)
+	if frame == 2:
+		var claw: Color = Palette.AQUA if tier >= 3 else (Palette.YELLOW if tier >= 2 else Palette.NAVY)
+		_rect(img, 1, 9, 2, 4, Palette.PINK)
+		_rect(img, 13, 9, 2, 4, Palette.PINK)
+		for y: int in [9, 11, 13]:
+			img.set_pixel(0, y, claw)
+			img.set_pixel(15, y, claw)
+		img.set_pixel(1, 13, claw)
+		img.set_pixel(14, 13, claw)
+	_outline(img)
+	if frame == 0:
+		for clod: Vector2i in [Vector2i(4, 9), Vector2i(11, 8), Vector2i(7, 10), Vector2i(8, 7)]:
+			img.set_pixelv(clod, Palette.TERRA)
+	return img
+
+
+func _disc(img: Image, center: Vector2, radius: float, color: Color) -> void:
+	for y: int in range(img.get_height()):
+		for x: int in range(img.get_width()):
+			if Vector2(x + 0.5, y + 0.5).distance_to(center) <= radius:
+				img.set_pixel(x, y, color)
+
+
+func _dot(img: Image, x: int, y: int, color: Color) -> void:
+	_rect(img, x, y, 1, 1, color)
+
+
+## Gusano del Abismo, 24x24. frame: 0 asomando, 1 erguido, 2 mordiendo hacia la izquierda. tier: 1 = púas; 2 = dientes
+## de oro; 3 = de cristal.
+func _worm(tier: int, frame: int) -> Image:
+	var img: Image = Image.create(24, 24, false, Image.FORMAT_RGBA8)
+	img.fill(T)
+	var light: Color = Palette.AQUA if tier >= 3 else Palette.PINK
+	var mid: Color = Palette.CYAN if tier >= 3 else Palette.PURPLE
+	var dark: Color = Palette.BLUE if tier >= 3 else Palette.MAROON
+	var paths: Array = [
+		[Vector2(14, 22), Vector2(14, 19), Vector2(13, 17)],
+		[Vector2(15, 22), Vector2(16, 18), Vector2(16, 14), Vector2(15, 10), Vector2(13, 8)],
+		[Vector2(17, 22), Vector2(18, 18), Vector2(17, 13), Vector2(14, 10), Vector2(9, 10)],
+	]
+	var path: Array = paths[frame]
+	for i: int in range(path.size()):
+		var at: Vector2 = path[i]
+		var radius: float = 5.0 if i < path.size() - 1 else 6.0
+		_disc(img, at, radius, dark)
+		_disc(img, at + Vector2(-0.6, -0.6), radius - 1.0, mid)
+		_disc(img, at + Vector2(-1.8, -1.8), radius * 0.35, light)
+		if tier >= 1 and i < path.size() - 1:
+			_dot(img, int(at.x) + 5, int(at.y) - 1, Palette.STEEL_LIGHT)
+			_dot(img, int(at.x) + 5, int(at.y), Palette.STEEL)
+			_dot(img, int(at.x) + 6, int(at.y) - 2, Palette.WHITE)
+	var head: Vector2 = path.back()
+	var mouth: Vector2 = head + (Vector2(-2.0, -1.0) if frame < 2 else Vector2(-3.0, 0.0))
+	var open: float = [2.0, 3.0, 4.0][frame]
+	_disc(img, mouth, open, Palette.NAVY)
+	var tooth: Color = Palette.AQUA if tier >= 3 else (Palette.YELLOW if tier >= 2 else Palette.FROST)
+	for angle: float in [0.0, 1.05, 2.1, 3.14, 4.19, 5.24]:
+		var point: Vector2 = mouth + Vector2.RIGHT.rotated(angle) * (open - 0.6)
+		_dot(img, int(point.x), int(point.y), tooth)
+	_dot(img, int(head.x) + 2, int(head.y) - 4, Palette.YELLOW)
+	_dot(img, int(head.x) - 1, int(head.y) - 5, Palette.YELLOW)
+	_rect(img, 7, 21, 16, 1, Palette.TERRA)
+	_rect(img, 5, 22, 19, 2, Palette.MAROON)
+	for clod: Vector2i in [Vector2i(6, 21), Vector2i(8, 20), Vector2i(21, 20), Vector2i(4, 23)]:
+		img.set_pixelv(clod, Palette.TERRA)
+	_outline(img)
+	return img
+
+
+# --- Cascos y dinamiteros ---------------------------------------------------------------------
+
+## Un casco (filas 0 a 5) sobre un personaje del pack: se saca el pelo de arriba y se dibuja encima.
+func _helmet(img: Image, shell: Array, lamp: bool) -> Image:
+	var result: Image = img.duplicate()
+	for y: int in range(6):
+		for x: int in range(SIZE):
+			result.set_pixel(x, y, T)
+	_ascii_into(result, [
+		"....oooooooo....",
+		"...oAAAAAABBo...",
+		"..oAwAAAAABBBo..",
+		"..oAAAAAAABBBo..",
+		".oBBBBBBBBBBBBo.",
+		".oooooooooooooo.",
+	] as Array[String], { "o": Palette.OUTLINE, "A": shell[0], "B": shell[1], "w": Palette.WHITE })
+	if lamp:
+		var colors: Dictionary = { "d": Palette.SLATE, "Y": Palette.YELLOW, "w": Palette.WHITE }
+		var glass: Image = _ascii([".dddd.", "dYwwYd", "dYwwYd", ".dddd."] as Array[String], colors)
+		result.blend_rect(glass, Rect2i(0, 0, 6, 4), Vector2i(5, 1))
+	return result
+
+
+## El casco solo, para ponérselo encima a un minero cuando llega a un hito.
+func _helmet_only(shell: Array, lamp: bool) -> Image:
+	return _helmet(_blank(), shell, lamp)
+
+
+func _dynamiter(throwing: bool) -> Image:
+	var tile: Image = _miner("0098", { Palette.STEEL_LIGHT: Palette.SAND_LIGHT, Palette.STEEL: Palette.ORANGE, Palette.SLATE: Palette.TERRA })
+	var img: Image = _helmet(tile, [Palette.SALMON, Palette.RED], false)
+	var x: int = 12
+	var y: int = 1 if throwing else 8
+	_rect(img, x, y + 2, 3, 5, Palette.RED)
+	_rect(img, x, y + 2, 1, 5, Palette.SALMON)
+	_rect(img, x, y + 4, 3, 1, Palette.SAND)
+	_dot(img, x + 1, y + 1, Palette.TERRA)
+	_dot(img, x + 2, y, Palette.YELLOW)
+	_dot(img, x + 3, y - 1, Palette.WHITE)
+	return img
+
+
+## El cartucho que vuela hacia la roca.
+func _stick() -> Image:
+	var img: Image = _blank()
+	_rect(img, 6, 5, 4, 9, Palette.RED)
+	_rect(img, 6, 5, 1, 9, Palette.SALMON)
+	_rect(img, 6, 9, 4, 2, Palette.SAND)
+	_dot(img, 8, 4, Palette.TERRA)
+	_dot(img, 9, 3, Palette.TERRA)
+	_outline(img)
+	_dot(img, 10, 2, Palette.YELLOW)
+	_dot(img, 11, 1, Palette.WHITE)
+	_dot(img, 11, 3, Palette.GOLD)
 	return img
 
 
@@ -467,20 +696,27 @@ func _coin() -> Image:
 	return img
 
 
-func _pick() -> Image:
-	var img: Image = _blank()
-	# mango en diagonal
-	for i: int in range(9):
-		img.set_pixel(3 + i, 13 - i, Palette.TERRA)
-		img.set_pixel(4 + i, 13 - i, Palette.MAROON)
-	# cabeza curva de acero
-	for point: Vector2i in [Vector2i(3, 5), Vector2i(4, 4), Vector2i(5, 3), Vector2i(6, 3), Vector2i(7, 3), Vector2i(8, 3),
-			Vector2i(9, 3), Vector2i(10, 4), Vector2i(11, 5), Vector2i(12, 6), Vector2i(12, 7), Vector2i(2, 6)]:
-		img.set_pixelv(point, Palette.STEEL_LIGHT)
-	for point: Vector2i in [Vector2i(4, 5), Vector2i(5, 4), Vector2i(6, 4), Vector2i(7, 4), Vector2i(8, 4), Vector2i(9, 4),
-			Vector2i(10, 5), Vector2i(11, 6), Vector2i(11, 7), Vector2i(3, 6)]:
-		img.set_pixelv(point, Palette.STEEL)
-	img.set_pixel(7, 3, Palette.WHITE)
+## Pico de frente: cabeza ancha de dos puntas iguales con el mango en el medio (el viejo parecía una hoz). Es el
+## icono de la tarjeta y el que llevan los mineros.
+func _pick(metal: String) -> Image:
+	var colors: Array = METALS[metal]
+	var img: Image = _ascii([
+		"................",
+		"......dddd......",
+		"....AAdAAdAA....",
+		"..AAAAdBBdAAAA..",
+		".AABBBdBBdBBBAA.",
+		".AB...dddd...BA.",
+		".A.....tm.....A.",
+		".......tm.......",
+		".......tm.......",
+		".......tm.......",
+		".......tm.......",
+		".......tm.......",
+		".......tm.......",
+		"......mtmm......",
+	] as Array[String], { "A": colors[0], "B": colors[1], "d": Palette.SLATE, "t": Palette.TERRA, "m": Palette.MAROON })
+	img.set_pixel(5, 2, Palette.WHITE)
 	_outline(img)
 	return img
 
@@ -612,7 +848,7 @@ func _blank() -> Image:
 func _rect(img: Image, x: int, y: int, w: int, h: int, color: Color) -> void:
 	for yy: int in range(y, y + h):
 		for xx: int in range(x, x + w):
-			if xx >= 0 and yy >= 0 and xx < SIZE and yy < SIZE:
+			if xx >= 0 and yy >= 0 and xx < img.get_width() and yy < img.get_height():
 				img.set_pixel(xx, yy, color)
 
 
@@ -638,14 +874,14 @@ func _overlay(img: Image, rows: Array[String], colors: Dictionary) -> void:
 ## Contorno oscuro de un píxel alrededor de todo lo que no es transparente (como en Tiny Dungeon).
 func _outline(img: Image) -> void:
 	var source: Image = img.duplicate()
-	for y: int in range(SIZE):
-		for x: int in range(SIZE):
+	for y: int in range(img.get_height()):
+		for x: int in range(img.get_width()):
 			if source.get_pixel(x, y).a > 0.5:
 				continue
 			for step: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
 				var nx: int = x + step.x
 				var ny: int = y + step.y
-				if nx >= 0 and ny >= 0 and nx < SIZE and ny < SIZE and source.get_pixel(nx, ny).a > 0.5:
+				if nx >= 0 and ny >= 0 and nx < img.get_width() and ny < img.get_height() and source.get_pixel(nx, ny).a > 0.5:
 					img.set_pixel(x, y, Palette.OUTLINE)
 					break
 

@@ -22,7 +22,7 @@ signal dynamite_exploded(at: Vector2)
 const SPRITE_DIR: String = "res://assets/sprites/generated/"
 const DEFAULT_BIOME: String = "earth"
 ## Cuántos mineros caben alrededor de la roca; con más unidades compradas se ven estos.
-const MINER_COUNT: int = 8
+const MINER_COUNT: int = 7
 ## Hacia dónde puede mirar un minero (sufijo del archivo: miner_3_left.png).
 const GAZES: Array[String] = ["left", "right", "down"]
 
@@ -159,11 +159,11 @@ const PICK_GRIP: Vector2 = Vector2(3.5, 13.5)
 const HAND: Vector2 = Vector2(0.8, 0.62)
 
 ## Puestos de trabajo, en px de diseño desde el centro de la roca. Ninguno toca la roca (que mide 352):
-## los mineros ocupan primero los costados y después una fila arriba, y el gólem y el taladro quedan
+## los mineros ocupan primero los costados y después una fila arriba (a la derecha queda el gusano), y el gólem y el taladro quedan
 ## abajo a los lados. Abajo de la roca no hay lugar: la roca va un poco más abajo del centro.
 const MINER_SLOTS: Array[Vector2] = [
 	Vector2(-240.0, 25.0), Vector2(240.0, 25.0), Vector2(-240.0, -95.0), Vector2(240.0, -95.0),
-	Vector2(-75.0, -222.0), Vector2(75.0, -222.0), Vector2(-225.0, -222.0), Vector2(225.0, -222.0),
+	Vector2(-85.0, -222.0), Vector2(-225.0, -222.0), Vector2(225.0, -222.0),
 ]
 const DRILL_SLOT: Vector2 = Vector2(256.0, 135.0)
 const GOLEM_SLOT: Vector2 = Vector2(-256.0, 135.0)

@@ -522,7 +522,7 @@ func _test_overlays_draw_on_top(packed: PackedScene) -> void:
 		var sprite: TextureRect = child as TextureRect
 		if sprite != null and sprite.visible:
 			bottoms.append(sprite.position.y + sprite.size.y)
-	_check(bottoms.size() >= 11, "se ven la roca, 8 mineros, el taladro y el gólem (%d)" % bottoms.size())
+	_check(bottoms.size() >= 10, "se ven la roca, 7 mineros, el taladro y el gólem (%d)" % bottoms.size())
 	var sorted_by_depth: bool = true
 	for i: int in range(1, bottoms.size()):
 		if bottoms[i] < bottoms[i - 1]:
@@ -589,7 +589,7 @@ func _test_mine_view(packed: PackedScene) -> void:
 
 	# la cuadrilla: mineros alrededor (hasta 8), el taladro y el gólem solo cuando se compran
 	var miners: Array = mine.miner_sprites
-	_check_eq(miners.size(), 8, "hay 8 puestos para mineros")
+	_check_eq(miners.size(), 7, "hay 7 puestos para mineros")
 	_check_eq(_visible_count(miners), 0, "sin cuadrilla no se ve ningún minero")
 	_check(not mine.drill_sprite.visible and not mine.golem_sprite.visible, "ni el taladro ni el gólem")
 	_economy.owned[0] = 1
@@ -603,7 +603,7 @@ func _test_mine_view(packed: PackedScene) -> void:
 	_economy.owned[0] = 40
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
-	_check_eq(_visible_count(miners), 8, "con 40 se ven 8 (el máximo que entra alrededor de la roca)")
+	_check_eq(_visible_count(miners), 7, "con 40 se ven 7 (el máximo en pantalla)")
 	_check(not mine.drill_sprite.visible, "el taladro sigue sin aparecer: no se compró")
 	_economy.owned[1] = 1 # Taladro a vapor
 	_economy.gold_changed.emit(_economy.gold)
@@ -619,7 +619,7 @@ func _test_mine_view(packed: PackedScene) -> void:
 	var textures: Dictionary = {}
 	for sprite: TextureRect in miners:
 		textures[sprite.texture.resource_path] = true
-	_check_eq(textures.size(), 8, "los 8 mineros usan 8 sprites distintos (variaciones de color)")
+	_check_eq(textures.size(), 7, "los 7 mineros usan 7 sprites distintos (variaciones de color)")
 	# nadie queda encima de la roca (ni un píxel de su cuadro) ni se sale de la mina, y entre sí casi no se pisan
 	var mine_rect: Rect2 = mine.get_global_rect()
 	var out_of_mine: Array[String] = []

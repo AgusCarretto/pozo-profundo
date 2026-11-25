@@ -19,8 +19,10 @@ const BALANCE_PATH: String = "res://data/balance.json"
 const MineView := preload("res://game/mine_view.gd")
 
 const SINGLE_SPRITES: Array[String] = [
-	"drill", "golem", "dynamite", "rune_1", "rune_2", "rune_3", "coin", "pick", "gem",
-	"miner_1", "miner_2", "miner_3", "miner_4", "miner_5", "miner_6", "miner_7", "miner_8",
+	"drill", "drill_1", "drill_2", "drill_3", "golem", "dynamite", "rune_1", "rune_2", "rune_3", "coin", "gem",
+	"pick", "pick_gold", "pick_gem", "helmet_lamp", "helmet_gold", "stick", "steam", "dynamiter_idle", "dynamiter_throw",
+	"mole_hole", "mole_0_1", "mole_0_2", "mole_1_1", "mole_1_2", "mole_2_1", "mole_2_2", "mole_3_1", "mole_3_2",
+	"miner_1", "miner_2", "miner_3", "miner_4", "miner_5", "miner_6", "miner_7",
 ]
 ## Hacia dónde mira cada variante de un minero: cuánto se desplazan sus ojos (1 px) respecto del frente.
 const GAZES: Dictionary = { "left": Vector2i(-1, 0), "right": Vector2i(1, 0), "down": Vector2i(0, 1) }
@@ -139,9 +141,13 @@ func _generated_files() -> Array[String]:
 		files.append("rock_%s" % id)
 		files.append("bg_%s" % id)
 	files.append_array(SINGLE_SPRITES)
-	for number: int in range(1, 9):
+	for number: int in range(1, 8):
 		for gaze: String in GAZES:
 			files.append("miner_%d_%s" % [number, gaze])
+	for tier: int in range(4):
+		for frame: int in range(3):
+			files.append("golem_%d_%d" % [tier, frame])
+			files.append("worm_%d_%d" % [tier, frame])
 	return files
 
 
@@ -153,23 +159,24 @@ func _test_generated_sprites() -> void:
 		if img == null:
 			_check(false, "%s existe y se puede leer" % file_name)
 			continue
-		_check_eq(img.get_size(), Vector2i(16, 16), "%s es de 16x16" % file_name)
+		var side: int = 24 if file_name.begins_with("worm_") else 16 # el gusano es enorme
+		_check_eq(img.get_size(), Vector2i(side, side), "%s es de %dx%d" % [file_name, side, side])
 		var off: Dictionary = _off_palette(img)
 		_check(off.is_empty(), "%s usa solo colores de la paleta (fuera: %s)" % [file_name, str(off)])
 		if not file_name.begins_with("bg_"):
 			var opaque: int = 0
-			for y: int in range(16):
-				for x: int in range(16):
+			for y: int in range(img.get_height()):
+				for x: int in range(img.get_width()):
 					if img.get_pixel(x, y).a == 1.0:
 						opaque += 1
-			_check(opaque > 20 and opaque < 256, "%s no está vacío ni lleno: tiene silueta (%d píxeles)" % [file_name, opaque])
+			_check(opaque > 20 and opaque < side * side, "%s no está vacío ni lleno: tiene silueta (%d píxeles)" % [file_name, opaque])
 	_check(ResourceLoader.exists(GENERATED_DIR + "golem.png"), "los sprites están importados por Godot (se pueden cargar con load)")
 
 
 func _test_miners_are_different() -> void:
 	_section("Los mineros tienen variaciones de color")
 	var images: Array[Image] = []
-	for number: int in range(1, 9):
+	for number: int in range(1, 8):
 		images.append(_load_image(GENERATED_DIR + "miner_%d.png" % number))
 	var distinct: int = 0
 	for i: int in range(images.size()):
@@ -179,7 +186,7 @@ func _test_miners_are_different() -> void:
 				unique = false
 		if unique:
 			distinct += 1
-	_check_eq(distinct, 8, "los 8 mineros son todos distintos entre sí")
+	_check_eq(distinct, 7, "los 7 mineros son todos distintos entre sí")
 	# Las variantes de color de un mismo personaje comparten silueta (mismos píxeles opacos).
 	var same_silhouette: bool = true
 	for y: int in range(16):
@@ -226,7 +233,7 @@ func _pixels_of(img: Image, color: Color) -> Array[Vector2i]:
 ## dónde esté parado): los mismos píxeles, con los ojos (los píxeles oscuros de la cara) corridos 1 px.
 func _test_miners_look_at_the_rock() -> void:
 	_section("Mineros que miran hacia la roca")
-	for number: int in range(1, 9):
+	for number: int in range(1, 8):
 		var front: Image = _load_image(GENERATED_DIR + "miner_%d.png" % number)
 		var front_eyes: Array[Vector2i] = _pixels_of(front, Palette.NAVY)
 		_check_eq(front_eyes.size(), 4, "miner_%d: 4 píxeles de ojos al frente" % number)
