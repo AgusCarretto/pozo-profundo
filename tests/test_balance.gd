@@ -27,12 +27,11 @@ const FULL: Dictionary = {
 	"loot": {
 		"chance_per_hit": 0.015,
 		"chance_per_second": 0.005,
-		"bonus_cap": 3.0,
 		"rarities": [
-			{ "id": "common", "name": "Común", "weight": 70, "bonus": 0.01 },
-			{ "id": "rare", "name": "Raro", "weight": 22, "bonus": 0.04 },
-			{ "id": "epic", "name": "Épico", "weight": 7, "bonus": 0.15 },
-			{ "id": "legendary", "name": "Legendario", "weight": 1, "bonus": 0.60 },
+			{ "id": "common", "name": "Común", "weight": 78, "seconds": 5, "hits": 15, "relics": 0 },
+			{ "id": "rare", "name": "Raro", "weight": 17, "seconds": 20, "hits": 50, "relics": 0 },
+			{ "id": "epic", "name": "Épico", "weight": 4.5, "seconds": 60, "hits": 150, "relics": 0 },
+			{ "id": "legendary", "name": "Legendario", "weight": 0.5, "seconds": 200, "hits": 500, "relics": 1 },
 		],
 	},
 	"prestige": { "min_depth": 300, "depth_offset": 200, "depth_step": 50, "exponent": 1.3, "bonus_per_relic": 0.25 },

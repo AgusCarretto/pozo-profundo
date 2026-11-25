@@ -1,10 +1,9 @@
 extends "res://tests/scene_fx_base.gd"
 ## @lento (animaciones: corre con -All o -Slow, ver tools/run_tests.ps1)
-## Tests headless del cofre (F2-B): cae en la mina con un brillo del color de su rareza, sale un aviso con el
-## bonus que suma (el del cofre y lo que de verdad sube el efectivo, que rinde cada vez menos) y el legendario
-## tiene su momento: una pausa breve y un destello (sin destello con "reducir efectos").
+## Tests headless del cofre: cae en la mina con un brillo del color de su rareza, llueven monedas (más cuanto más
+## rara), sale un aviso con el oro que dio y el legendario tiene su momento: una pausa breve y un destello (sin
+## destello con "reducir efectos").
 
-const EconomyMath := preload("res://core/economy_math.gd")
 const CHEST_TEXTURE: String = "tile_0089.png"
 
 
@@ -13,16 +12,30 @@ func _rarity_color(id: String) -> Color:
 	return (load("res://game/main.gd") as GDScript).get_script_constant_map()["RARITY_COLORS"][id]
 
 
+## El balance real con los cofres al azar apagados: acá se piden a mano con drop_loot().
 func _balance() -> Dictionary:
-	return JSON.parse_string(FileAccess.get_file_as_string("res://data/balance.json"))
+	var balance: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/balance.json"))
+	balance["loot"]["chance_per_hit"] = 0.0
+	balance["loot"]["chance_per_second"] = 0.0
+	balance.erase("crit")
+	return balance
 
 
 func _run_tests() -> void:
 	await _test_chest_falls()
 	await _test_toast()
+	await _test_coin_rain()
 	await _test_many_chests()
 	await _test_legendary()
 	await _test_legendary_reduced()
+
+
+func _rains() -> Array[CPUParticles2D]:
+	var found: Array[CPUParticles2D] = []
+	for child: Node in _fx().get_children():
+		if child.has_meta(&"coin_rain") and not child.is_queued_for_deletion():
+			found.append(child as CPUParticles2D)
+	return found
 
 
 func _chests() -> Array[TextureRect]:
@@ -90,24 +103,25 @@ func _test_chest_falls() -> void:
 
 
 func _test_toast() -> void:
-	_section("Aviso del cofre con el bonus real")
+	_section("Aviso del cofre con el oro que dio")
 	_economy.reset()
-	_economy.loot_bonus = 1.0 # ya hay +100% bruto: el próximo cofre rinde menos que lo que dice
+	_economy.owned[0] = 10
 	await _wait(0.1)
-	_economy.drop_loot(1) # Raro, +4% bruto
+	var reward: float = _economy.loot_reward(1)
+	var before: float = _economy.gold
+	_economy.drop_loot(1) # Raro
+	_check(_economy.gold - before >= reward, "el oro entra en el acto")
 	await process_frame
 	var toasts: Array[Control] = _toasts()
 	_check_eq(toasts.size(), 1, "sale un aviso")
 	if toasts.is_empty():
 		return
 	var toast: Control = toasts[0]
-	var cap: float = _economy.loot_bonus_cap()
-	var gain: float = EconomyMath.loot_bonus_effective(1.04, cap) - EconomyMath.loot_bonus_effective(1.0, cap)
-	var expected: String = "+4%% » +%s" % NumberFormat.format_percent(gain)
+	var expected: String = "+%s de oro" % NumberFormat.format_number(reward)
 	var text: String = _labels_text(toast)
 	_check(text.contains("Raro"), "dice la rareza (%s)" % text)
-	_check(text.contains(expected), "y el bonus: lo del cofre » lo que de verdad sube (%s; esperado %s)" % [text, expected])
-	_check(gain < 0.04, "(con bonus acumulado, sube menos que el 4%% del cofre: %.2f%%)" % (gain * 100.0))
+	_check(text.contains(expected), "y cuánto oro dio (%s; esperado %s)" % [text, expected])
+	_check(not text.contains("reliquia") and not text.contains("%"), "sin reliquias ni porcentajes")
 	var title: Label = toast.find_children("*", "Label", true, false)[0] as Label
 	_check(Color(title.get_theme_color("font_color"), 1.0).is_equal_approx(Color(_rarity_color("rare"), 1.0)), "con el color de la rareza")
 	_check_eq(toast.mouse_filter, Control.MOUSE_FILTER_IGNORE, "no come toques")
@@ -121,8 +135,42 @@ func _test_toast() -> void:
 		if font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, label.get_theme_font_size("font_size")).x > label.size.x + 0.5:
 			cut.append(label.text)
 	_check(cut.is_empty(), "sin texto cortado (%s)" % str(cut))
+	_economy.drop_loot(3)
+	await process_frame
+	_check(not _toasts().is_empty() and _labels_text(_toasts()[0]).contains("+1 reliquia"), "el legendario avisa la reliquia (%s)" % (_labels_text(_toasts()[0]) if not _toasts().is_empty() else "nada"))
 	await _wait(3.0)
 	_check(_toasts().is_empty(), "y se va solo")
+	_economy.reset()
+
+
+func _test_coin_rain() -> void:
+	_section("Lluvia de monedas, más grande cuanto más rara")
+	_economy.reset()
+	await _wait(2.5)
+	_check(_rains().is_empty(), "sin cofres no llueve")
+	var amounts: Dictionary = (load("res://game/main.gd") as GDScript).get_script_constant_map()["COINS_BY_RARITY"]
+	var ids: Array = ["common", "rare", "epic", "legendary"]
+	for index: int in range(1, ids.size()):
+		_check(amounts[ids[index]] > amounts[ids[index - 1]], "%s trae más monedas que %s" % [ids[index], ids[index - 1]])
+	_economy.drop_loot(2)
+	await process_frame
+	_check_eq(_rains().size(), 1, "un cofre, una lluvia")
+	if not _rains().is_empty():
+		var rain: CPUParticles2D = _rains()[0]
+		_check(rain.texture.resource_path.ends_with("coin.png"), "de monedas")
+		_check_eq(rain.amount, int(amounts["epic"]), "tantas como pide la rareza")
+		_check(rain.emitting and rain.one_shot, "una sola tanda")
+	_mine().call("clear_effects")
+	await process_frame
+	_check(_rains().is_empty(), "limpiar los efectos la saca")
+	_settings.reduce_effects = true
+	await process_frame
+	_economy.drop_loot(2)
+	await process_frame
+	_check(not _rains().is_empty() and _rains()[0].amount == int(amounts["epic"]) / 2, "con 'reducir efectos', la mitad")
+	_settings.reduce_effects = false
+	await _wait(3.0)
+	_check(_rains().is_empty(), "y al rato no queda nada")
 	_economy.reset()
 
 

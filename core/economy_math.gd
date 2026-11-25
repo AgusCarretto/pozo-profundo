@@ -97,14 +97,9 @@ static func relic_multiplier(relics: int, bonus_each: float) -> float:
 	return 1.0 + maxi(relics, 0) * bonus_each
 
 
-## Bonus de botín efectivo (0.27 = +27%) a partir del bruto que suman los cofres, con
-## rendimientos decrecientes: cap * (1 - e^(-bruto / cap)).
-## Con poco bruto rinde casi 1 a 1 y se va aplanando hasta `cap`, que es el techo (nunca
-## se alcanza ni se pasa). Un bruto negativo o inválido, o un techo <= 0, da 0.
-static func loot_bonus_effective(raw: float, cap: float) -> float:
-	if not (raw > 0.0) or not (cap > 0.0):
-		return 0.0
-	return minf(cap * (1.0 - exp(-raw / cap)), cap)
+## Premio de un cofre: lo que más sea entre `seconds` de producción (`gold_per_second`) y `hits` golpes.
+static func chest_reward(gold_per_second: float, hit_value: float, seconds: float, hits: float) -> float:
+	return maxf(maxf(seconds * gold_per_second, hits * hit_value), 0.0)
 
 
 ## Sorteo por pesos. `roll` está en [0, 1) y cada peso ocupa un tramo proporcional.

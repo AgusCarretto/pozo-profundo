@@ -351,7 +351,7 @@ func _test_prestige_flow() -> void:
 	_check(_modal().visible, "apretar abre la confirmación")
 	var body: String = _modal().body_label.text
 	_check(body.contains("2 reliquias") and body.contains("+50%"), "que dice cuánto ganás (%s)" % body.replace("\n", " | "))
-	_check(body.contains("oro") and body.contains("cuadrilla") and body.contains("pico") and body.contains("botín"), "y qué perdés: oro, cuadrilla, pico y bonus de botín")
+	_check(body.contains("oro") and body.contains("cuadrilla") and body.contains("pico"), "y qué perdés: oro, cuadrilla y pico")
 	# El juego sigue andando con el cartel abierto (la cuadrilla produce unos centavos por frame):
 	# lo que no puede pasar es que se reinicie algo.
 	_check_eq(_economy.relics, 0, "todavía no se ganó ninguna reliquia")
@@ -366,7 +366,6 @@ func _test_prestige_flow() -> void:
 	_check_eq(_economy.pick_level, 4, "y el pico intacto")
 	_check(_economy.run_gold >= 2.7e6 and _economy.run_gold < 2.7e6 + 100.0, "y la profundidad intacta (%s)" % str(_economy.run_gold))
 
-	_economy.loot_bonus = 0.5
 	button.pressed.emit()
 	_check(_modal().visible, "se puede volver a abrir")
 	_modal().confirm_button.pressed.emit()
@@ -374,7 +373,6 @@ func _test_prestige_flow() -> void:
 	# La vuelta a la superficie pasa detrás de un fundido a blanco (ver transitions_test.gd): se espera a que pase.
 	await _wait_until(func() -> bool: return _economy.relics == 2, 3.0)
 	_check_eq(_economy.relics, 2, "y da 2 reliquias")
-	_check_eq(_economy.loot_bonus, 0.0, "y reinicia el bonus de botín")
 	_check_eq(_economy.gold, 0.0, "el oro vuelve a 0")
 	_check_eq(_economy.owned_count(0), 0, "sin cuadrilla")
 	_check_eq(_economy.pick_level, 0, "pico en 0")
@@ -434,7 +432,7 @@ func _test_offline_notice() -> void:
 func _test_loot_hidden_without_loot() -> void:
 	_section("Sin botín en el balance")
 	_check(not (_scene.get_node("%LootBox") as Control).visible, "el panel de cofres no se muestra si no hay botín")
-	_check(not _label("LootBonusLabel").is_visible_in_tree(), "ni el bonus de botín")
+	_check(not _label("LootHintLabel").is_visible_in_tree(), "ni lo que dan los cofres")
 
 
 func _test_debug_panel_only_in_debug_builds() -> void:
@@ -454,7 +452,6 @@ func _test_debug_panel_only_in_debug_builds() -> void:
 	_check(_scene.has_node("DebugPanel"), "la escena principal trae el panel en este build")
 	var scene_panel: Control = _scene.get_node("DebugPanel")
 	_check_eq(scene_panel.chest_buttons.size(), 0, "sin botín en el balance, no hay botones de cofre")
-	_check_eq(scene_panel.raw_bonus_label, null, "ni el dato del bonus bruto")
 	_check(not scene_panel.body.visible, "arranca cerrado: no tapa la pantalla")
 
 
@@ -489,126 +486,93 @@ func _test_debug_panel_tools() -> void:
 	_modal().confirm_button.pressed.emit()
 
 	await _set_gold(0.0)
-	_check(panel.raw_bonus_label != null, "el panel tiene el dato del bonus de botín bruto")
-	if panel.raw_bonus_label != null:
-		_check(panel.raw_bonus_label.text.contains("+0%"), "arranca en +0%% (%s)" % panel.raw_bonus_label.text)
 	_check_eq(panel.chest_buttons.size(), 4, "un botón de cofre por rareza (4)")
 	var table: Array[Dictionary] = _economy.loot_table()
-	var expected_bonus: float = 0.0
 	for index: int in range(mini(panel.chest_buttons.size(), table.size())):
 		var button: Button = panel.chest_buttons[index]
 		_check(button.text.contains(table[index]["name"]), "el botón %d dice %s (%s)" % [index, table[index]["name"], button.text])
+		var before: float = _economy.gold
+		var reward: float = _economy.loot_reward(index)
 		button.pressed.emit()
-		expected_bonus += table[index]["bonus"]
-		_check_near(_economy.loot_bonus, expected_bonus, "forzar %s suma su bonus (+%s)" % [table[index]["name"], NumberFormat.format_percent(table[index]["bonus"])])
-	_check_eq(_economy.gold, 0.0, "los cofres forzados no dan oro")
+		_check_near(_economy.gold - before, reward, "forzar %s da su oro (%s)" % [table[index]["name"], str(reward)])
+	_check_eq(_economy.relics, 1, "y el legendario, una reliquia")
 	await process_frame
-	_check_near(_economy.loot_bonus, 0.80, "los cuatro cofres suman +80% de bonus bruto")
-	_check_eq(_label("LootBonusLabel").text, "Bonus de botín: +70.2%", "en pantalla se ve el EFECTIVO (+70.2%%), no el bruto (%s)" % _label("LootBonusLabel").text)
-	_check(not _label("LootBonusLabel").text.contains("80"), "y el bruto no aparece en la pantalla del jugador")
-	if panel.raw_bonus_label != null:
-		var raw_text: String = panel.raw_bonus_label.text
-		_check(raw_text.contains("+80%"), "el panel de debug muestra el bruto (+80%%) (%s)" % raw_text)
-		_check(raw_text.contains("70.2%"), "junto al efectivo (%s)" % raw_text)
-		_check(raw_text.contains("300%"), "y el techo (%s)" % raw_text)
-	_check(_label("LastLootLabel").text.contains("Legendario"), "y el último cofre es el Legendario (%s)" % _label("LastLootLabel").text)
+	_check(_label("LastLootLabel").text.contains("Legendario"), "el último cofre es el Legendario (%s)" % _label("LastLootLabel").text)
 	_economy.reset()
 
 
 func _test_loot_odds_are_visible() -> void:
-	_section("Probabilidades del botín visibles")
+	_section("Probabilidades y premios del botín visibles")
 	_check((_scene.get_node("%LootBox") as Control).visible, "el panel de cofres se muestra")
 	var info: String = _label("LootInfoLabel").text
-	_check(info.contains("1.5%") and info.contains("golpe"), "dice 1.5%% por golpe (%s)" % info)
-	_check(info.contains("0.5%") and info.contains("segundo"), "y 0.5%% por segundo con cuadrilla (%s)" % info)
+	_check(info.contains("0.3%") and info.contains("golpe"), "dice 0.3%% por golpe (%s)" % info)
+	_check(info.contains("1.5%") and info.contains("segundo"), "y 1.5%% por segundo con cuadrilla (%s)" % info)
+	_check(_label("LootHintLabel").text.contains("oro") and _label("LootHintLabel").text.contains("reliquia"), "explica qué dan (%s)" % _label("LootHintLabel").text)
+	_economy.reset()
+	_economy.owned[0] = 100
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
 	var texts: Array[String] = []
 	for child: Node in _scene.get_node("%OddsRow").get_children():
 		texts.append((child as Label).text.replace("\n", " "))
-	_check_eq(_label("LootBonusLabel").text, "Bonus de botín: +0%", "arranca en 'Bonus de botín: +0%%' (%s)" % _label("LootBonusLabel").text)
 	_check_eq(texts.size(), 4, "una etiqueta por rareza (4)")
-	var expected: Array = [
-		["Común", "70%", "+1%"],
-		["Raro", "22%", "+4%"],
-		["Épico", "7%", "+15%"],
-		["Legendario", "1%", "+60%"],
-	]
+	var expected: Array = [["Común", "78%"], ["Raro", "17%"], ["Épico", "4.5%"], ["Legendario", "0.5%"]]
 	for index: int in range(mini(texts.size(), expected.size())):
-		var parts: Array = expected[index]
-		var shown: bool = true
-		for part: String in parts:
-			if not texts[index].contains(part):
-				shown = false
-		_check(shown, "%s muestra su probabilidad y su bonus (%s)" % [parts[0], texts[index]])
+		var reward: String = "+%s" % NumberFormat.format_number(_economy.loot_reward(index))
+		_check(texts[index].contains(expected[index][0]) and texts[index].contains(expected[index][1]) and texts[index].contains(reward),
+			"%s muestra su probabilidad y lo que daría ahora (%s; %s)" % [expected[index][0], texts[index], reward])
 	var colors: Dictionary = {}
 	for child: Node in _scene.get_node("%OddsRow").get_children():
 		colors[(child as Label).get_theme_color("font_color")] = true
 	_check_eq(colors.size(), 4, "cada rareza tiene su propio color")
+	_economy.reset()
 
 
 func _test_chest_message() -> void:
 	_section("Aviso del último cofre")
-	_check(not _label("LastLootLabel").text.contains("Cofre"), "antes del primero no dice 'Cofre' (%s)" % _label("LastLootLabel").text)
+	_check(not _label("LastLootLabel").text.contains("¡Cofre"), "antes del primero no anuncia ninguno (%s)" % _label("LastLootLabel").text)
 	await _set_gold(0.0)
 	var seen: Array[int] = []
-	_economy.loot_dropped.connect(func(rarity: int, _amount: float) -> void: seen.append(rarity))
+	var paid: Array[float] = []
+	_economy.loot_dropped.connect(func(rarity: int, amount: float) -> void:
+		seen.append(rarity)
+		paid.append(amount))
 	_button("TapButton").button_down.emit()
 	_check_eq(seen.size(), 1, "con 100%% por golpe, el golpe suelta un cofre")
 	if seen.size() == 1:
 		var entry: Dictionary = _economy.loot_table()[seen[0]]
 		var text: String = _label("LastLootLabel").text
 		_check(text.contains("Cofre") and text.contains(entry["name"]), "el cartel dice 'Cofre %s' (%s)" % [entry["name"], text])
-		_check(text.contains("+%s" % NumberFormat.format_percent(entry["bonus"])), "y cuánto bonus sumó (%s)" % text)
-		_check(not text.contains("oro"), "no habla de oro: el cofre no da oro (%s)" % text)
-	_check_eq(_economy.gold, 1.0, "el golpe sumó 1 de oro y el cofre ninguno")
-	await process_frame
-	var expected_bonus: String = "Bonus de botín: +%s" % NumberFormat.format_percent(_economy.loot_bonus_effective())
-	_check_eq(_label("LootBonusLabel").text, expected_bonus, "el bonus total (efectivo) se actualiza (%s)" % _label("LootBonusLabel").text)
+		_check(text.contains("+%s de oro" % NumberFormat.format_number(paid[0])), "y cuánto oro dio (%s)" % text)
+		_check_near(_economy.gold, 1.0 + paid[0], "el oro del cofre entra con el del golpe")
 	_button("TapButton").button_down.emit()
 	_button("TapButton").button_down.emit()
 	await process_frame
 	_check_eq(seen.size(), 3, "3 golpes, 3 cofres")
-	expected_bonus = "Bonus de botín: +%s" % NumberFormat.format_percent(_economy.loot_bonus_effective())
-	_check_eq(_label("LootBonusLabel").text, expected_bonus, "y acumula los 3 cofres (%s)" % _label("LootBonusLabel").text)
-	var summed: float = 0.0
-	for rarity: int in seen:
-		summed += _economy.loot_table()[rarity]["bonus"]
-	_check_near(_economy.loot_bonus, summed, "la suma coincide con los bonus de cada cofre")
-	_check(_economy.loot_bonus > 0.0, "y es mayor que 0 (%s)" % str(_economy.loot_bonus))
 
 
-## El aviso del último cofre se deriva del estado, no solo de la señal del cofre: antes decía "Todavía no
-## salió ningún cofre" aunque hubiera bonus (al cargar una partida guardada) y, al revés, seguía mostrando
-## un cofre viejo cuando el bonus ya había vuelto a 0 (al volver a la superficie).
+## El aviso del último cofre se deriva del estado, no solo de la señal del cofre: al volver a la superficie o
+## reiniciar no puede quedar un cofre viejo.
 func _test_last_loot_follows_the_state() -> void:
 	_section("El aviso del último cofre refleja el estado real")
 	await _set_gold(0.0)
 	var label: Label = _label("LastLootLabel")
-	_check(label.text.contains("Todavía no salió ningún cofre"), "sin bonus dice que todavía no salió ninguno (%s)" % label.text)
-	# una partida guardada con bonus (el cofre salió en una sesión anterior)
-	_economy.from_dict({ "loot_bonus": 0.3 })
-	await process_frame
-	_check_near(_economy.loot_bonus, 0.3, "se cargó una partida con +30% de bonus bruto")
-	_check(not label.text.contains("Todavía no salió"), "con bonus ya no dice 'Todavía no salió ningún cofre' (%s)" % label.text)
-	_check(label.text.contains("cofres"), "dice de dónde viene el bonus (%s)" % label.text)
-	# un cofre nuevo pisa el aviso con su rareza
+	_check(label.text.contains("Todavía no salió ningún cofre"), "al empezar dice que todavía no salió ninguno (%s)" % label.text)
 	_economy.drop_loot(2)
 	await process_frame
-	_check(label.text.contains("Épico"), "un cofre nuevo muestra su rareza (%s)" % label.text)
+	_check(label.text.contains("Épico"), "un cofre muestra su rareza (%s)" % label.text)
 	_check(label.has_theme_color_override("font_color"), "y su color")
-	# al volver a la superficie el bonus es 0 y el aviso también
-	_economy.run_gold = 2.7e6
+	_economy.run_gold = 1.0e12
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
 	_check(_economy.prestige() > 0, "se vuelve a la superficie")
 	await process_frame
-	_check_eq(_economy.loot_bonus, 0.0, "el bonus vuelve a 0")
-	_check(label.text.contains("Todavía no salió ningún cofre"), "y el aviso vuelve a decir que todavía no salió ninguno (%s)" % label.text)
+	_check(label.text.contains("Todavía no salió ningún cofre"), "y el aviso vuelve a empezar (%s)" % label.text)
 	_check(not label.has_theme_color_override("font_color"), "sin el color del cofre viejo")
-	# lo mismo al reiniciar la partida
 	_economy.drop_loot(3)
 	await process_frame
-	_check(label.text.contains("Legendario"), "un legendario: lo muestra (%s)" % label.text)
+	_check(label.text.contains("Legendario") and label.text.contains("reliquia"), "un legendario: lo muestra con su reliquia (%s)" % label.text)
 	_economy.reset()
 	await process_frame
-	_check(label.text.contains("Todavía no salió ningún cofre") and _economy.loot_bonus == 0.0, "al reiniciar, el aviso se limpia (%s)" % label.text)
+	_check(label.text.contains("Todavía no salió ningún cofre"), "al reiniciar, el aviso se limpia (%s)" % label.text)
 	_economy.reset()

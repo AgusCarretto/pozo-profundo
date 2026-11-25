@@ -16,7 +16,6 @@ const MineView := preload("res://game/mine_view.gd")
 const NumberFormat := preload("res://core/number_format.gd")
 const OptionsPanel := preload("res://game/options_panel.gd")
 const ScreenFx := preload("res://game/screen_fx.gd")
-const EconomyMath := preload("res://core/economy_math.gd")
 const Juice := preload("res://game/juice.gd")
 const PickCard := preload("res://game/pick_card.gd")
 const SideButton := preload("res://game/side_button.gd")
@@ -32,6 +31,9 @@ const RARITY_COLORS: Dictionary = {
 	"legendary": Color(1.0, 0.72, 0.2),
 }
 const DEFAULT_RARITY_COLOR: Color = Color(0.9, 0.9, 0.9)
+## Cuántas monedas llueven al abrir un cofre, por rareza. También es presentación.
+const COINS_BY_RARITY: Dictionary = { "common": 12, "rare": 24, "epic": 44, "legendary": 80 }
+const DEFAULT_COINS: int = 12
 ## El cofre de esta rareza tiene su momento: una pausa breve (cámara lenta) y un destello de pantalla.
 const SPECIAL_RARITY: String = "legendary"
 const SPECIAL_PAUSE: float = 0.3
@@ -80,9 +82,10 @@ var _screen_fx: ScreenFx
 var _music: MusicDirector
 var _pick_card: PickCard
 var _shown_runes: int = -1
-## El último cofre que salió en esta partida ({rarity, bonus}); vacío si todavía no salió ninguno (o si el
-## bonus volvió a 0). El aviso del botín se arma con esto y con el bonus real: ver _refresh_last_loot().
+## El último cofre que salió en esta partida ({rarity, amount}); vacío si todavía no salió ninguno.
 var _last_chest: Dictionary = {}
+## En el cartel de Botín, una etiqueta por rareza con lo que daría ahora.
+var _odds_labels: Array[Label] = []
 ## Índice del bioma que se está mostrando (-1 = todavía ninguno). Bajar a uno más profundo suena.
 var _shown_biome: int = -1
 ## Se prende al final de _ready: lo que se marca mientras se arma la escena no suena. (is_node_ready() no sirve:
@@ -117,7 +120,7 @@ var _gold_font_size: int = 0
 @onready var _chest_row: HBoxContainer = %ChestRow
 @onready var _odds_row: HBoxContainer = %OddsRow
 @onready var _last_loot_label: Label = %LastLootLabel
-@onready var _loot_bonus_label: Label = %LootBonusLabel
+@onready var _loot_hint_label: Label = %LootHintLabel
 @onready var _shop: GridContainer = %Shop
 @onready var _relics_label: Label = %RelicsLabel
 @onready var _relics_row: HBoxContainer = %RelicsRow
@@ -263,8 +266,7 @@ func _refresh() -> void:
 	_mult_label.text = "×%.2f" % Economy.multiplier
 	_refresh_depth()
 	_refresh_mine()
-	# Se muestra el bonus efectivo (el que de verdad multiplica el oro); el bruto solo va en el panel de debug.
-	_loot_bonus_label.text = "Bonus de botín: +%s" % NumberFormat.format_percent(Economy.loot_bonus_effective())
+	_refresh_odds()
 	_pick_card.refresh()
 	_refresh_last_loot()
 	_refresh_prestige()
@@ -273,11 +275,9 @@ func _refresh() -> void:
 		card.refresh(_mode)
 
 
-## Los avisos de los botones del costado: cuánto bonus de botín hay, y cuántas reliquias (o un ! cuando ya se
-## puede volver a la superficie, para que no se pase por alto con el cartel cerrado).
+## El aviso del botón de Reliquias: cuántas hay, o un ! cuando ya se puede volver a la superficie (para que no se
+## pase por alto con el cartel cerrado). El de Botín no lleva: el cofre ya pagó.
 func _refresh_badges() -> void:
-	var bonus: float = Economy.loot_bonus_effective()
-	_loot_button.set_badge("+%s" % NumberFormat.format_percent(bonus) if bonus > 0.0 else "")
 	var relics: int = Economy.relics if _relics_shown < 0 else _relics_shown
 	if _relics_shown < 0 and Economy.can_prestige():
 		_relics_button.set_badge("!", true)
@@ -395,60 +395,75 @@ func _build_loot_panel() -> void:
 		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		_chest_row.add_child(icon)
 		var label: Label = Label.new()
-		label.text = "%s\n%s (+%s)" % [rarity["name"], NumberFormat.format_percent(rarity["chance"]), NumberFormat.format_percent(rarity["bonus"])]
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		label.add_theme_font_size_override("font_size", 22)
 		label.add_theme_color_override("font_color", color)
 		_odds_row.add_child(label)
+		_odds_labels.append(label)
+	var hint: String = "Cada cofre paga oro al instante."
+	for rarity: Dictionary in table:
+		if int(rarity["relics"]) > 0:
+			hint += " El %s además da %s." % [str(rarity["name"]).to_lower(), _relics_phrase(rarity["relics"])]
+	_loot_hint_label.text = hint
+	_refresh_odds()
 
 
-func _on_loot_dropped(rarity: int, bonus: float) -> void:
-	_mark_dirty() # el bonus total cambió, aunque el oro no
+## Cada rareza con su probabilidad y el oro que daría si saliera ahora.
+func _refresh_odds() -> void:
+	var table: Array[Dictionary] = Economy.loot_table()
+	for index: int in range(mini(_odds_labels.size(), table.size())):
+		_odds_labels[index].text = "%s\n%s\n+%s" % [table[index]["name"], NumberFormat.format_percent(table[index]["chance"]), NumberFormat.format_number(Economy.loot_reward(index))]
+
+
+func _on_loot_dropped(rarity: int, amount: float) -> void:
+	_mark_dirty()
 	Juice.bounce(_loot_button)
 	var table: Array[Dictionary] = Economy.loot_table()
 	if rarity < 0 or rarity >= table.size():
 		return
-	_last_chest = { "rarity": rarity, "bonus": bonus }
+	_last_chest = { "rarity": rarity, "amount": amount }
 	_refresh_last_loot() # ya mismo: no hace falta esperar al próximo refresco
-	_celebrate_chest(table[rarity], bonus)
+	_celebrate_chest(table[rarity], amount)
 
 
-## El cofre cae en la mina con el brillo de su rareza y sale un aviso con lo que suma: el bonus del cofre y lo que
-## de verdad sube el efectivo (rinde cada vez menos). El legendario además pausa un momento y destella.
-func _celebrate_chest(entry: Dictionary, bonus: float) -> void:
+## El cofre cae en la mina con el brillo de su rareza, llueven monedas (más cuanto más rara) y sale un aviso con
+## el oro que dio. Si dio reliquias, el botón de Reliquias rebota. El legendario además pausa un momento y destella.
+func _celebrate_chest(entry: Dictionary, amount: float) -> void:
 	var color: Color = _rarity_color(entry["id"])
 	var special: bool = entry["id"] == SPECIAL_RARITY
 	var chest_icon: Texture2D = load(CHEST_ICON) as Texture2D
 	_mine_view.drop_chest(chest_icon, color, special)
-	var cap: float = Economy.loot_bonus_cap()
-	var gain: float = Economy.loot_bonus_effective() - EconomyMath.loot_bonus_effective(Economy.loot_bonus - bonus, cap)
-	_mine_view.show_toast(chest_icon, "¡Cofre %s!" % entry["name"], "+%s » +%s" % [NumberFormat.format_percent(bonus), NumberFormat.format_percent(gain)], color)
+	_mine_view.rain_coins(load(COIN_ICON) as Texture2D, int(COINS_BY_RARITY.get(entry["id"], DEFAULT_COINS)))
+	var detail: String = "+%s de oro" % NumberFormat.format_number(amount)
+	if int(entry["relics"]) > 0:
+		detail += " · +%s" % _relics_phrase(entry["relics"])
+		Juice.bounce(_relics_button)
+		Audio.play_sfx("relic")
+	_mine_view.show_toast(chest_icon, "¡Cofre %s!" % entry["name"], detail, color)
 	if special:
 		_screen_fx.hit_stop(SPECIAL_PAUSE, SPECIAL_SLOW)
 		if not Settings.reduce_effects:
 			_screen_fx.flash(SPECIAL_FLASH, SPECIAL_FLASH_FADE)
 
 
-## El aviso del último cofre sale del estado, no solo de la señal del cofre: sin bonus dice que todavía no
-## salió ninguno (también tras volver a la superficie o reiniciar); con bonus muestra el último cofre de esta
-## sesión y, si el bonus viene de una partida guardada (no hay cofre que mostrar), lo dice.
+## El aviso del último cofre sale del estado, no solo de la señal del cofre: en una partida sin nada ganado
+## (volver a la superficie, reiniciar) no queda un cofre viejo.
 func _refresh_last_loot() -> void:
 	var table: Array[Dictionary] = Economy.loot_table()
 	if table.is_empty():
 		return
-	if Economy.loot_bonus <= 0.0:
+	if Economy.run_gold <= 0.0 or _last_chest.is_empty() or int(_last_chest["rarity"]) >= table.size():
 		_last_chest = {}
 		_last_loot_label.text = "Todavía no salió ningún cofre"
 		_last_loot_label.remove_theme_color_override("font_color")
-	elif _last_chest.is_empty() or int(_last_chest["rarity"]) >= table.size():
-		_last_chest = {}
-		_last_loot_label.text = "Tu bonus viene de cofres que ya encontraste"
-		_last_loot_label.remove_theme_color_override("font_color")
-	else:
-		var entry: Dictionary = table[int(_last_chest["rarity"])]
-		_last_loot_label.text = "¡Cofre %s! +%s de bonus" % [entry["name"], NumberFormat.format_percent(_last_chest["bonus"])]
-		_last_loot_label.add_theme_color_override("font_color", _rarity_color(entry["id"]))
+		return
+	var entry: Dictionary = table[int(_last_chest["rarity"])]
+	var text: String = "¡Cofre %s! +%s de oro" % [entry["name"], NumberFormat.format_number(_last_chest["amount"])]
+	if int(entry["relics"]) > 0:
+		text += " y %s" % _relics_phrase(entry["relics"])
+	_last_loot_label.text = text
+	_last_loot_label.add_theme_color_override("font_color", _rarity_color(entry["id"]))
 
 
 func _rarity_color(id: String) -> Color:
@@ -506,7 +521,7 @@ func _on_prestige_pressed() -> void:
 	if not Economy.can_prestige():
 		return
 	var gain: int = Economy.prestige_relics()
-	var body: String = "Estás a %d m (%s).\n\nGanás %s: +%s de oro permanente (en total ×%.2f).\n\nVolvés a la superficie sin oro, sin cuadrilla, sin bonus de botín y con el pico en nivel 0. Las reliquias te quedan para siempre." % [
+	var body: String = "Estás a %d m (%s).\n\nGanás %s: +%s de oro permanente (en total ×%.2f).\n\nVolvés a la superficie sin oro, sin cuadrilla y con el pico en nivel 0. Las reliquias te quedan para siempre." % [
 		int(floorf(Economy.depth())),
 		Economy.biome_name(Economy.biome_index()),
 		_relics_phrase(gain),

@@ -119,6 +119,11 @@ const CHEST_FALL_TIME: float = 0.55
 const CHEST_STAY_TIME: float = 1.4
 const CHEST_FADE_TIME: float = 0.4
 const CHEST_GLOW_SIZE: float = 2.6
+## Lluvia de monedas de un cofre: caen desde arriba a todo lo ancho (`rain_coins`). Más de MAX_RAINS a la vez no.
+const MAX_RAINS: int = 3
+const RAIN_META: StringName = &"coin_rain"
+const RAIN_LIFETIME: float = 1.3
+const RAIN_COIN_SCALE: float = 3.0
 ## Aviso del cofre: arriba de la mina, entra deslizando, queda TOAST_TIME y se desvanece. Uno solo a la vez.
 const TOAST_TIME: float = 2.2
 const TOAST_SLIDE_TIME: float = 0.25
@@ -431,6 +436,40 @@ func drop_chest(texture: Texture2D, color: Color, special: bool) -> void:
 	tween.tween_callback(chest.queue_free)
 
 
+## `count` monedas (`coin`) caen desde arriba de la mina. Con reduce_effects, la mitad.
+func rain_coins(coin: Texture2D, count: int) -> void:
+	var alive: Array[Node] = []
+	for child: Node in _fx.get_children():
+		if child.has_meta(RAIN_META) and not child.is_queued_for_deletion():
+			alive.append(child)
+	while alive.size() >= MAX_RAINS:
+		alive.pop_front().queue_free()
+	var rain: CPUParticles2D = CPUParticles2D.new()
+	rain.set_meta(RAIN_META, true)
+	rain.texture = coin
+	rain.amount = maxi(count / 2 if reduce_effects else count, 1)
+	rain.lifetime = RAIN_LIFETIME
+	rain.one_shot = true
+	rain.explosiveness = 0.6 # no todas juntas: es una lluvia
+	rain.position = Vector2(size.x * 0.5, -16.0 * RAIN_COIN_SCALE * _unit)
+	rain.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	rain.emission_rect_extents = Vector2(size.x * 0.5, 8.0)
+	rain.direction = Vector2.DOWN
+	rain.spread = 12.0
+	rain.gravity = Vector2(0.0, 1300.0 * _unit)
+	rain.initial_velocity_min = 60.0 * _unit
+	rain.initial_velocity_max = 260.0 * _unit
+	rain.angular_velocity_min = -220.0
+	rain.angular_velocity_max = 220.0
+	rain.scale_amount_min = RAIN_COIN_SCALE * _unit
+	rain.scale_amount_max = RAIN_COIN_SCALE * _unit
+	_fx.add_child(rain)
+	rain.emitting = true
+	var tween: Tween = rain.create_tween()
+	tween.tween_interval(RAIN_LIFETIME * 2.0)
+	tween.tween_callback(rain.queue_free)
+
+
 func _add_chest_glow(chest: TextureRect, color: Color, special: bool) -> void:
 	var glow: TextureRect = TextureRect.new()
 	glow.name = "Glow"
@@ -555,7 +594,7 @@ func show_toast(icon: Texture2D, title: String, detail: String, color: Color) ->
 ## escena (volver a la superficie) o una captura limpia.
 func clear_effects() -> void:
 	for child: Node in _fx.get_children():
-		if not (child is CPUParticles2D) and not child.has_meta(PERSISTENT_META):
+		if child.has_meta(RAIN_META) or (not (child is CPUParticles2D) and not child.has_meta(PERSISTENT_META)):
 			child.queue_free()
 	_dynamite_clock = 0.0
 	# Apagar un emisor no saca las partículas que ya están en el aire: se oculta, y el próximo disparo (_fire) lo

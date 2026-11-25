@@ -212,7 +212,6 @@ func _test_offline_does_not_roll_loot() -> void:
 	e.loot_dropped.connect(func(rarity: int, _amount: float) -> void: drops.append(rarity))
 	e.apply_offline(8.0 * HOUR)
 	_check_eq(drops.size(), 0, "ningún cofre, aunque la probabilidad sea 100%")
-	_check_eq(e.loot_bonus, 0.0, "ni bonus de botín")
 	_check_eq(e.gold, 288000.0, "el oro es exactamente la producción")
 
 
@@ -259,17 +258,18 @@ func _test_in_session_gaps_go_through_offline() -> void:
 	always["loot"]["chance_per_second"] = 1.0
 	var e: EconomyScript = _make(always)
 	e.owned[0] = 2 # 2 oro/s
-	var drops: Array[int] = []
-	e.loot_dropped.connect(func(rarity: int, _amount: float) -> void: drops.append(rarity))
+	var drops: Array[float] = []
+	e.loot_dropped.connect(func(_rarity: int, amount: float) -> void: drops.append(amount))
 	e.tick_realtime(1000000) # referencia
 	e.tick_realtime(1000000 + 119000000) # 119 s oculta
-	_check_near(e.gold, 238.0, "119 s se acreditan como juego activo (238)")
 	_check(e.pending_offline_report.is_empty(), "sin aviso")
-	_check_eq(drops.size(), 1, "y la cuadrilla puede encontrar cofres, como jugando")
+	_check_eq(drops.size(), 1, "la cuadrilla puede encontrar cofres, como jugando")
+	if drops.size() == 1:
+		_check_near(e.gold, 238.0 + drops[0], "119 s se acreditan como juego activo (238), más el cofre")
 	var away: EconomyScript = _make(always)
 	away.owned[0] = 2
 	drops.clear()
-	away.loot_dropped.connect(func(rarity: int, _amount: float) -> void: drops.append(rarity))
+	away.loot_dropped.connect(func(_rarity: int, amount: float) -> void: drops.append(amount))
 	away.tick_realtime(1000000)
 	away.tick_realtime(1000000 + 120000000) # 120 s oculta
 	_check_near(away.gold, 240.0, "120 s también se acreditan")

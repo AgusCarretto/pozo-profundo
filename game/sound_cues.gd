@@ -21,7 +21,7 @@ func _on_hit_landed() -> void:
 
 
 ## El cofre suena según su rareza: "chest_<id de la rareza en el balance>".
-func _on_loot_dropped(rarity: int, _bonus: float) -> void:
+func _on_loot_dropped(rarity: int, _amount: float) -> void:
 	var table: Array[Dictionary] = Economy.loot_table()
 	if rarity >= 0 and rarity < table.size():
 		_play("chest_%s" % table[rarity]["id"])

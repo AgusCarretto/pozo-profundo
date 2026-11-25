@@ -20,10 +20,10 @@ const COVER_SCALE: int = 5
 ## `owned` sigue el orden del balance: Minero, Taladro, Dinamita, Gólem, Excavadora. "hits": golpes seguidos justo
 ## antes (ráfaga: números, astillas y gemas); "chest": rareza que cae; "wait": segundos antes de capturar.
 const SHOTS: Array[Dictionary] = [
-	{ "name": "1_tierra", "gold": 240.0, "run_gold": 320.0, "pick": 2, "owned": [5, 1], "loot": 0.06, "relics": 0, "hits": 4, "wait": 0.12 },
-	{ "name": "2_cristal_frenesi", "gold": 86000.0, "run_gold": 240000.0, "pick": 6, "owned": [14, 6, 2, 1], "loot": 0.6, "relics": 1, "hits": 12, "wait": 0.08 },
-	{ "name": "3_cofre_legendario", "gold": 5.6e6, "run_gold": 9.0e6, "pick": 7, "owned": [30, 10, 5, 2], "loot": 1.4, "relics": 3, "chest": 3, "wait": 1.15 },
-	{ "name": "4_abismo_cuadrilla", "gold": 9.4e8, "run_gold": 2.0e9, "pick": 9, "owned": [60, 25, 12, 6, 6], "loot": 2.0, "relics": 8, "wait": 1.5 },
+	{ "name": "1_tierra", "gold": 240.0, "run_gold": 320.0, "pick": 2, "owned": [5, 1], "relics": 0, "hits": 4, "wait": 0.12 },
+	{ "name": "2_cristal_frenesi", "gold": 86000.0, "run_gold": 240000.0, "pick": 6, "owned": [14, 6, 2, 1], "relics": 1, "hits": 12, "wait": 0.08 },
+	{ "name": "3_cofre_legendario", "gold": 5.6e6, "run_gold": 9.0e6, "pick": 7, "owned": [30, 10, 5, 2], "relics": 3, "chest": 3, "wait": 1.15 },
+	{ "name": "4_abismo_cuadrilla", "gold": 9.4e8, "run_gold": 2.0e9, "pick": 9, "owned": [60, 25, 12, 6, 6], "relics": 8, "wait": 1.5 },
 ]
 
 ## Letras del título (5x7). Solo las que usa "POZO PROFUNDO".
@@ -114,7 +114,6 @@ func _apply(economy: Node, shot: Dictionary) -> void:
 	economy.run_gold = shot["run_gold"]
 	economy.gold = shot["gold"]
 	economy.pick_level = shot["pick"]
-	economy.loot_bonus = shot["loot"]
 	economy.relics = shot["relics"]
 	var owned: Array = shot["owned"]
 	for index: int in range(owned.size()):

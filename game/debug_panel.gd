@@ -25,8 +25,6 @@ var toggle_button: Button
 var body: PanelContainer
 var gold_button: Button
 var time_button: Button
-## Bonus de botín bruto (y el efectivo que resulta, con su techo); null si no hay botín.
-var raw_bonus_label: Label
 ## Un botón por rareza del botín (en el orden de Economy.loot_table()); vacío si no hay botín.
 var chest_buttons: Array[Button] = []
 
@@ -86,14 +84,6 @@ func _ready() -> void:
 
 	var table: Array[Dictionary] = Economy.loot_table()
 	if not table.is_empty():
-		raw_bonus_label = Label.new()
-		raw_bonus_label.add_theme_font_size_override("font_size", 22)
-		raw_bonus_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		box.add_child(raw_bonus_label)
-		_refresh_raw_bonus()
-		Economy.gold_changed.connect(_refresh_raw_bonus.unbind(1))
-		Economy.loot_dropped.connect(_refresh_raw_bonus.unbind(2))
-
 		var chests_title: Label = Label.new()
 		chests_title.text = "Forzar cofre:"
 		chests_title.add_theme_font_size_override("font_size", 22)
@@ -104,21 +94,11 @@ func _ready() -> void:
 		grid.add_theme_constant_override("v_separation", 8)
 		box.add_child(grid)
 		for index: int in range(table.size()):
-			var button: Button = _make_button("%s +%s" % [table[index]["name"], NumberFormat.format_percent(table[index]["bonus"])], 24)
+			var button: Button = _make_button(str(table[index]["name"]), 24)
 			button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			button.pressed.connect(_on_chest_pressed.bind(index))
 			grid.add_child(button)
 			chest_buttons.append(button)
-
-
-## "Botín bruto +80% -> efectivo +70.2% (techo +300%)": el bruto es lo que suman los cofres;
-## el efectivo (el que ve el jugador) es lo que de verdad multiplica el oro.
-func _refresh_raw_bonus() -> void:
-	raw_bonus_label.text = "Botín bruto +%s » efectivo +%s (techo +%s)" % [
-		NumberFormat.format_percent(Economy.loot_bonus),
-		NumberFormat.format_percent(Economy.loot_bonus_effective()),
-		NumberFormat.format_percent(Economy.loot_bonus_cap()),
-	]
 
 
 ## Se queda debajo del HUD de la escena (`%HudPanel` del padre), aunque cambie de alto.

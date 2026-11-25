@@ -279,7 +279,7 @@ func _test_side_buttons(packed: PackedScene) -> void:
 	loot_button.pressed.emit()
 	await process_frame
 	_check(loot.visible and not relics.visible, "Botín abre el cartel del botín")
-	_check(_node(scene, "LootBonusLabel").is_visible_in_tree() and _node(scene, "OddsRow").is_visible_in_tree(), "con las probabilidades y el bonus")
+	_check(_node(scene, "LootHintLabel").is_visible_in_tree() and _node(scene, "OddsRow").is_visible_in_tree(), "con las probabilidades y qué dan")
 	_check_eq(loot.mouse_filter, Control.MOUSE_FILTER_STOP, "y no deja tocar lo de atrás")
 	(loot.find_child("CloseButton", true, false) as Button).pressed.emit()
 	_check(not loot.visible, "'Cerrar' lo cierra")
@@ -310,10 +310,11 @@ func _test_side_buttons(packed: PackedScene) -> void:
 	await process_frame
 	var loot_badge: Control = loot_button.get("badge")
 	var relics_badge: Control = relics_button.get("badge")
-	_check(not loot_badge.visible and not relics_badge.visible, "sin bonus ni reliquias no hay avisos")
+	_check(not loot_badge.visible and not relics_badge.visible, "sin reliquias no hay avisos")
 	_economy.drop_loot(3)
 	await process_frame
-	_check(loot_badge.visible and _card_texts(loot_button).any(func(t: String) -> bool: return t.contains("%")), "con bonus, el de Botín muestra cuánto (%s)" % str(_card_texts(loot_button)))
+	_check(not loot_badge.visible, "el de Botín no lleva aviso: el cofre ya pagó")
+	_check(relics_badge.visible and _card_texts(relics_button).has("1"), "la reliquia del legendario se ve en su botón (%s)" % str(_card_texts(relics_button)))
 	_economy.relics = 3
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
@@ -376,9 +377,9 @@ func _test_hud(packed: PackedScene) -> void:
 	_check(next_text.contains("Cristal") and next_text.contains("300"), "en Roca, el próximo es Cristal a los 300 m (%s)" % next_text)
 	_check(bar.value < 0.05, "la barra vuelve a casi vacía al cruzar a Roca (%.3f)" % bar.value)
 
-	_economy.drop_loot(3) # +60% bruto -> ~+54.4% efectivo
+	_economy.drop_loot(3) # el legendario da una reliquia
 	await process_frame
-	_check_eq(_label_in(scene, "MultLabel").text, "×%.2f" % _economy.multiplier, "el multiplicador incluye el botín (%s)" % _label_in(scene, "MultLabel").text)
+	_check_eq(_label_in(scene, "MultLabel").text, "×%.2f" % _economy.multiplier, "el multiplicador incluye la reliquia nueva (%s)" % _label_in(scene, "MultLabel").text)
 
 	_economy.run_gold = 1.8e8 # Abismo
 	_economy.gold_changed.emit(_economy.gold)
@@ -443,7 +444,6 @@ func _test_text_is_not_cut(packed: PackedScene) -> void:
 				_economy.gold = state["gold"]
 				_economy.relics = state["relics"]
 				_economy.pick_level = 9
-				_economy.loot_bonus = 5.0
 				_economy.owned[0] = 1234
 				_economy.owned[2] = 1234 # Cuadrilla de dinamita: el nombre más largo
 				for tap: int in range(mode_taps):
@@ -907,5 +907,5 @@ func _test_no_loot_hides_the_loot_button(packed: PackedScene) -> void:
 	var scene: Control = await _mount_host(packed, PHONE_SIZES[0], _balance_without_loot())
 	_check(not _node(scene, "LootButton").visible, "no hay botón de Botín")
 	_check(_node(scene, "RelicsButton").visible and _node(scene, "ModeButton").visible, "pero sí los otros dos")
-	_check(not _node(scene, "LootBonusLabel").is_visible_in_tree(), "y el bonus de botín no se ve")
+	_check(not _node(scene, "LootHintLabel").is_visible_in_tree(), "ni lo que dan los cofres")
 	await _free_host(scene)

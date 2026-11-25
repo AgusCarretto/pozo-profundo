@@ -21,7 +21,7 @@ func _initialize() -> void:
 	_test_relics_for_depth()
 	_test_relic_multiplier()
 	_test_pick_weighted()
-	_test_loot_bonus_effective()
+	_test_chest_reward()
 	_test_offline_seconds()
 	_test_balance_file()
 	_finish()
@@ -220,45 +220,13 @@ func _test_pick_weighted() -> void:
 	_check_eq(EconomyMath.pick_weighted(none, 0.5), -1, "todos los pesos en 0 -> -1")
 
 
-## Bonus de botín con rendimientos decrecientes: cap * (1 - e^(-bruto / cap)).
-func _test_loot_bonus_effective() -> void:
-	_section("Bonus de botín efectivo (rendimientos decrecientes, techo +300%)")
-	_check_eq(EconomyMath.loot_bonus_effective(0.0, 3.0), 0.0, "sin bonus bruto no hay bonus efectivo")
-	_check_near(EconomyMath.loot_bonus_effective(1.0, 3.0), 3.0 * (1.0 - exp(-1.0 / 3.0)), "bruto +100% -> 3 x (1 - e^(-1/3)) = +85.0%")
-	_check_near(EconomyMath.loot_bonus_effective(1.0, 3.0), 0.8504060683, "bruto +100% -> ~+85.04%", 1e-9)
-	_check_near(EconomyMath.loot_bonus_effective(0.6, 3.0), 0.5438077408, "bruto +60% (un legendario) -> ~+54.4%", 1e-9)
-	_check_near(EconomyMath.loot_bonus_effective(3.0, 3.0), 3.0 * (1.0 - exp(-1.0)), "bruto +300% -> solo ~+189.6%", 1e-9)
-	_check_near(EconomyMath.loot_bonus_effective(0.01, 3.0), 0.01, "con poco bonus es casi 1 a 1 (+1% bruto ~ +1%)", 2e-3)
-	_check(EconomyMath.loot_bonus_effective(0.01, 3.0) < 0.01, "pero nunca rinde más que el bruto")
-	var previous: float = 0.0
-	var increasing: bool = true
-	var below_gross: bool = true
-	var gains: Array[float] = []
-	for step: int in range(1, 41):
-		var raw: float = step * 0.5
-		var effective: float = EconomyMath.loot_bonus_effective(raw, 3.0)
-		if not (effective > previous):
-			increasing = false
-		if effective >= raw:
-			below_gross = false
-		gains.append(effective - previous)
-		previous = effective
-	_check(increasing, "más bruto siempre da más efectivo (hasta 20 de bruto)")
-	_check(below_gross, "el efectivo queda siempre por debajo del bruto")
-	var shrinking: bool = true
-	for i: int in range(1, gains.size()):
-		if gains[i] >= gains[i - 1]:
-			shrinking = false
-	_check(shrinking, "cada +50% de bruto agrega menos que el anterior (rendimientos decrecientes)")
-	_check(EconomyMath.loot_bonus_effective(100.0, 3.0) <= 3.0, "el techo de +300% no se pasa (bruto 100)")
-	_check_near(EconomyMath.loot_bonus_effective(100.0, 3.0), 3.0, "y con mucho bruto se acerca al techo (bruto 100 -> +300%)", 1e-9)
-	_check_eq(EconomyMath.loot_bonus_effective(1.0e6, 3.0), 3.0, "con un bruto absurdo (1e6) queda justo en el techo")
-	_check_eq(EconomyMath.loot_bonus_effective(INF, 3.0), 3.0, "infinito -> techo")
-	_check_near(EconomyMath.loot_bonus_effective(1.0, 5.0), 5.0 * (1.0 - exp(-1.0 / 5.0)), "el techo sale del parámetro: con 5 es otra curva")
-	_check_eq(EconomyMath.loot_bonus_effective(-0.5, 3.0), 0.0, "un bruto negativo -> 0")
-	_check_eq(EconomyMath.loot_bonus_effective(NAN, 3.0), 0.0, "NaN -> 0")
-	_check_eq(EconomyMath.loot_bonus_effective(1.0, 0.0), 0.0, "un techo de 0 -> 0 (sin dividir por cero)")
-	_check_eq(EconomyMath.loot_bonus_effective(1.0, -3.0), 0.0, "un techo negativo -> 0")
+## El cofre paga lo que más sea entre N segundos de producción y M golpes.
+func _test_chest_reward() -> void:
+	_section("Premio de un cofre")
+	_check_eq(EconomyMath.chest_reward(10.0, 1.3, 5.0, 15.0), 50.0, "5 s de 10 oro/s le ganan a 15 golpes de 1.3")
+	_check_eq(EconomyMath.chest_reward(0.0, 1.0, 5.0, 15.0), 15.0, "sin cuadrilla pagan los golpes")
+	_check_eq(EconomyMath.chest_reward(100.0, 1000.0, 5.0, 15.0), 15000.0, "con un golpe enorme, también")
+	_check_eq(EconomyMath.chest_reward(-1.0, -1.0, 5.0, 15.0), 0.0, "datos negativos no restan")
 
 
 func _test_offline_seconds() -> void:

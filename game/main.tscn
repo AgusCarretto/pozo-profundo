@@ -365,7 +365,7 @@ text = " "
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="LootBonusLabel" type="Label" parent="LootPanel/Center/Panel/Box/LootBox"]
+[node name="LootHintLabel" type="Label" parent="LootPanel/Center/Panel/Box/LootBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"AccentLabel"
