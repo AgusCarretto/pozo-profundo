@@ -33,6 +33,7 @@ func _initialize() -> void:
 	await _test_music_crossfade()
 	_test_music_entries()
 	await _test_music_resume()
+	await _test_waits_for_gesture()
 	await process_frame
 	_test_real_autoload()
 	for node: Node in _nodes:
@@ -399,6 +400,49 @@ func _test_music_resume() -> void:
 	_check(audio.current_music_player().get_playback_position() < 0.1, "con from_start arranca de cero (%.2f s)" % audio.current_music_player().get_playback_position())
 	audio.stop_music(0.0)
 	_check_eq(audio.current_music_id(), "", "sin música, current_music_id es \"\"")
+	_drop(audio)
+
+
+## En el navegador el audio está bloqueado hasta que la persona toca algo: no se pide nada antes y al primer
+## toque arranca el último tema pedido.
+func _test_waits_for_gesture() -> void:
+	_section("En la web nada suena hasta el primer toque")
+	var audio: AudioScript = _make_audio()
+	_check_eq(audio.get("waiting_for_gesture"), false, "fuera de la web no espera nada")
+	audio.set("waiting_for_gesture", true)
+	_check(audio.play_music("earth", 0.0), "pedir un tema se acepta")
+	_check(audio.current_music_player() == null, "pero todavía no suena")
+	_check_eq(audio.current_music_id(), "", "ni se informa como sonando")
+	_check(audio.play_sfx("hit") == null, "los efectos tampoco")
+	audio.play_music("rock", 0.0)
+	var release: InputEventScreenTouch = InputEventScreenTouch.new()
+	release.pressed = false
+	root.push_input(release)
+	root.push_input(InputEventMouseMotion.new())
+	_check_eq(audio.get("waiting_for_gesture"), true, "soltar o mover no alcanza")
+	var touch: InputEventScreenTouch = InputEventScreenTouch.new()
+	touch.pressed = true
+	root.push_input(touch)
+	_check_eq(audio.get("waiting_for_gesture"), false, "el primer toque destraba")
+	_check_eq(audio.current_music_id(), "rock", "suena lo último que se pidió")
+	_check(audio.current_music_player() != null and audio.current_music_player().playing, "y está sonando")
+	_check(audio.play_sfx("hit") != null, "y los efectos ya suenan")
+	var click: InputEventMouseButton = InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	var key: InputEventKey = InputEventKey.new()
+	key.keycode = KEY_SPACE
+	for event: InputEvent in [click, key]:
+		audio.set("waiting_for_gesture", true)
+		event.set("pressed", true)
+		root.push_input(event)
+		_check_eq(audio.get("waiting_for_gesture"), false, "%s también destraba" % event.get_class())
+	audio.stop_music(0.0)
+	audio.set("waiting_for_gesture", true)
+	audio.play_music("earth", 0.0)
+	audio.stop_music(0.0)
+	root.push_input(touch)
+	_check(audio.current_music_player() == null, "apagar la música antes del toque descarta lo pedido")
+	await process_frame
 	_drop(audio)
 
 

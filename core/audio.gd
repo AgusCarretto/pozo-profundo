@@ -20,6 +20,10 @@ extends Node
 ## existen. Los volúmenes y el silencio vienen de Settings (que va antes en los autoloads) y se aplican a
 ## los buses cada vez que cambian. play_music() cambia de tema con un fundido cruzado y retoma un tema que ya
 ## sonó donde había quedado (salvo que se pida desde el principio).
+##
+## En el navegador el audio está bloqueado hasta que la persona toca algo. Por eso en la web Audio arranca
+## esperando (`waiting_for_gesture`): no suena ningún SFX y la música pedida queda anotada; el primer toque, click
+## o tecla llama a unlock(), que arranca el último tema pedido.
 
 ## Sonó el SFX `id` (no se emite si no sonó: id desconocido, silencio o volumen 0).
 signal sfx_played(id: String)
@@ -34,6 +38,8 @@ const DEFAULT_CATALOG_PATH: String = "res://data/sounds.json"
 const SFX_VOICES: int = 8
 ## Segundos del fundido cruzado entre temas, si no se pide otro.
 const DEFAULT_MUSIC_FADE: float = 1.5
+## Fundido con el que entra la música al primer toque.
+const UNLOCK_FADE: float = 0.3
 ## Límites razonables para lo que trae el catálogo.
 const PITCH_LIMITS: Vector2 = Vector2(0.25, 4.0)
 const VOLUME_DB_LIMITS: Vector2 = Vector2(-60.0, 24.0)
@@ -65,6 +71,10 @@ var _music_players: Array[AudioStreamPlayer] = []
 ## Índice en _music_players del tema que suena (o al que se está entrando); -1 = ninguno.
 var _current_music: int = -1
 var _music_tween: Tween
+## Todavía no hubo un gesto de la persona (solo pasa en la web): nada suena hasta entonces.
+var waiting_for_gesture: bool = OS.has_feature("web")
+## Lo último que se pidió mientras se esperaba el gesto: { "stream", "id" } ({} = nada).
+var _pending_music: Dictionary = {}
 
 
 func _init() -> void:
@@ -96,6 +106,28 @@ func _exit_tree() -> void:
 	silence()
 
 
+## Antes que la interfaz (los `_input` van primero): así el mismo toque que destraba el audio ya suena.
+func _input(event: InputEvent) -> void:
+	if not waiting_for_gesture:
+		return
+	var is_gesture: bool = (event is InputEventScreenTouch or event is InputEventMouseButton or event is InputEventKey) and event.is_pressed()
+	if is_gesture:
+		unlock()
+
+
+## Deja de esperar el gesto y arranca la música que se había pedido.
+func unlock() -> void:
+	if not waiting_for_gesture:
+		return
+	waiting_for_gesture = false
+	if _pending_music.is_empty():
+		return
+	var pending: Dictionary = _pending_music
+	_pending_music = {}
+	play_music_stream(pending["stream"], UNLOCK_FADE, true)
+	_current_music_id = pending["id"]
+
+
 ## Corta en seco todo lo que suena (SFX y música) y suelta los streams de los reproductores. El catálogo
 ## queda: después se puede volver a sonar. Lo usa el cierre: un sonido que sigue sonando cuando Godot
 ## sale queda retenido por el AudioServer y se reporta como recurso todavía en uso (el AudioServer lo
@@ -104,6 +136,7 @@ func silence() -> void:
 	_kill_music_tween()
 	_current_music = -1
 	_current_music_id = ""
+	_pending_music = {}
 	_music_positions.clear()
 	for player: AudioStreamPlayer in _voices + _music_players:
 		player.stop()
@@ -191,7 +224,7 @@ func has_music(id: String) -> bool:
 ## sin sonar si el id no está en el catálogo (no es un error: un evento puede no tener sonido todavía), si
 ## está todo en silencio o si el volumen de SFX está en 0.
 func play_sfx(id: String) -> AudioStreamPlayer:
-	if not _sfx.has(id) or _voices.is_empty() or not is_inside_tree():
+	if not _sfx.has(id) or _voices.is_empty() or not is_inside_tree() or waiting_for_gesture:
 		return null
 	if settings != null and (settings.muted or settings.sfx_volume <= 0.0):
 		return null
@@ -234,7 +267,10 @@ func play_music(id: String, fade: float = DEFAULT_MUSIC_FADE, from_start: bool =
 	if not _music.has(id):
 		return false
 	play_music_stream(_music[id], fade, from_start)
-	_current_music_id = id
+	if waiting_for_gesture:
+		_pending_music["id"] = id
+	else:
+		_current_music_id = id
 	return true
 
 
@@ -242,6 +278,9 @@ func play_music_stream(stream: AudioStream, fade: float = DEFAULT_MUSIC_FADE, fr
 	if _music_players.is_empty() or stream == null:
 		return
 	_current_music_id = ""
+	if waiting_for_gesture:
+		_pending_music = { "stream": stream, "id": "" }
+		return
 	var current: AudioStreamPlayer = current_music_player()
 	if current != null and current.stream == stream and current.playing and not from_start:
 		return
@@ -270,6 +309,7 @@ func play_music_stream(stream: AudioStream, fade: float = DEFAULT_MUSIC_FADE, fr
 
 ## Apaga la música con un fundido de `fade` segundos.
 func stop_music(fade: float = DEFAULT_MUSIC_FADE) -> void:
+	_pending_music = {}
 	_kill_music_tween()
 	_current_music = -1
 	_current_music_id = ""
