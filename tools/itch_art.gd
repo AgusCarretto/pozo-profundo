@@ -69,7 +69,17 @@ func _save(image: Image, file_name: String) -> void:
 
 # --- Capturas ----------------------------------------------------------------
 
+## Sin cofres al azar: uno que caiga mientras se espera pisa el aviso que se quería mostrar (el "legendario"
+## salía como "Común") y las imágenes cambian en cada corrida. El de la captura se pide a mano con drop_loot().
+func _stop_random_chests() -> void:
+	var balance: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/balance.json"))
+	balance["loot"]["chance_per_hit"] = 0.0
+	balance["loot"]["chance_per_second"] = 0.0
+	root.get_node("Economy").load_balance(balance)
+
+
 func _screenshots() -> void:
+	_stop_random_chests()
 	var viewport: SubViewport = SubViewport.new()
 	viewport.size = SHOT_SIZE
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
