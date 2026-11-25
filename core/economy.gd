@@ -83,6 +83,8 @@ var _rarity_weights: Array[float] = []
 var _prestige: Dictionary = {}
 ## Reglas del progreso offline (max_hours, min_notice_seconds). Vacío = sin progreso offline.
 var _offline: Dictionary = {}
+## Umbrales del frenesí (hits_per_second, enter_seconds, exit_seconds, window_seconds). Vacío = sin frenesí.
+var _frenzy: Dictionary = {}
 
 
 func _init() -> void:
@@ -169,6 +171,9 @@ func load_balance(balance: Dictionary) -> bool:
 	var parsed_offline: Variant = _read_numbers(balance, "offline", ["max_hours", "min_notice_seconds"])
 	if parsed_offline == null:
 		return false
+	var parsed_frenzy: Variant = _read_numbers(balance, "frenzy", ["hits_per_second", "enter_seconds", "exit_seconds", "window_seconds"])
+	if parsed_frenzy == null:
+		return false
 
 	last_error = ""
 	_cost_growth = growth
@@ -177,6 +182,7 @@ func load_balance(balance: Dictionary) -> bool:
 	_depth = parsed_depth
 	_prestige = parsed_prestige
 	_offline = parsed_offline
+	_frenzy = parsed_frenzy
 	_biomes = []
 	_biome_meters_each = 0.0
 	_biome_growth = 1.0
@@ -463,6 +469,13 @@ func tick(delta: float) -> void:
 	# así un frame lento no tira menos cofres que varios rápidos.
 	_roll_loot(1.0 - pow(1.0 - _loot_second_chance, delta))
 	gold_changed.emit(gold)
+
+
+# --- Frenesí -----------------------------------------------------------------
+
+## Los umbrales del frenesí del balance (para core/frenzy_meter.gd); {} si el balance no tiene "frenzy".
+func frenzy_settings() -> Dictionary:
+	return _frenzy.duplicate()
 
 
 # --- Progreso offline ------------------------------------------------------------
