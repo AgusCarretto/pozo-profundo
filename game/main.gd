@@ -186,12 +186,18 @@ func _ready() -> void:
 	Economy.hit_landed.connect(_on_hit_landed)
 	_mine_view.dynamite_exploded.connect(func(_at: Vector2) -> void: Audio.play_sfx("dynamite"))
 	Economy.offline_progress.connect(_show_offline_notice)
+	# Guardado del navegador: la copia de la partida y sus avisos.
+	_options.restore_code_entered.connect(_on_restore_code)
+	Save.imported.connect(_on_save_imported)
+	Economy.generator_bought.connect(_warn_fragile_storage.unbind(2))
+	Economy.pick_upgraded.connect(_warn_fragile_storage.unbind(1))
 	_refresh()
 	_built = true
 
 	# Si el juego arrancó con progreso offline, Economy ya lo acreditó antes de que existiera esta escena.
 	if not Economy.pending_offline_report.is_empty():
 		_show_offline_notice(Economy.pending_offline_report)
+	check_storage()
 
 
 func _process(_delta: float) -> void:
@@ -541,6 +547,47 @@ func _fly_relics(before: int, gained: int) -> void:
 		_screen_fx.fly(load(RUNE_ICONS[index % RUNE_ICONS.size()]) as Texture2D, origin + spread, target, RUNE_SIZE, PRESTIGE_FADE_OUT * 0.5 + index * RELIC_STAGGER, RELIC_FLIGHT_TIME, on_arrive)
 	var deadline: float = PRESTIGE_FADE_OUT * 0.5 + figures * RELIC_STAGGER + RELIC_FLIGHT_TIME + 0.3
 	await get_tree().create_timer(deadline).timeout
+
+
+# --- Guardado en el navegador --------------------------------------------------
+
+## Si el navegador no deja guardar nada, se dice apenas se abre: mejor saberlo antes de jugar media hora.
+func check_storage() -> void:
+	if not _options.platform.storage_blocked():
+		return
+	_modal.open("No se puede guardar", "Este navegador no deja guardar: al cerrar se pierde la partida.\n\nProbá sin modo privado, con las cookies permitidas, o en otro navegador.", "Entendido")
+
+
+## En iPhone dentro de itch.io el navegador puede borrar la partida: se avisa una vez, recién con la primera compra
+## (ya hay algo que perder y no interrumpe la entrada al juego).
+func _warn_fragile_storage() -> void:
+	if Settings.storage_notice_seen or _modal.visible or _prestiging or not _options.platform.has_fragile_storage():
+		return
+	Settings.storage_notice_seen = true
+	_modal.open("Cuidá tu partida", "En iPhone y iPad el navegador puede borrar la partida al cerrarlo.\n\nGuardá una copia cada tanto (Opciones » Guardar copia), y jugá sin modo privado y siempre desde el mismo navegador.",
+		"Guardar copia", "Después", _options.show_backup)
+
+
+func _on_restore_code(code: String) -> void:
+	if code.strip_edges() == "" or _prestiging:
+		return
+	var data: Dictionary = Save.read_code(code)
+	if data.is_empty():
+		_modal.open("Ese código no sirve", "Copialo entero, tal como te lo dio el juego, y probá de nuevo.", "Entendido")
+		return
+	var age: float = maxf(Time.get_unix_time_from_system() - float(data.get("saved_at", 0.0)), 0.0)
+	_modal.open("¿Restaurar esta partida?", "La copia es de hace %s.\n\nSe reemplaza la partida de ahora por la de la copia." % NumberFormat.format_duration(age),
+		"Sí, restaurar", "No", func() -> void: Save.import_code(code))
+
+
+## La partida cambió de golpe: la pantalla se arma de nuevo sin festejos (ni cartel de bioma ni último cofre).
+func _on_save_imported() -> void:
+	Economy.dismiss_offline_report()
+	_options.close()
+	_mine_view.clear_effects()
+	_shown_biome = -1
+	_last_chest = {}
+	_refresh()
 
 
 # --- Progreso offline --------------------------------------------------------

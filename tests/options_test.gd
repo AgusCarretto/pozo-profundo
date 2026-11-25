@@ -7,6 +7,7 @@ extends "res://tests/test_base.gd"
 
 const MAIN_SCENE: String = "res://game/main.tscn"
 const WebPlatform := preload("res://core/web_platform.gd")
+const WebTextDialog := preload("res://core/web_text_dialog.gd")
 const ICON_DIR: String = "res://assets/ui/game_icons/"
 const LINK: String = "https://ejemplo.com/opinar"
 const TOUCH_MIN: float = 96.0
@@ -18,6 +19,26 @@ class FakePlatform extends WebPlatform:
 	var supported: bool = true
 	var full: bool = false
 	var opened: Array[String] = []
+	var backup: bool = true
+	var fragile: bool = false
+	var blocked: bool = false
+	var shown: Array[String] = []
+	var asked: Array[Callable] = []
+
+	func can_backup() -> bool:
+		return backup
+
+	func has_fragile_storage() -> bool:
+		return fragile
+
+	func storage_blocked() -> bool:
+		return blocked
+
+	func show_text(_title: String, _hint: String, text: String, _labels: Dictionary) -> void:
+		shown.append(text)
+
+	func ask_text(_title: String, _hint: String, _labels: Dictionary, on_text: Callable) -> void:
+		asked.append(on_text)
 
 	func can_fullscreen() -> bool:
 		return supported
@@ -53,6 +74,10 @@ func _initialize() -> void:
 	_test_js_booleans()
 	await _test_web_options(packed)
 	await _test_credits(packed)
+	await _test_backup(packed)
+	await _test_storage_notices(packed)
+	_test_ios_detection()
+	_test_dialog_script()
 	await _test_options_layout(packed)
 	_settings.from_dict(_saved_settings)
 	_finish()
@@ -288,6 +313,115 @@ func _test_credits(packed: PackedScene) -> void:
 	await _free(scene)
 
 
+func _test_backup(packed: PackedScene) -> void:
+	_section("Guardar y restaurar una copia de la partida")
+	var economy: Node = root.get_node("Economy")
+	var save: Node = root.get_node("Save")
+	var platform: FakePlatform = FakePlatform.new()
+	platform.backup = false
+	var scene: Control = await _open_options(packed, platform, "")
+	var panel: Control = scene.get_node("OptionsPanel") as Control
+	var backup: Button = panel.get("backup_button") as Button
+	var restore: Button = panel.get("restore_button") as Button
+	_check(backup != null and restore != null, "existen los botones de copia")
+	if backup == null or restore == null:
+		await _free(scene)
+		return
+	_check(not backup.is_visible_in_tree() and not restore.is_visible_in_tree(), "fuera del navegador no se muestran")
+	await _free(scene)
+
+	economy.reset()
+	economy.owned[0] = 7
+	economy.pick_level = 3
+	platform = FakePlatform.new()
+	scene = await _open_options(packed, platform, "")
+	panel = scene.get_node("OptionsPanel") as Control
+	var modal: Control = scene.get_node("Modal") as Control
+	(panel.get("backup_button") as Button).pressed.emit()
+	_check_eq(platform.shown.size(), 1, "Guardar copia muestra el código")
+	var code: String = platform.shown[0] if not platform.shown.is_empty() else ""
+	_check_eq(save.read_code(code).get("sections", {}).get("economy", {}).get("pick_level"), 3.0, "que trae la partida de ahora")
+
+	economy.reset() # lo que hace iOS: la partida desaparece
+	(panel.get("restore_button") as Button).pressed.emit()
+	_check_eq(platform.asked.size(), 1, "Restaurar copia pide el código")
+	if platform.asked.is_empty():
+		await _free(scene)
+		return
+	platform.asked[0].call("cualquier cosa")
+	_check(modal.visible and modal.title_label.text.contains("no sirve"), "un código cualquiera avisa que no sirve (%s)" % modal.title_label.text)
+	modal.confirm_button.pressed.emit()
+	platform.asked[0].call("")
+	_check(not modal.visible, "dejarlo vacío no hace nada")
+
+	platform.asked[0].call(code)
+	_check(modal.visible and modal.cancel_button.visible, "un código bueno pide confirmación")
+	_check(modal.body_label.text.contains("reemplaza"), "y avisa que reemplaza la partida (%s)" % modal.body_label.text.replace("\n", " | "))
+	modal.cancel_button.pressed.emit()
+	_check_eq(economy.pick_level, 0, "cancelar no restaura")
+	platform.asked[0].call(code)
+	modal.confirm_button.pressed.emit()
+	await process_frame
+	_check_eq(economy.owned_count(0), 7, "confirmar devuelve la cuadrilla")
+	_check_eq(economy.pick_level, 3, "y el pico")
+	_check(not panel.visible, "cierra Opciones para ver la mina")
+	_check(not modal.visible, "sin cartel pendiente")
+	economy.reset()
+	await _free(scene)
+
+
+func _test_storage_notices(packed: PackedScene) -> void:
+	_section("Avisos de guardado: iPhone dentro de itch.io, o navegador que no deja guardar")
+	var economy: Node = root.get_node("Economy")
+	_settings.storage_notice_seen = false
+	economy.reset()
+	var platform: FakePlatform = FakePlatform.new()
+	var scene: Control = await _mount(packed, PHONE_SIZES[0])
+	(scene.get_node("OptionsPanel") as Control).set("platform", platform)
+	var modal: Control = scene.get_node("Modal") as Control
+	economy.gold = 1.0e6
+	economy.buy_generator(0, 0)
+	_check(not modal.visible, "donde el guardado es normal, comprar no avisa nada")
+
+	platform.fragile = true
+	economy.buy_generator(0, 0)
+	_check(modal.visible and modal.body_label.text.contains("iPhone"), "en iPhone, al comprar avisa que la partida se puede borrar")
+	_check_eq(_settings.storage_notice_seen, true, "y lo anota")
+	_check_eq(_settings.to_dict().get("storage_notice_seen"), true, "en lo que se guarda")
+	modal.confirm_button.pressed.emit()
+	_check_eq(platform.shown.size(), 1, "desde el aviso se guarda la copia")
+	economy.upgrade_pick()
+	_check(not modal.visible, "no se repite")
+
+	scene.call("check_storage")
+	_check(not modal.visible, "si el navegador deja guardar, al abrir no hay aviso")
+	platform.blocked = true
+	scene.call("check_storage")
+	_check(modal.visible and modal.body_label.text.contains("no deja guardar"), "si no deja, lo dice apenas se abre")
+	modal.confirm_button.pressed.emit()
+	economy.reset()
+	await _free(scene)
+
+
+## El iPad se presenta como una Mac: se lo reconoce por la pantalla táctil.
+func _test_ios_detection() -> void:
+	_section("Reconocer iPhone y iPad")
+	_check(WebPlatform.is_ios("Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 CriOS/139.0", "iPhone", 5), "iPhone (cualquier navegador)")
+	_check(WebPlatform.is_ios("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15", "MacIntel", 5), "iPad que dice ser Mac")
+	_check(not WebPlatform.is_ios("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15", "MacIntel", 0), "una Mac no")
+	_check(not WebPlatform.is_ios("Mozilla/5.0 (Linux; Android 14; Pixel 8) Chrome/139.0 Mobile", "Linux armv81", 5), "Android no")
+	_check(not WebPlatform.is_ios("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/139.0", "Win32", 10), "una PC táctil tampoco")
+
+
+## El cuadro de copia es JavaScript: acá solo se puede mirar que el código se arme entero (el CSS tiene "%", que
+## con el formato de textos de GDScript rompía todo y solo se veía en el navegador).
+func _test_dialog_script() -> void:
+	_section("El cuadro del navegador para copiar y pegar")
+	var script: String = WebTextDialog.build_script("Un \"título\"", "100% seguro", "SAVE1.abc", "show", { "copy": "Copiar" })
+	_check(script.contains("width:100%"), "conserva el CSS")
+	_check(script.strip_edges().ends_with("(\"Un \\\"título\\\"\", \"100% seguro\", \"SAVE1.abc\", \"show\", {\"copy\":\"Copiar\"}))"), "y recibe los textos como literales (%s)" % script.right(80))
+
+
 func _test_options_layout(packed: PackedScene) -> void:
 	_section("Opciones en un celular")
 	for phone: Vector2 in PHONE_SIZES:
@@ -295,12 +429,14 @@ func _test_options_layout(packed: PackedScene) -> void:
 		var label: String = "%dx%d" % [int(phone.x), int(phone.y)]
 		var panel: Control = scene.get_node("OptionsPanel") as Control
 		# Con todo lo opcional a la vista: es el caso más alto.
-		panel.set("platform", FakePlatform.new())
+		var everything: FakePlatform = FakePlatform.new()
+		everything.fragile = true # con la explicación de iPhone a la vista
+		panel.set("platform", everything)
 		panel.set("feedback_url", LINK)
 		(_node(scene, "OptionsButton") as Button).pressed.emit()
 		await process_frame
 		await process_frame
-		for shown: String in ["fullscreen_button", "feedback_button", "credits_button"]:
+		for shown: String in ["fullscreen_button", "feedback_button", "credits_button", "backup_button", "restore_button", "close_button"]:
 			var button: Button = panel.get(shown) as Button
 			_check(button != null and button.is_visible_in_tree() and button.get_global_rect().end.y <= phone.y, "[%s] %s se ve entero" % [label, shown])
 		var small: Array[String] = []

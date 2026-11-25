@@ -101,7 +101,7 @@ func _test_bad_data_is_ignored() -> void:
 	_check_eq(settings.muted, false, "un silencio que no es booleano se ignora")
 	_check_eq(settings.reduce_effects, false, "igual que reducir efectos")
 	settings.from_dict({})
-	_check_eq(settings.to_dict(), { "music_volume": defaults["music_volume"], "music_scale": SettingsScript.MUSIC_SCALE, "sfx_volume": 1.0, "muted": false, "reduce_effects": false }, "una sección vacía no cambia nada")
+	_check_eq(settings.to_dict(), { "music_volume": defaults["music_volume"], "music_scale": SettingsScript.MUSIC_SCALE, "sfx_volume": 1.0, "muted": false, "reduce_effects": false, "storage_notice_seen": false }, "una sección vacía no cambia nada")
 
 
 ## La música ahora suena más baja en todo el recorrido del control: un volumen elegido con la escala anterior ya

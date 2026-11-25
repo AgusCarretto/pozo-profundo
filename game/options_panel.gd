@@ -10,6 +10,14 @@ extends Control
 ## Se abrió o se cerró (solo cuando cambia: abrirlo ya abierto no avisa).
 signal opened
 signal closed
+## El jugador pegó un código de respaldo (la escena confirma y restaura).
+signal restore_code_entered(code: String)
+
+const BACKUP_TITLE: String = "Copia de la partida"
+const BACKUP_HINT: String = "Copiá este código y guardalo (en las notas, o mandátelo por mensaje). Con él recuperás la partida si el navegador la borra."
+const RESTORE_HINT: String = "Pegá acá el código que guardaste (mantené apretado el cuadro y elegí Pegar)."
+const COPY_LABELS: Dictionary = { "copy": "Copiar", "copied": "¡Copiado!", "copy_failed": "No se pudo copiar solo: mantené apretado el texto y elegí Copiar.", "close": "Cerrar" }
+const RESTORE_LABELS: Dictionary = { "accept": "Restaurar", "cancel": "Cancelar" }
 
 const CreditsPanel := preload("res://game/credits_panel.gd")
 const OnlineConfig := preload("res://core/online_config.gd")
@@ -28,6 +36,8 @@ var feedback_button: Button
 var credits_button: Button
 var version_label: Label
 var credits_panel: CreditsPanel
+var backup_button: Button
+var restore_button: Button
 ## Pantalla completa y links; los tests lo reemplazan antes de abrir.
 var platform: WebPlatform = WebPlatform.new()
 ## Lo que abre "Opinar" ("" = no hay botón).
@@ -35,6 +45,9 @@ var feedback_url: String = ""
 
 var _music_value: Label
 var _sfx_value: Label
+var _backup_row: HBoxContainer
+## Explicación que solo se muestra donde el navegador puede borrar la partida.
+var _fragile_hint: Label
 
 
 func _init() -> void:
@@ -99,6 +112,19 @@ func _init() -> void:
 	feedback_button.pressed.connect(func() -> void: platform.open_url(feedback_url))
 	credits_button = _button(extras, "Créditos")
 
+	_fragile_hint = Label.new()
+	_fragile_hint.theme_type_variation = &"MutedLabel"
+	_fragile_hint.text = "En iPhone el navegador puede borrar la partida: guardá una copia."
+	_fragile_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(_fragile_hint)
+	_backup_row = HBoxContainer.new()
+	_backup_row.add_theme_constant_override("separation", 16)
+	box.add_child(_backup_row)
+	backup_button = _button(_backup_row, "Guardar copia")
+	backup_button.pressed.connect(show_backup)
+	restore_button = _button(_backup_row, "Restaurar copia")
+	restore_button.pressed.connect(_on_restore_pressed)
+
 	close_button = _button(box, "Cerrar")
 	close_button.pressed.connect(close)
 
@@ -134,6 +160,15 @@ func close() -> void:
 	closed.emit()
 
 
+## Muestra el código de la partida de ahora para copiarlo.
+func show_backup() -> void:
+	platform.show_text(BACKUP_TITLE, BACKUP_HINT, Save.export_code(), COPY_LABELS)
+
+
+func _on_restore_pressed() -> void:
+	platform.ask_text(BACKUP_TITLE, RESTORE_HINT, RESTORE_LABELS, func(code: String) -> void: restore_code_entered.emit(code))
+
+
 ## La pantalla completa también se cambia por fuera (el gesto de atrás del celular): el texto la sigue.
 func _process(_delta: float) -> void:
 	if visible:
@@ -165,6 +200,8 @@ func _button(parent: Container, text: String) -> Button:
 func _sync() -> void:
 	fullscreen_button.visible = platform.can_fullscreen()
 	feedback_button.visible = feedback_url != ""
+	_backup_row.visible = platform.can_backup()
+	_fragile_hint.visible = platform.can_backup() and platform.has_fragile_storage()
 	_show_fullscreen_state()
 	music_slider.set_value_no_signal(Settings.music_volume)
 	sfx_slider.set_value_no_signal(Settings.sfx_volume)

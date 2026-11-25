@@ -61,6 +61,7 @@ func _initialize() -> void:
 	_test_never_writes_without_sections()
 	_test_persistence_disabled()
 	_test_mirror()
+	_test_backup_code()
 	_test_save_triggers()
 	await _test_autosave_timer()
 	_test_real_autoloads()
@@ -361,6 +362,39 @@ func _test_mirror() -> void:
 	save.persistence_enabled = false
 	_register(save, { "gold": 2.0 })
 	_check(not save.load_from_disk() and not save.save_now() and untouched.writes == 0, "con la persistencia apagada no toca la copia")
+
+
+## En iPhone el navegador puede borrar el almacenamiento del juego: el jugador se lleva la partida como texto.
+func _test_backup_code() -> void:
+	_section("Código de respaldo (copiar y pegar la partida)")
+	var writer: SaveScript = _make("code_writer")
+	_register(writer, { "gold": BIG_GOLD, "owned": [12, 3] })
+	var code: String = writer.export_code()
+	_check(code.begins_with("SAVE1.") and not code.contains("\n") and not code.contains(" "), "es un solo texto sin espacios (%s...)" % code.left(24))
+	var data: Dictionary = writer.read_code(code)
+	_check_eq(data.get("sections", {}).get("game", {}).get("gold"), BIG_GOLD, "se lee sin perder precisión")
+	_check(absf(float(data.get("saved_at", 0.0)) - Time.get_unix_time_from_system()) < 5.0, "y dice de cuándo es")
+
+	var reader: SaveScript = _make("code_reader")
+	var section: Provider = _register(reader, { "gold": 1.0 })
+	var imports: Array[bool] = []
+	reader.imported.connect(func() -> void: imports.append(true))
+	var half: int = code.length() / 2
+	_check(reader.import_code("  %s\n %s \n" % [code.left(half), code.substr(half)]), "se restaura aunque al pegarlo se corte en líneas")
+	_check_eq(section.received.size(), 1, "la sección recibe los datos")
+	_check_eq(section.received[0].get("owned") if not section.received.is_empty() else null, [12.0, 3.0], "tal como estaban")
+	_check_eq(imports.size(), 1, "avisa con imported")
+	_check(FileAccess.file_exists(reader.path), "y queda guardada en el acto")
+
+	var body: String = code.get_slice(".", 2)
+	var broken: Array[String] = ["", "hola", "SAVE1.", "SAVE1.00000000.", "SAVE1.00000000." + body, code.left(code.length() - 3),
+		code.replace("SAVE1.", "SAVE9."), code + "A"]
+	var untouched: SaveScript = _make("code_broken")
+	var nothing: Provider = _register(untouched, { "gold": 1.0 })
+	for bad: String in broken:
+		_check(untouched.read_code(bad).is_empty() and not untouched.import_code(bad), "un código roto se rechaza (%s)" % bad.left(20))
+	_check_eq(nothing.received.size(), 0, "sin tocar la partida")
+	_check(not FileAccess.file_exists(untouched.path), "ni el archivo")
 
 
 func _test_save_triggers() -> void:

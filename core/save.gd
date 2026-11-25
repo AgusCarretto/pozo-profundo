@@ -13,7 +13,16 @@ extends Node
 ## En la web, además del archivo (IndexedDB, que se vacía de forma asíncrona) se guarda una copia sincrónica en
 ## localStorage (`mirror`), también cuando la página se oculta o se cierra; al cargar gana la más nueva.
 
+## Se restauró una partida desde un código (import_code): lo que ya está en pantalla quedó viejo.
+signal imported
+
 const WebStorageMirror := preload("res://core/web_storage_mirror.gd")
+
+## Código de respaldo: "SAVE1.<8 hex del sha256 del resto>.<el save en JSON, deflate, base64>".
+const CODE_PREFIX: String = "SAVE1"
+const CODE_CHECK_LENGTH: int = 8
+## Tope del JSON descomprimido de un código (una partida pesa menos de 2 KB).
+const CODE_MAX_BYTES: int = 1048576
 
 const SAVE_VERSION: int = 1
 const AUTOSAVE_INTERVAL: float = 5.0
@@ -97,6 +106,51 @@ func load_from_disk() -> bool:
 func save_now() -> bool:
 	if not persistence_enabled or _sections.is_empty():
 		return false
+	var text: String = _serialize("\t")
+	# La copia primero: es la que sobrevive si la página se está cerrando.
+	var mirrored: bool = mirror != null and bool(mirror.call("write", text))
+	var written: bool = _write_atomically(text)
+	return written or mirrored
+
+
+## La partida de ahora como un texto que el jugador puede copiar y guardar donde quiera: la salida cuando el
+## navegador borra el almacenamiento del juego (iPhone dentro de un iframe). No depende de persistence_enabled.
+func export_code() -> String:
+	var body: String = Marshalls.raw_to_base64(_serialize("").to_utf8_buffer().compress(FileAccess.COMPRESSION_DEFLATE))
+	return "%s.%s.%s" % [CODE_PREFIX, _check_of(body), body]
+
+
+## El save que trae `code` ({version, saved_at, sections}), o {} si no es un código válido. Tolera espacios y
+## saltos de línea que se cuelan al pegar. El dígito verificador se mira antes de decodificar nada.
+func read_code(code: String) -> Dictionary:
+	var clean: String = code.replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "")
+	var parts: PackedStringArray = clean.split(".")
+	if parts.size() != 3 or parts[0] != CODE_PREFIX or parts[2] == "" or parts[1] != _check_of(parts[2]):
+		return {}
+	var packed: PackedByteArray = Marshalls.base64_to_raw(parts[2])
+	if packed.is_empty():
+		return {}
+	var data: Variant = _parse(packed.decompress_dynamic(CODE_MAX_BYTES, FileAccess.COMPRESSION_DEFLATE).get_string_from_utf8())
+	if data == null or not _is_usable(data):
+		return {}
+	return data
+
+
+## Reemplaza la partida por la del código y la guarda. Devuelve false (sin tocar nada) si el código no sirve.
+## No acredita progreso offline: si no, un código viejo daría horas de producción cada vez que se pega.
+func import_code(code: String) -> bool:
+	var data: Dictionary = read_code(code)
+	if data.is_empty():
+		return false
+	_loaded_sections = data["sections"]
+	for section: String in _sections:
+		_deliver(section)
+	save_now()
+	imported.emit()
+	return true
+
+
+func _serialize(indent: String) -> String:
 	# Parte de lo leído, para no perder secciones que esta versión del juego no registra.
 	var sections: Dictionary = _loaded_sections.duplicate(true)
 	for section: String in _sections:
@@ -107,11 +161,11 @@ func save_now() -> bool:
 		"sections": sections,
 	}
 	# full_precision: sin esto JSON recorta a ~14 dígitos y el oro grande se degrada.
-	var text: String = JSON.stringify(payload, "\t", true, true)
-	# La copia primero: es la que sobrevive si la página se está cerrando.
-	var mirrored: bool = mirror != null and bool(mirror.call("write", text))
-	var written: bool = _write_atomically(text)
-	return written or mirrored
+	return JSON.stringify(payload, indent, true, true)
+
+
+func _check_of(body: String) -> String:
+	return body.sha256_text().left(CODE_CHECK_LENGTH)
 
 
 ## El save como diccionario, o null si el texto no es un JSON con forma de objeto.
