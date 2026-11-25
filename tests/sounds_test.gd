@@ -21,7 +21,7 @@ const MUSIC_MAP: Dictionary = {
 	"options": "title_screen.ogg",
 }
 ## Los temas que tienen intro: el loop vuelve después (segundos mínimos de intro).
-const MUSIC_INTROS: Dictionary = { "earth": 10.0 }
+const MUSIC_INTROS: Dictionary = { "earth": 10.0, "frenzy": 1.5 }
 ## El prestigio suena una vez; el resto loopea.
 const MUSIC_ONCE: Array[String] = ["prestige"]
 ## Los SFX que el juego pide sí o sí (los de los cofres se agregan por rareza del balance).
