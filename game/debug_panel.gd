@@ -114,7 +114,7 @@ func _ready() -> void:
 ## "Botín bruto +80% -> efectivo +70.2% (techo +300%)": el bruto es lo que suman los cofres;
 ## el efectivo (el que ve el jugador) es lo que de verdad multiplica el oro.
 func _refresh_raw_bonus() -> void:
-	raw_bonus_label.text = "Botín bruto +%s → efectivo +%s (techo +%s)" % [
+	raw_bonus_label.text = "Botín bruto +%s » efectivo +%s (techo +%s)" % [
 		NumberFormat.format_percent(Economy.loot_bonus),
 		NumberFormat.format_percent(Economy.loot_bonus_effective()),
 		NumberFormat.format_percent(Economy.loot_bonus_cap()),

@@ -103,10 +103,10 @@ func _test_toast() -> void:
 	var toast: Control = toasts[0]
 	var cap: float = _economy.loot_bonus_cap()
 	var gain: float = EconomyMath.loot_bonus_effective(1.04, cap) - EconomyMath.loot_bonus_effective(1.0, cap)
-	var expected: String = "+4%% → +%s" % NumberFormat.format_percent(gain)
+	var expected: String = "+4%% » +%s" % NumberFormat.format_percent(gain)
 	var text: String = _labels_text(toast)
 	_check(text.contains("Raro"), "dice la rareza (%s)" % text)
-	_check(text.contains(expected), "y el bonus: lo del cofre → lo que de verdad sube (%s; esperado %s)" % [text, expected])
+	_check(text.contains(expected), "y el bonus: lo del cofre » lo que de verdad sube (%s; esperado %s)" % [text, expected])
 	_check(gain < 0.04, "(con bonus acumulado, sube menos que el 4%% del cofre: %.2f%%)" % (gain * 100.0))
 	var title: Label = toast.find_children("*", "Label", true, false)[0] as Label
 	_check(Color(title.get_theme_color("font_color"), 1.0).is_equal_approx(Color(_rarity_color("rare"), 1.0)), "con el color de la rareza")

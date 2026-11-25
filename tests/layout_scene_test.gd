@@ -859,7 +859,7 @@ func _test_toasts_clear_the_side_column(packed: PackedScene) -> void:
 		var label: String = "%dx%d" % [int(phone.x), int(phone.y)]
 		var mine: Control = _node(scene, "MineView")
 		# el aviso más ancho: cofre legendario con los porcentajes más largos
-		mine.show_toast(load("res://assets/sprites/tiny_dungeon/tile_0089.png"), "¡Cofre Legendario!", "+60% → +54.4%", Color(1.0, 0.72, 0.2))
+		mine.show_toast(load("res://assets/sprites/tiny_dungeon/tile_0089.png"), "¡Cofre Legendario!", "+60% » +54.4%", Color(1.0, 0.72, 0.2))
 		mine.show_banner("Bioma Cristal", "×2.25 de oro", Color.CYAN)
 		await create_timer(0.7).timeout
 		for notice_name: String in ["ChestToast", "BiomeBanner"]:

@@ -50,6 +50,7 @@ func _initialize() -> void:
 	_test_tiny_dungeon_tiles()
 	_test_ui_pack_and_font()
 	_test_credits()
+	_test_font_covers_ui_text()
 	_finish()
 
 
@@ -490,3 +491,37 @@ func _list_assets(dir_path: String) -> Array[String]:
 		if not IGNORED_FILES.has(file_name.get_extension().to_lower()):
 			found.append(dir_path + "/" + file_name)
 	return found
+
+
+## En la web no hay fuentes del sistema que completen lo que le falta a la del juego: un carácter sin dibujo sale
+## como un cuadrado. Todo lo que se muestra (textos del código, de la escena, del balance y de Créditos) tiene que
+## estar en Pixelify Sans.
+func _test_font_covers_ui_text() -> void:
+	_section("La fuente tiene todos los caracteres que muestra el juego")
+	var font: FontFile = (load(FONT_PATH) as FontFile).duplicate() as FontFile
+	font.allow_system_fallback = false
+	var texts: Dictionary = {}
+	var quoted: RegEx = RegEx.create_from_string("\"((?:[^\"\\\\]|\\\\.)*)\"")
+	for folder: String in ["res://game", "res://core"]:
+		for file_name: String in DirAccess.get_files_at(folder):
+			if not (file_name.ends_with(".gd") or file_name.ends_with(".tscn")):
+				continue
+			for line: String in FileAccess.get_file_as_string("%s/%s" % [folder, file_name]).split("\n"):
+				if line.strip_edges().begins_with("#"):
+					continue
+				for found: RegExMatch in quoted.search_all(line):
+					texts[found.get_string(1)] = file_name
+	for found: RegExMatch in quoted.search_all(FileAccess.get_file_as_string(BALANCE_PATH)):
+		texts[found.get_string(1)] = "balance.json"
+	var credits: Control = (load("res://game/credits_panel.gd") as GDScript).new() as Control
+	for node: Node in credits.find_children("*", "Label", true, false):
+		texts[(node as Label).text] = "Créditos"
+	credits.free()
+	var missing: Dictionary = {}
+	for text: String in texts:
+		for index: int in range(text.length()):
+			var code: int = text.unicode_at(index)
+			if code > 127 and not font.has_char(code):
+				missing["%s (U+%04X) en %s" % [text[index], code, texts[text]]] = true
+	_check(not texts.is_empty(), "revisa %d textos" % texts.size())
+	_check(missing.is_empty(), "ninguno usa un carácter que la fuente no tenga %s" % str(missing.keys()))

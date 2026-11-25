@@ -296,7 +296,7 @@ func _refresh_depth() -> void:
 	_depth_bar.value = Economy.biome_progress()
 	var next: int = Economy.next_biome_index()
 	if next >= 0:
-		_next_biome_label.text = "→ %s · %s m" % [Economy.biome_name(next), NumberFormat.format_number(Economy.next_biome_depth())]
+		_next_biome_label.text = "» %s · %s m" % [Economy.biome_name(next), NumberFormat.format_number(Economy.next_biome_depth())]
 	else:
 		_next_biome_label.text = "¡Fondo!"
 	# Bajar a un bioma más profundo es una novedad: el piso y la roca se funden al nuevo, sale un cartel y suena.
@@ -403,7 +403,7 @@ func _celebrate_chest(entry: Dictionary, bonus: float) -> void:
 	_mine_view.drop_chest(chest_icon, color, special)
 	var cap: float = Economy.loot_bonus_cap()
 	var gain: float = Economy.loot_bonus_effective() - EconomyMath.loot_bonus_effective(Economy.loot_bonus - bonus, cap)
-	_mine_view.show_toast(chest_icon, "¡Cofre %s!" % entry["name"], "+%s → +%s" % [NumberFormat.format_percent(bonus), NumberFormat.format_percent(gain)], color)
+	_mine_view.show_toast(chest_icon, "¡Cofre %s!" % entry["name"], "+%s » +%s" % [NumberFormat.format_percent(bonus), NumberFormat.format_percent(gain)], color)
 	if special:
 		_screen_fx.hit_stop(SPECIAL_PAUSE, SPECIAL_SLOW)
 		if not Settings.reduce_effects:

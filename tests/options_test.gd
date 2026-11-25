@@ -258,8 +258,7 @@ func _test_credits(packed: PackedScene) -> void:
 	_check(credits.visible, "el botón lo abre")
 	var text: String = ""
 	for node: Node in credits.find_children("*", "Label", true, false):
-		text += (node as Label).text + "
-"
+		text += (node as Label).text + "\n"
 	for piece: String in ["Godot Engine", "Permission is hereby granted", "SIL OPEN FONT LICENSE", "pixelsphere.org", "mutkanto", "Juhani Junkala", "Kenney", "FreeType"]:
 		_check(text.contains(piece), "menciona %s" % piece)
 	var close: Button = credits.get("close_button") as Button
