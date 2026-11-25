@@ -109,7 +109,7 @@ func _test_mute_button(packed: PackedScene) -> void:
 
 func _test_options_panel(packed: PackedScene) -> void:
 	_section("El panel de Opciones")
-	_settings.from_dict({ "music_volume": 0.4, "sfx_volume": 0.9, "muted": false, "reduce_effects": false })
+	_settings.from_dict({ "music_volume": 0.4, "music_scale": 2, "sfx_volume": 0.9, "muted": false, "reduce_effects": false })
 	var scene: Control = await _mount(packed, PHONE_SIZES[0])
 	var panel: Control = scene.get_node_or_null("OptionsPanel") as Control
 	_check(panel != null, "existe el panel de Opciones")

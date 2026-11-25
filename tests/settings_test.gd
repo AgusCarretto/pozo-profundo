@@ -14,6 +14,7 @@ func _initialize() -> void:
 	_test_changed_signal()
 	_test_round_trip()
 	_test_bad_data_is_ignored()
+	_test_old_music_volume_is_forgotten()
 	# Los _ready de los autoloads corren después de _initialize: hay que esperar un frame.
 	await process_frame
 	_test_real_autoload()
@@ -35,7 +36,7 @@ func _count_change() -> void:
 func _test_defaults() -> void:
 	_section("Valores por defecto")
 	var settings: SettingsScript = _make()
-	_check(settings.music_volume > 0.0 and settings.music_volume <= 1.0, "la música arranca con volumen (%.2f)" % settings.music_volume)
+	_check_eq(settings.music_volume, 0.5, "la música arranca al 50%")
 	_check_eq(settings.sfx_volume, 1.0, "los SFX arrancan al máximo")
 	_check_eq(settings.muted, false, "no arranca en silencio")
 	_check_eq(settings.reduce_effects, false, "ni con los efectos reducidos")
@@ -100,7 +101,21 @@ func _test_bad_data_is_ignored() -> void:
 	_check_eq(settings.muted, false, "un silencio que no es booleano se ignora")
 	_check_eq(settings.reduce_effects, false, "igual que reducir efectos")
 	settings.from_dict({})
-	_check_eq(settings.to_dict(), { "music_volume": defaults["music_volume"], "sfx_volume": 1.0, "muted": false, "reduce_effects": false }, "una sección vacía no cambia nada")
+	_check_eq(settings.to_dict(), { "music_volume": defaults["music_volume"], "music_scale": SettingsScript.MUSIC_SCALE, "sfx_volume": 1.0, "muted": false, "reduce_effects": false }, "una sección vacía no cambia nada")
+
+
+## La música ahora suena más baja en todo el recorrido del control: un volumen elegido con la escala anterior ya
+## no quiere decir lo mismo (un 5% para compensar quedaría inaudible), así que se vuelve al valor por defecto.
+func _test_old_music_volume_is_forgotten() -> void:
+	_section("Un volumen de música de la escala anterior no se usa")
+	var settings: SettingsScript = _make()
+	settings.from_dict({ "music_volume": 0.05, "sfx_volume": 0.8, "muted": true })
+	_check_eq(settings.music_volume, 0.5, "el volumen de música viejo (sin marca de escala) se ignora: 50%")
+	_check_near(settings.sfx_volume, 0.8, "los efectos se respetan")
+	_check_eq(settings.muted, true, "y el silencio")
+	settings.from_dict({ "music_volume": 0.3, "music_scale": SettingsScript.MUSIC_SCALE })
+	_check_near(settings.music_volume, 0.3, "con la marca de la escala actual se respeta")
+	_check_eq(int(settings.to_dict()["music_scale"]), SettingsScript.MUSIC_SCALE, "y al guardar se marca")
 
 
 func _test_real_autoload() -> void:

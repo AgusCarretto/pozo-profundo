@@ -112,6 +112,7 @@
 			"volume_db": -2
 		}
 	},
+	"music_volume_db": -10,
 	"music": {
 		"earth": { "file": "res://assets/music/town_theme.ogg", "loop_offset": 14.15 },
 		"rock": "res://assets/music/level_1.ogg",

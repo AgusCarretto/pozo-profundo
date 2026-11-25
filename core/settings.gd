@@ -10,7 +10,11 @@ extends Node
 signal changed
 
 const SAVE_SECTION: String = "settings"
-const DEFAULT_MUSIC_VOLUME: float = 0.7
+## La música arranca a la mitad: de base ya suena más baja (ver "music_volume_db" en data/sounds.json).
+const DEFAULT_MUSIC_VOLUME: float = 0.5
+## Versión de la escala del volumen de música. Si cambia cuán fuerte suena un mismo valor, se sube: un volumen
+## guardado con otra escala no quiere decir lo mismo y se vuelve al de por defecto.
+const MUSIC_SCALE: int = 2
 const DEFAULT_SFX_VOLUME: float = 1.0
 
 ## Volumen de la música, de 0 (nada) a 1 (completo).
@@ -53,6 +57,7 @@ func _ready() -> void:
 func to_dict() -> Dictionary:
 	return {
 		"music_volume": music_volume,
+		"music_scale": MUSIC_SCALE,
 		"sfx_volume": sfx_volume,
 		"muted": muted,
 		"reduce_effects": reduce_effects,
@@ -62,7 +67,8 @@ func to_dict() -> Dictionary:
 ## Toma de `data` lo que sea válido y deja el resto como está.
 func from_dict(data: Dictionary) -> void:
 	var music: Variant = data.get("music_volume")
-	if music is float or music is int:
+	var scale: Variant = data.get("music_scale")
+	if (music is float or music is int) and (scale is float or scale is int) and int(scale) == MUSIC_SCALE:
 		music_volume = float(music)
 	var sfx: Variant = data.get("sfx_volume")
 	if sfx is float or sfx is int:

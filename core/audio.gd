@@ -5,7 +5,8 @@ extends Node
 ## Qué suena con cada evento lo dice un catálogo en datos (res://data/sounds.json), no el código:
 ##   {
 ##     "sfx":   { "<id>": { "files": ["res://...ogg", ...], "pitch": [0.9, 1.1], "volume_db": -2 } },
-##     "music": { "<id>": "res://...ogg"  o  { "file": "res://...ogg", "loop": true, "loop_offset": 12.5 } }
+##     "music": { "<id>": "res://...ogg"  o  { "file": "res://...ogg", "loop": true, "loop_offset": 12.5 } },
+##     "music_volume_db": -10   (opcional: cuánto se baja toda la música, además de lo que elija el jugador)
 ##   }
 ## `pitch` y `volume_db` son opcionales (1 y 0 dB). Cada play_sfx() elige una variante al azar (nunca la
 ## misma dos veces seguidas) y un tono dentro del rango: así cien golpes no suenan como uno repetido.
@@ -50,6 +51,8 @@ var last_error: String = ""
 var _sfx: Dictionary = {}
 ## id -> AudioStream
 var _music: Dictionary = {}
+## Lo que el catálogo suma a toda la música, en dB (0 = sin cambios; -10 = la mitad al oído).
+var _music_gain_db: float = 0.0
 ## AudioStream -> segundo en el que quedó la última vez que dejó de sonar (para retomarlo).
 var _music_positions: Dictionary = {}
 ## Id del catálogo del tema que suena ("" = ninguno o un stream suelto).
@@ -146,6 +149,9 @@ func load_catalog(catalog: Dictionary) -> bool:
 			return _fail("el tema '%s' usa el mismo archivo que otro con otro loop (%s)" % [id, stream.resource_path])
 		loops[stream] = settings_here
 		music[str(id)] = stream
+	var gain: Variant = catalog.get("music_volume_db", 0.0)
+	if not _is_number(gain) or float(gain) < VOLUME_DB_LIMITS.x or float(gain) > VOLUME_DB_LIMITS.y:
+		return _fail("'music_volume_db' va de %d a %d" % [VOLUME_DB_LIMITS.x, VOLUME_DB_LIMITS.y])
 	for stream: AudioStream in loops:
 		if "loop" in stream:
 			stream.set("loop", loops[stream]["loop"])
@@ -153,8 +159,10 @@ func load_catalog(catalog: Dictionary) -> bool:
 			stream.set("loop_offset", loops[stream]["loop_offset"])
 	_sfx = sfx
 	_music = music
+	_music_gain_db = float(gain)
 	_last_variant.clear()
 	last_error = ""
+	apply_settings() # el volumen de la música depende del catálogo
 	return true
 
 
@@ -329,18 +337,18 @@ func _kill_music_tween() -> void:
 func apply_settings() -> void:
 	if settings == null:
 		return
-	_set_bus_volume(MUSIC_BUS, settings.music_volume)
+	_set_bus_volume(MUSIC_BUS, settings.music_volume, _music_gain_db)
 	_set_bus_volume(SFX_BUS, settings.sfx_volume)
 	AudioServer.set_bus_mute(AudioServer.get_bus_index(MASTER_BUS), settings.muted)
 
 
-func _set_bus_volume(bus: StringName, volume: float) -> void:
+func _set_bus_volume(bus: StringName, volume: float, gain_db: float = 0.0) -> void:
 	var index: int = AudioServer.get_bus_index(bus)
 	if index < 0:
 		return
 	AudioServer.set_bus_mute(index, volume <= 0.0)
 	if volume > 0.0:
-		AudioServer.set_bus_volume_db(index, linear_to_db(volume))
+		AudioServer.set_bus_volume_db(index, linear_to_db(volume) + gain_db)
 
 
 func _ensure_bus(bus: StringName) -> void:

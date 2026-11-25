@@ -266,6 +266,27 @@ func _test_volumes_follow_settings() -> void:
 	settings.music_volume = 1.0
 	await process_frame
 	_drop(fresh)
+	# El catálogo puede bajar toda la música (music_volume_db): se suma a lo que elige el jugador, solo en la música.
+	var quieter: Dictionary = _catalog()
+	quieter["music_volume_db"] = -10
+	_check(audio.load_catalog(quieter), "un catálogo con music_volume_db es válido (%s)" % audio.last_error)
+	audio.settings.music_volume = 1.0
+	_check_near(_bus_volume_db(AudioScript.MUSIC_BUS), -10.0, "con el control al 100%, la música a -10 dB (la mitad al oído)", 1e-4)
+	audio.settings.music_volume = 0.5
+	_check_near(_bus_volume_db(AudioScript.MUSIC_BUS), linear_to_db(0.5) - 10.0, "al 50%, otros 6 dB menos", 1e-4)
+	audio.settings.sfx_volume = 1.0
+	_check_near(_bus_volume_db(AudioScript.SFX_BUS), 0.0, "los efectos no cambian", 1e-4)
+	audio.settings.music_volume = 0.0
+	_check(_bus_muted(AudioScript.MUSIC_BUS), "y 0 sigue siendo silencio")
+	for bad: Variant in ["fuerte", 100, NAN]:
+		var broken: Dictionary = _catalog()
+		broken["music_volume_db"] = bad
+		_check(not audio.load_catalog(broken), "rechaza music_volume_db %s" % str(bad))
+	_check(audio.load_catalog(_catalog()), "sin la clave, vuelve a 0 dB")
+	audio.settings.music_volume = 1.0
+	_check_near(_bus_volume_db(AudioScript.MUSIC_BUS), 0.0, "0 dB", 1e-4)
+	var real: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(AudioScript.DEFAULT_CATALOG_PATH))
+	_check_near(float(real.get("music_volume_db", 0.0)), -10.0, "el catálogo del juego baja la música 10 dB")
 	_drop(audio)
 
 
