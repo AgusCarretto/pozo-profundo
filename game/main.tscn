@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://game/main.gd" id="1_main"]
 [ext_resource type="Theme" path="res://ui/theme.tres" id="2_theme"]
@@ -6,6 +6,8 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/generated/coin.png" id="4_coin"]
 [ext_resource type="Texture2D" path="res://assets/sprites/generated/rock_earth.png" id="5_rock"]
 [ext_resource type="Texture2D" path="res://assets/ui/game_icons/gear.png" id="6_gear"]
+[ext_resource type="Script" path="res://game/side_button.gd" id="7_side"]
+[ext_resource type="Script" path="res://game/side_panel.gd" id="8_panel"]
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_tap"]
 
@@ -240,130 +242,104 @@ text = "Tocá la roca para picar"
 horizontal_alignment = 1
 vertical_alignment = 1
 
+[node name="SideBar" type="VBoxContainer" parent="Layout/MineView"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -108.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = 336.0
+grow_horizontal = 0
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="LootButton" type="Button" parent="Layout/MineView/SideBar"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("7_side")
+
+[node name="RelicsButton" type="Button" parent="Layout/MineView/SideBar"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("7_side")
+
+[node name="ModeButton" type="Button" parent="Layout/MineView/SideBar"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("7_side")
+
 [node name="BottomPanel" type="PanelContainer" parent="Layout"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 480)
+custom_minimum_size = Vector2(0, 500)
 layout_mode = 2
 size_flags_vertical = 3
 theme_type_variation = &"BottomPanel"
 
-[node name="BottomBox" type="VBoxContainer" parent="Layout/BottomPanel"]
+[node name="Scroll" type="ScrollContainer" parent="Layout/BottomPanel"]
 layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="TabBar" type="HBoxContainer" parent="Layout/BottomPanel/BottomBox"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="TabCrewButton" type="Button" parent="Layout/BottomPanel/BottomBox/TabBar"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 96)
-layout_mode = 2
-size_flags_horizontal = 3
-focus_mode = 0
-theme_type_variation = &"TabButton"
-toggle_mode = true
-button_pressed = true
-text = "Cuadrilla"
-
-[node name="TabLootButton" type="Button" parent="Layout/BottomPanel/BottomBox/TabBar"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 96)
-layout_mode = 2
-size_flags_horizontal = 3
-focus_mode = 0
-theme_type_variation = &"TabButton"
-toggle_mode = true
-text = "Botín"
-
-[node name="TabRelicsButton" type="Button" parent="Layout/BottomPanel/BottomBox/TabBar"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 96)
-layout_mode = 2
-size_flags_horizontal = 3
-focus_mode = 0
-theme_type_variation = &"TabButton"
-toggle_mode = true
-text = "Reliquias"
-
-[node name="Pages" type="VBoxContainer" parent="Layout/BottomPanel/BottomBox"]
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="CrewPage" type="VBoxContainer" parent="Layout/BottomPanel/BottomBox/Pages"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 10
-
-[node name="ModeBar" type="HBoxContainer" parent="Layout/BottomPanel/BottomBox/Pages/CrewPage"]
-layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="Mode1Button" type="Button" parent="Layout/BottomPanel/BottomBox/Pages/CrewPage/ModeBar"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 96)
-layout_mode = 2
-size_flags_horizontal = 3
-focus_mode = 0
-theme_type_variation = &"ModeButton"
-toggle_mode = true
-text = "×1"
-
-[node name="Mode10Button" type="Button" parent="Layout/BottomPanel/BottomBox/Pages/CrewPage/ModeBar"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 96)
-layout_mode = 2
-size_flags_horizontal = 3
-focus_mode = 0
-theme_type_variation = &"ModeButton"
-toggle_mode = true
-text = "×10"
-
-[node name="ModeMaxButton" type="Button" parent="Layout/BottomPanel/BottomBox/Pages/CrewPage/ModeBar"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 96)
-layout_mode = 2
-size_flags_horizontal = 3
-focus_mode = 0
-theme_type_variation = &"ModeButton"
-toggle_mode = true
-text = "Máx"
-
-[node name="Scroll" type="ScrollContainer" parent="Layout/BottomPanel/BottomBox/Pages/CrewPage"]
-layout_mode = 2
-size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="ScrollBox" type="VBoxContainer" parent="Layout/BottomPanel/BottomBox/Pages/CrewPage/Scroll"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 10
-
-[node name="PickRow" type="VBoxContainer" parent="Layout/BottomPanel/BottomBox/Pages/CrewPage/Scroll/ScrollBox"]
+[node name="Shop" type="GridContainer" parent="Layout/BottomPanel/Scroll"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+columns = 2
 
-[node name="GeneratorList" type="VBoxContainer" parent="Layout/BottomPanel/BottomBox/Pages/CrewPage/Scroll/ScrollBox"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 10
-
-[node name="LootPage" type="VBoxContainer" parent="Layout/BottomPanel/BottomBox/Pages"]
+[node name="LootPanel" type="Control" parent="."]
 unique_name_in_owner = true
 visible = false
-layout_mode = 2
-size_flags_vertical = 3
-alignment = 1
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("8_panel")
 
-[node name="LootBox" type="VBoxContainer" parent="Layout/BottomPanel/BottomBox/Pages/LootPage"]
+[node name="Dim" type="ColorRect" parent="LootPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0.72)
+
+[node name="Center" type="CenterContainer" parent="LootPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Panel" type="PanelContainer" parent="LootPanel/Center"]
+custom_minimum_size = Vector2(660, 0)
+layout_mode = 2
+theme_type_variation = &"ModalPanel"
+
+[node name="Box" type="VBoxContainer" parent="LootPanel/Center/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="LootPanel/Center/Panel/Box"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "Botín"
+horizontal_alignment = 1
+
+[node name="LootBox" type="VBoxContainer" parent="LootPanel/Center/Panel/Box"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 10
 
-[node name="LootInfoLabel" type="Label" parent="Layout/BottomPanel/BottomBox/Pages/LootPage/LootBox"]
+[node name="LootInfoLabel" type="Label" parent="LootPanel/Center/Panel/Box/LootBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"MutedLabel"
@@ -371,17 +347,17 @@ text = "Cofres"
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="ChestRow" type="HBoxContainer" parent="Layout/BottomPanel/BottomBox/Pages/LootPage/LootBox"]
+[node name="ChestRow" type="HBoxContainer" parent="LootPanel/Center/Panel/Box/LootBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="OddsRow" type="HBoxContainer" parent="Layout/BottomPanel/BottomBox/Pages/LootPage/LootBox"]
+[node name="OddsRow" type="HBoxContainer" parent="LootPanel/Center/Panel/Box/LootBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="LastLootLabel" type="Label" parent="Layout/BottomPanel/BottomBox/Pages/LootPage/LootBox"]
+[node name="LastLootLabel" type="Label" parent="LootPanel/Center/Panel/Box/LootBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"MutedLabel"
@@ -389,7 +365,7 @@ text = " "
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="LootBonusLabel" type="Label" parent="Layout/BottomPanel/BottomBox/Pages/LootPage/LootBox"]
+[node name="LootBonusLabel" type="Label" parent="LootPanel/Center/Panel/Box/LootBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"AccentLabel"
@@ -397,38 +373,77 @@ theme_override_font_sizes/font_size = 34
 text = "Bonus de botín: +0%"
 horizontal_alignment = 1
 
-[node name="RelicsPage" type="VBoxContainer" parent="Layout/BottomPanel/BottomBox/Pages"]
+[node name="CloseButton" type="Button" parent="LootPanel/Center/Panel/Box"]
+custom_minimum_size = Vector2(0, 96)
+layout_mode = 2
+focus_mode = 0
+theme_type_variation = &"ButtonNeutral"
+text = "Cerrar"
+
+[node name="RelicsPanel" type="Control" parent="."]
 unique_name_in_owner = true
 visible = false
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 12
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("8_panel")
 
-[node name="RelicsLabel" type="Label" parent="Layout/BottomPanel/BottomBox/Pages/RelicsPage"]
+[node name="Dim" type="ColorRect" parent="RelicsPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0.72)
+
+[node name="Center" type="CenterContainer" parent="RelicsPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Panel" type="PanelContainer" parent="RelicsPanel/Center"]
+custom_minimum_size = Vector2(660, 0)
+layout_mode = 2
+theme_type_variation = &"ModalPanel"
+
+[node name="Box" type="VBoxContainer" parent="RelicsPanel/Center/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="RelicsLabel" type="Label" parent="RelicsPanel/Center/Panel/Box"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"TitleLabel"
 text = "Reliquias: 0"
 horizontal_alignment = 1
+autowrap_mode = 3
 
-[node name="RelicsRow" type="HBoxContainer" parent="Layout/BottomPanel/BottomBox/Pages/RelicsPage"]
+[node name="RelicsRow" type="HBoxContainer" parent="RelicsPanel/Center/Panel/Box"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 80)
 layout_mode = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 0
 alignment = 1
 
-[node name="RelicsHint" type="Label" parent="Layout/BottomPanel/BottomBox/Pages/RelicsPage"]
+[node name="RelicsHint" type="Label" parent="RelicsPanel/Center/Panel/Box"]
 unique_name_in_owner = true
 layout_mode = 2
-size_flags_vertical = 3
 theme_type_variation = &"MutedLabel"
 text = "Reliquias"
 horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 3
 
-[node name="PrestigeButton" type="Button" parent="Layout/BottomPanel/BottomBox/Pages/RelicsPage"]
+[node name="PrestigeButton" type="Button" parent="RelicsPanel/Center/Panel/Box"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 112)
 layout_mode = 2
@@ -436,3 +451,10 @@ focus_mode = 0
 theme_type_variation = &"ButtonRed"
 text = "Volver a la superficie"
 disabled = true
+
+[node name="CloseButton" type="Button" parent="RelicsPanel/Center/Panel/Box"]
+custom_minimum_size = Vector2(0, 96)
+layout_mode = 2
+focus_mode = 0
+theme_type_variation = &"ButtonNeutral"
+text = "Cerrar"

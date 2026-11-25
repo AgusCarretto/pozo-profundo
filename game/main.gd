@@ -1,14 +1,14 @@
 extends Control
 ## Escena principal (layout vertical para celular): HUD arriba (oro, oro/s, profundidad con barra al
-## próximo bioma y multiplicador), la mina en el medio (roca, mineros, taladro y gólem) y abajo un
-## panel con pestañas: Cuadrilla, Botín y Reliquias.
+## próximo bioma y multiplicador), la mina en el medio (roca, mineros, taladro y gólem; al costado los
+## botones de Botín, Reliquias y modo de compra) y abajo las mejoras en dos columnas, siempre a la vista.
 ##
 ## Toda la lógica está en el autoload Economy: acá solo se conecta la UI. El arte vive en
 ## game/mine_view.gd (la mina) y los estilos en ui/theme.tres.
 
 const BiomePalette := preload("res://game/biome_palette.gd")
 const DebugPanel := preload("res://game/debug_panel.gd")
-const GeneratorRow := preload("res://game/generator_row.gd")
+const GeneratorCard := preload("res://game/generator_card.gd")
 const Modal := preload("res://game/modal.gd")
 const MineView := preload("res://game/mine_view.gd")
 const NumberFormat := preload("res://core/number_format.gd")
@@ -16,7 +16,9 @@ const OptionsPanel := preload("res://game/options_panel.gd")
 const ScreenFx := preload("res://game/screen_fx.gd")
 const EconomyMath := preload("res://core/economy_math.gd")
 const Juice := preload("res://game/juice.gd")
-const PickRow := preload("res://game/pick_row.gd")
+const PickCard := preload("res://game/pick_card.gd")
+const SideButton := preload("res://game/side_button.gd")
+const SidePanel := preload("res://game/side_panel.gd")
 const SoundCues := preload("res://game/sound_cues.gd")
 const MusicDirector := preload("res://game/music_director.gd")
 
@@ -54,7 +56,7 @@ const RUNE_ICONS: Array[String] = [
 	"res://assets/sprites/generated/rune_2.png",
 	"res://assets/sprites/generated/rune_3.png",
 ]
-## Cuántas runas se dibujan como máximo en la pestaña de reliquias (el contador dice el total real).
+## Cuántas runas se dibujan como máximo en el cartel de reliquias (el contador dice el total real).
 const MAX_RUNES_SHOWN: int = 8
 const RUNE_SIZE: float = 80.0
 ## El oro achica su fuente de a este paso cuando el número no entra en su lugar, sin bajar del mínimo.
@@ -62,17 +64,19 @@ const GOLD_FONT_STEP: int = 4
 const GOLD_FONT_MIN: int = 48
 const CHEST_SIZE: float = 64.0
 
-enum Tab { CREW, LOOT, RELICS }
+## El botón de modo pasa por estos, en este orden.
+const MODE_ORDER: Array[int] = [Economy.BuyMode.X1, Economy.BuyMode.X10, Economy.BuyMode.MAX]
+const MODE_NAMES: Array[String] = ["×1", "×10", "Máx"]
 
 var _mode: int = Economy.BuyMode.X1
-var _rows: Array[GeneratorRow] = []
+var _cards: Array[GeneratorCard] = []
 ## Se marca cuando Economy cambia; la pantalla se refresca una vez por frame, no por señal.
 var _dirty: bool = true
 var _modal: Modal
 var _options: OptionsPanel
 var _screen_fx: ScreenFx
 var _music: MusicDirector
-var _pick_row: PickRow
+var _pick_card: PickCard
 var _shown_runes: int = -1
 ## El último cofre que salió en esta partida ({rarity, bonus}); vacío si todavía no salió ninguno (o si el
 ## bonus volvió a 0). El aviso del botín se arma con esto y con el bonus real: ver _refresh_last_loot().
@@ -101,56 +105,45 @@ var _gold_font_size: int = 0
 @onready var _mine_view: MineView = %MineView
 @onready var _tap_button: Button = %TapButton
 @onready var _hint_label: Label = %HintLabel
-@onready var _tab_buttons: Array[Button] = [%TabCrewButton, %TabLootButton, %TabRelicsButton]
-@onready var _mode_buttons: Array[Button] = [%Mode1Button, %Mode10Button, %ModeMaxButton]
-@onready var _pages: Array[Control] = [%CrewPage, %LootPage, %RelicsPage]
+@onready var _loot_button: SideButton = %LootButton
+@onready var _relics_button: SideButton = %RelicsButton
+@onready var _mode_button: SideButton = %ModeButton
+@onready var _loot_panel: SidePanel = %LootPanel
+@onready var _relics_panel: SidePanel = %RelicsPanel
 @onready var _loot_box: VBoxContainer = %LootBox
 @onready var _loot_info_label: Label = %LootInfoLabel
 @onready var _chest_row: HBoxContainer = %ChestRow
 @onready var _odds_row: HBoxContainer = %OddsRow
 @onready var _last_loot_label: Label = %LastLootLabel
 @onready var _loot_bonus_label: Label = %LootBonusLabel
-@onready var _pick_holder: VBoxContainer = %PickRow
+@onready var _shop: GridContainer = %Shop
 @onready var _relics_label: Label = %RelicsLabel
 @onready var _relics_row: HBoxContainer = %RelicsRow
 @onready var _relics_hint: Label = %RelicsHint
 @onready var _prestige_button: Button = %PrestigeButton
-@onready var _generator_list: VBoxContainer = %GeneratorList
 
 
 func _ready() -> void:
 	_gold_font_size = _gold_label.get_theme_font_size("font_size")
 	_gold_label.resized.connect(_fit_gold_label)
+	# La grilla de mejoras: primero el pico y después los generadores, todos con el mismo formato.
+	_pick_card = PickCard.new()
+	_shop.add_child(_pick_card)
+	_pick_card.setup()
 	for index: int in range(Economy.generator_count()):
-		var row: GeneratorRow = GeneratorRow.new()
-		_generator_list.add_child(row)
-		row.setup(index)
-		_rows.append(row)
+		var card: GeneratorCard = GeneratorCard.new()
+		_shop.add_child(card)
+		card.setup(index)
+		_cards.append(card)
 
-	# El pico es la primera fila de la lista, con el mismo formato que los generadores.
-	_pick_row = PickRow.new()
-	_pick_holder.add_child(_pick_row)
-	_pick_row.setup()
-
-	var group: ButtonGroup = ButtonGroup.new()
-	var mode_buttons: Dictionary = {
-		Economy.BuyMode.X1: %Mode1Button,
-		Economy.BuyMode.X10: %Mode10Button,
-		Economy.BuyMode.MAX: %ModeMaxButton,
-	}
-	for mode: int in mode_buttons:
-		var button: Button = mode_buttons[mode]
-		button.button_group = group
-		button.toggled.connect(_on_mode_toggled.bind(mode))
-	(%Mode1Button as Button).button_pressed = true
-
-	# Las pestañas: una sola activa a la vez (ButtonGroup) y cada una muestra su página.
-	var tab_group: ButtonGroup = ButtonGroup.new()
-	for index: int in range(_tab_buttons.size()):
-		_tab_buttons[index].button_group = tab_group
-		_tab_buttons[index].toggled.connect(_on_tab_toggled.bind(index))
-	_tab_buttons[Tab.CREW].button_pressed = true
-	_show_page(Tab.CREW)
+	# Los botones del costado de la mina.
+	_loot_button.build(load(CHEST_ICON) as Texture2D, "Botín")
+	_relics_button.build(load(RUNE_ICONS[0]) as Texture2D, "Reliquias")
+	_mode_button.build(null, "Comprar")
+	_mode_button.set_big_text(MODE_NAMES[0])
+	_loot_button.pressed.connect(_loot_panel.open)
+	_relics_button.pressed.connect(_relics_panel.open)
+	_mode_button.pressed.connect(_on_mode_pressed)
 
 	# Reaccionan al apretar (no al soltar): un clicker tiene que responder al toque.
 	_tap_button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
@@ -164,6 +157,9 @@ func _ready() -> void:
 
 	# Solo en builds de debug; en un export de release no se crea (ver debug_panel.gd).
 	DebugPanel.attach_if_debug(self, OS.is_debug_build())
+	# Los carteles de Botín y Reliquias: encima del juego y del panel de debug.
+	move_child(_loot_panel, -1)
+	move_child(_relics_panel, -1)
 	# Opciones: encima del juego y del panel de debug, debajo del cartel.
 	_options = OptionsPanel.new()
 	add_child(_options)
@@ -229,29 +225,13 @@ func _apply_settings() -> void:
 	_mine_view.reduce_effects = Settings.reduce_effects
 
 
-# Los toggles que se marcan al armar la escena (en _ready) no suenan: solo los que toca el jugador.
-func _on_mode_toggled(pressed: bool, mode: int) -> void:
-	if pressed:
-		if _built:
-			Audio.play_sfx("mode")
-			for button: Button in _mode_buttons:
-				if button.button_pressed:
-					Juice.bounce(button)
-		_mode = mode
-		_mark_dirty()
-
-
-func _on_tab_toggled(pressed: bool, tab: int) -> void:
-	if pressed:
-		if _built:
-			Audio.play_sfx("tab")
-			Juice.bounce(_tab_buttons[tab])
-		_show_page(tab)
-
-
-func _show_page(tab: int) -> void:
-	for index: int in range(_pages.size()):
-		_pages[index].visible = index == tab
+## El único botón de modo: cada toque pasa de ×1 a ×10, a Máx y vuelve.
+func _on_mode_pressed() -> void:
+	var next: int = (MODE_ORDER.find(_mode) + 1) % MODE_ORDER.size()
+	_mode = MODE_ORDER[next]
+	_mode_button.set_big_text(MODE_NAMES[next])
+	Audio.play_sfx("mode")
+	_mark_dirty()
 
 
 func _refresh() -> void:
@@ -265,11 +245,24 @@ func _refresh() -> void:
 	_refresh_mine()
 	# Se muestra el bonus efectivo (el que de verdad multiplica el oro); el bruto solo va en el panel de debug.
 	_loot_bonus_label.text = "Bonus de botín: +%s" % NumberFormat.format_percent(Economy.loot_bonus_effective())
-	_pick_row.refresh()
+	_pick_card.refresh()
 	_refresh_last_loot()
 	_refresh_prestige()
-	for row: GeneratorRow in _rows:
-		row.refresh(_mode)
+	_refresh_badges()
+	for card: GeneratorCard in _cards:
+		card.refresh(_mode)
+
+
+## Los avisos de los botones del costado: cuánto bonus de botín hay, y cuántas reliquias (o un ! cuando ya se
+## puede volver a la superficie, para que no se pase por alto con el cartel cerrado).
+func _refresh_badges() -> void:
+	var bonus: float = Economy.loot_bonus_effective()
+	_loot_button.set_badge("+%s" % NumberFormat.format_percent(bonus) if bonus > 0.0 else "")
+	var relics: int = Economy.relics if _relics_shown < 0 else _relics_shown
+	if _relics_shown < 0 and Economy.can_prestige():
+		_relics_button.set_badge("!", true)
+	else:
+		_relics_button.set_badge(NumberFormat.format_number(relics) if relics > 0 else "")
 
 
 ## El oro comparte fila con el multiplicador y los botones de sonido y opciones: si el número no entra,
@@ -362,7 +355,7 @@ func _refresh_mine() -> void:
 func _build_loot_panel() -> void:
 	var table: Array[Dictionary] = Economy.loot_table()
 	_loot_box.visible = not table.is_empty()
-	_tab_buttons[Tab.LOOT].visible = not table.is_empty()
+	_loot_button.visible = not table.is_empty()
 	if table.is_empty():
 		return
 	_loot_info_label.text = "Cofres: %s por golpe · %s por segundo con cuadrilla" % [
@@ -392,6 +385,7 @@ func _build_loot_panel() -> void:
 
 func _on_loot_dropped(rarity: int, bonus: float) -> void:
 	_mark_dirty() # el bonus total cambió, aunque el oro no
+	Juice.bounce(_loot_button)
 	var table: Array[Dictionary] = Economy.loot_table()
 	if rarity < 0 or rarity >= table.size():
 		return
@@ -509,6 +503,7 @@ func _confirm_prestige() -> void:
 	if _prestiging:
 		return
 	_prestiging = true
+	_relics_panel.close() # las reliquias ganadas vuelan al botón del costado
 	_music.begin_prestige()
 	await _screen_fx.cover(PRESTIGE_DARK if Settings.reduce_effects else PRESTIGE_WHITE, PRESTIGE_FADE_IN)
 	var before: int = Economy.relics
@@ -530,7 +525,7 @@ func _fly_relics(before: int, gained: int) -> void:
 	var figures: int = mini(gained, MAX_FLYING_RELICS)
 	if figures <= 0:
 		return
-	var target_control: Control = _relics_label if _relics_label.is_visible_in_tree() else _tab_buttons[Tab.RELICS]
+	var target_control: Control = _relics_label if _relics_label.is_visible_in_tree() else _relics_button
 	var target: Vector2 = target_control.get_global_rect().get_center() - _screen_fx.get_global_rect().position
 	var origin: Vector2 = _screen_fx.size * 0.5
 	var arrived: Array[int] = [0]
@@ -540,7 +535,8 @@ func _fly_relics(before: int, gained: int) -> void:
 			arrived[0] += 1
 			_relics_shown = before + int(roundf(gained * float(arrived[0]) / figures))
 			_refresh_prestige()
-			Juice.bounce(_relics_label)
+			_refresh_badges()
+			Juice.bounce(target_control)
 			Audio.play_sfx("relic")
 		_screen_fx.fly(load(RUNE_ICONS[index % RUNE_ICONS.size()]) as Texture2D, origin + spread, target, RUNE_SIZE, PRESTIGE_FADE_OUT * 0.5 + index * RELIC_STAGGER, RELIC_FLIGHT_TIME, on_arrive)
 	var deadline: float = PRESTIGE_FADE_OUT * 0.5 + figures * RELIC_STAGGER + RELIC_FLIGHT_TIME + 0.3

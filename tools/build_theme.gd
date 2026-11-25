@@ -83,6 +83,15 @@ func _build_labels() -> void:
 	_label_variation("RowNameLabel", 30, Palette.FROST, 0)
 	_label_variation("FloatLabel", 44, Palette.YELLOW, 8) # el número que sale de la roca al golpear
 	_label_variation("BannerLabel", 60, Palette.WHITE, 10) # el cartel de bioma nuevo
+	# tarjetas de mejora y botones del costado de la mina
+	_label_variation("CardNameLabel", 24, Palette.FROST, 0)
+	_label_variation("CardDetailLabel", 22, Palette.STEEL_PALE, 0)
+	_label_variation("PriceLabel", 28, Palette.WHITE, 6) # sobre la franja verde
+	_label_variation("PriceOffLabel", 28, Palette.NAVY, 0) # sobre la franja gris
+	_label_variation("SideCaption", 18, Palette.FROST, 5)
+	_label_variation("SideBigLabel", 34, Palette.WHITE, 6)
+	_label_variation("BadgeLabel", 18, Palette.OUTLINE, 0)
+	_label_variation("BadgeAlertLabel", 22, Palette.WHITE, 4)
 
 
 func _label_variation(type_name: String, size: int, color: Color, outline: int) -> void:
@@ -96,11 +105,10 @@ func _label_variation(type_name: String, size: int, color: Color, outline: int) 
 
 # --- Botones ---------------------------------------------------------------------------------
 
-## Cada color de botón tiene un único significado:
-##   verde (ButtonGreen) = se puede comprar; gris = no alcanza (es el estilo "deshabilitado" de todos);
-##   amarillo = solo la pestaña activa (TabButton marcada); rojo (ButtonRed) = solo el prestigio.
-## Lo demás es neutro (un estilo plano oscuro, ButtonNeutral): selector ×1/×10/Máx, pestañas inactivas,
-## cancelar y los avisos.
+## Cada color tiene un único significado:
+##   verde = se puede comprar (la franja del precio, PriceGreen); gris = no alcanza (PriceGrey, y el estilo
+##   "deshabilitado" de los botones de acción); rojo (ButtonRed) = solo el prestigio.
+## Lo demás es neutro (un estilo plano oscuro): tarjetas, botones del costado, cancelar y los avisos.
 func _build_buttons() -> void:
 	_theme.set_font("font", "Button", _font_bold)
 	_theme.set_font_size("font_size", "Button", 30)
@@ -109,11 +117,34 @@ func _build_buttons() -> void:
 	_action_style("ButtonGreen", "green")
 	_action_style("ButtonRed", "red")
 	_neutral_style("ButtonNeutral")
-	_neutral_style("ModeButton") # selector: el marcado es el "apretado" (más claro, con borde)
-	_tab_style("TabButton")
-	for type_name: String in ["ButtonGreen", "ButtonRed", "ButtonNeutral", "ModeButton", "TabButton"]:
+	_card_style("CardButton")
+	_side_style("SideButton")
+	for type_name: String in ["ButtonGreen", "ButtonRed", "ButtonNeutral", "CardButton", "SideButton"]:
 		_theme.set_type_variation(type_name, "Button")
 		_theme.set_font("font", type_name, _font_bold)
+
+
+## Tarjeta de mejora (toda la tarjeta es el botón): oscura; apretada, más clara; si no alcanza, apagada. El
+## verde o gris de "alcanza / no alcanza" va en la franja del precio, no en la tarjeta entera.
+func _card_style(type_name: String) -> void:
+	var fill: Color = Palette.NAVY.lerp(Palette.SLATE, 0.3)
+	_theme.set_stylebox("normal", type_name, _flat(fill, Palette.SLATE, 3, 14, 0))
+	_theme.set_stylebox("hover", type_name, _flat(fill.lightened(0.08), Palette.SLATE_LIGHT, 3, 14, 0))
+	_theme.set_stylebox("pressed", type_name, _flat(Palette.SLATE, Palette.STEEL_LIGHT, 3, 14, 0))
+	_theme.set_stylebox("hover_pressed", type_name, _flat(Palette.SLATE, Palette.STEEL_LIGHT, 3, 14, 0))
+	_theme.set_stylebox("disabled", type_name, _flat(Palette.NAVY, Palette.NAVY.lerp(Palette.SLATE, 0.5), 3, 14, 0))
+	_theme.set_stylebox("focus", type_name, StyleBoxEmpty.new())
+
+
+## Botón del costado de la mina: neutro y casi opaco, para que se lea sobre el piso.
+func _side_style(type_name: String) -> void:
+	var fill: Color = Color(NEUTRAL_FILL, 0.92)
+	_theme.set_stylebox("normal", type_name, _flat(fill, NEUTRAL_BORDER, 3, 18, 0))
+	_theme.set_stylebox("hover", type_name, _flat(fill.lightened(0.12), NEUTRAL_BORDER, 3, 18, 0))
+	_theme.set_stylebox("pressed", type_name, _flat(Palette.SLATE_LIGHT, Palette.STEEL_LIGHT, 3, 18, 0))
+	_theme.set_stylebox("hover_pressed", type_name, _flat(Palette.SLATE_LIGHT, Palette.STEEL_LIGHT, 3, 18, 0))
+	_theme.set_stylebox("disabled", type_name, _flat(fill.darkened(0.2), NEUTRAL_BORDER, 3, 18, 0))
+	_theme.set_stylebox("focus", type_name, StyleBoxEmpty.new())
 
 
 ## Botón de acción con el UI Pack: reposo con profundidad, apretado plano. Deshabilitado = gris (no alcanza).
@@ -133,19 +164,6 @@ func _neutral_style(type_name: String) -> void:
 	_set_button_states(type_name, normal, hover, pressed, pressed, Palette.FROST, 0)
 	_theme.set_color("font_pressed_color", type_name, Palette.WHITE)
 	_theme.set_color("font_hover_pressed_color", type_name, Palette.WHITE)
-
-
-## Pestaña: inactiva = neutra; la activa (marcada) = amarilla. Es el único lugar donde va el amarillo.
-func _tab_style(type_name: String) -> void:
-	var normal: StyleBoxFlat = _neutral_box(NEUTRAL_FILL, NEUTRAL_BORDER)
-	var hover: StyleBoxFlat = _neutral_box(NEUTRAL_FILL.lightened(0.12), NEUTRAL_BORDER)
-	var active: StyleBoxTexture = _texture_style("yellow", false, Color.WHITE)
-	active.content_margin_top += 4.0
-	_set_button_states(type_name, normal, hover, active, active, Palette.FROST, 0)
-	_theme.set_color("font_hover_color", type_name, Palette.WHITE)
-	# sobre el amarillo, texto oscuro
-	_theme.set_color("font_pressed_color", type_name, Palette.OUTLINE)
-	_theme.set_color("font_hover_pressed_color", type_name, Palette.OUTLINE)
 
 
 func _neutral_box(fill: Color, border: Color) -> StyleBoxFlat:
@@ -205,7 +223,21 @@ func _build_panels() -> void:
 	_panel_variation("CardPanel", _flat(Palette.NAVY.lerp(Palette.SLATE, 0.3), Palette.SLATE, 3, 14, 12))
 	_panel_variation("ModalPanel", _flat(Palette.NAVY, Palette.GOLD, 4, 18, 24))
 	_panel_variation("BadgePanel", _flat(Palette.OUTLINE, Palette.GOLD, 3, 16, 10))
+	# la franja del precio de una tarjeta: verde = se puede comprar, gris = no alcanza
+	_panel_variation("PriceGreen", _price_strip("green", Color.WHITE))
+	_panel_variation("PriceGrey", _price_strip("grey", Color(0.68, 0.68, 0.74)))
+	# avisos sobre los botones del costado
+	_panel_variation("SideBadge", _flat(Palette.GOLD, Palette.OUTLINE, 3, 12, 3))
+	_panel_variation("SideBadgeAlert", _flat(Palette.RED, Palette.WHITE, 3, 14, 3))
 	_theme.set_stylebox("panel", "Panel", _flat(Palette.NAVY, Palette.SLATE, 3, 14, 16))
+
+
+func _price_strip(color: String, modulate: Color) -> StyleBoxTexture:
+	var style: StyleBoxTexture = _texture_style(color, false, modulate)
+	style.texture_margin_top = 12
+	style.texture_margin_bottom = 12
+	style.set_content_margin_all(2.0)
+	return style
 
 
 func _panel_variation(type_name: String, style: StyleBox) -> void:

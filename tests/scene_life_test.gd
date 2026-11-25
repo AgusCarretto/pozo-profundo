@@ -18,21 +18,22 @@ func _test_buttons_bounce() -> void:
 	_economy.reset()
 	_economy.gold = 1.0e6
 	await _wait(0.1)
-	var buy: Button = _scene.get_node("%GeneratorList").get_child(0).find_children("*", "Button", true, false)[0] as Button
+	var buy: Button = _scene.get_node("%Shop").get_child(1) as Button
 	buy.pressed.emit()
 	await _check_bounce(buy, "comprar")
-	var pick: Button = _scene.get_node("%PickRow").find_children("*", "Button", true, false)[0] as Button
+	var pick: Button = _scene.get_node("%Shop").get_child(0) as Button
 	pick.pressed.emit()
 	await _check_bounce(pick, "mejorar el pico")
-	var tab: Button = _scene.get_node("%TabLootButton") as Button
-	tab.button_pressed = true
-	await _check_bounce(tab, "una pestaña")
-	(_scene.get_node("%TabCrewButton") as Button).button_pressed = true
+	var side: Button = _scene.get_node("%LootButton") as Button
+	side.pressed.emit()
+	await _check_bounce(side, "el botón de Botín")
+	(_scene.get_node("%LootPanel") as Control).call("close")
 	await _wait(0.4)
-	var mode: Button = _scene.get_node("%Mode10Button") as Button
-	mode.button_pressed = true
-	await _check_bounce(mode, "el modo ×10")
-	(_scene.get_node("%Mode1Button") as Button).button_pressed = true
+	var mode: Button = _scene.get_node("%ModeButton") as Button
+	mode.pressed.emit()
+	await _check_bounce(mode, "el modo de compra")
+	mode.pressed.emit()
+	mode.pressed.emit() # de vuelta en ×1
 	await _wait(0.4)
 	var sound: Button = _scene.get_node("%SoundButton") as Button
 	sound.pressed.emit()
@@ -52,7 +53,7 @@ func _test_crew_pops_in() -> void:
 	_economy.reset()
 	_economy.gold = 1000.0
 	await _wait(0.1)
-	var buy: Button = _scene.get_node("%GeneratorList").get_child(0).find_children("*", "Button", true, false)[0] as Button
+	var buy: Button = _scene.get_node("%Shop").get_child(1) as Button
 	buy.pressed.emit()
 	# main.gd refresca la mina en su _process, que corre después de process_frame: dos frames.
 	await process_frame
@@ -64,7 +65,7 @@ func _test_crew_pops_in() -> void:
 	_check(first.scale.is_equal_approx(Vector2.ONE), "hasta su tamaño")
 	var drill: Control = mine.get("drill_sprite")
 	_economy.gold = 1000.0
-	var buy_drill: Button = _scene.get_node("%GeneratorList").get_child(1).find_children("*", "Button", true, false)[0] as Button
+	var buy_drill: Button = _scene.get_node("%Shop").get_child(2) as Button
 	buy_drill.pressed.emit()
 	await process_frame
 	await process_frame

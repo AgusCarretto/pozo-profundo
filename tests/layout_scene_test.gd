@@ -1,6 +1,6 @@
 extends "res://tests/test_base.gd"
-## Tests headless del layout y el arte de la escena principal (F2-A): HUD arriba, mina al medio y
-## panel con pestañas abajo, en las proporciones de un celular vertical.
+## Tests headless del layout y el arte de la escena principal: HUD arriba, mina al medio (con los botones de
+## Botín, Reliquias y modo al costado) y la grilla de mejoras abajo, en las proporciones de un celular vertical.
 ##
 ## Cada prueba arma la escena dentro de un contenedor de tamaño fijo, como si la pantalla midiera
 ## eso. La pantalla se diseña a 720 px de ancho; con aspect "expand" un celular de 360x640 equivale a
@@ -32,7 +32,7 @@ func _initialize() -> void:
 
 	await _test_vertical_layout(packed)
 	await _test_touch_targets(packed)
-	await _test_tabs(packed)
+	await _test_side_buttons(packed)
 	await _test_hud(packed)
 	await _test_text_is_not_cut(packed)
 	await _test_debug_toggle_below_the_hud(packed)
@@ -40,9 +40,10 @@ func _initialize() -> void:
 	await _test_mine_view(packed)
 	await _test_relics_page(packed)
 	await _test_theme(packed)
-	await _test_pick_row(packed)
+	await _test_shop_grid(packed)
 	await _test_button_roles(packed)
-	await _test_no_loot_hides_the_loot_tab(packed)
+	await _test_toasts_clear_the_side_column(packed)
+	await _test_no_loot_hides_the_loot_button(packed)
 	_economy.load_balance(_real_balance())
 	_economy.reset()
 	_finish()
@@ -108,14 +109,32 @@ func _inside_scroll(control: Control, scene: Control) -> bool:
 	return false
 
 
-## El botón de mejorar el pico (vive en una fila de la lista, `%PickRow`).
-func _pick_button(scene: Control) -> Button:
-	return _node(scene, "PickRow").find_children("*", "Button", true, false)[0] as Button
+## La tarjeta del pico: la primera de la grilla de mejoras.
+func _pick_card(scene: Control) -> Button:
+	return _node(scene, "Shop").get_child(0) as Button
 
 
-## El botón de compra de la fila `index` de la lista de generadores.
-func _buy_button(scene: Control, index: int) -> Button:
-	return _node(scene, "GeneratorList").get_child(index).find_children("*", "Button", true, false)[0] as Button
+## La tarjeta del generador `index` (van después de la del pico). La tarjeta entera es el botón de compra.
+func _card(scene: Control, index: int) -> Button:
+	return _node(scene, "Shop").get_child(index + 1) as Button
+
+
+## El nombre, el dato y el precio de una tarjeta, en ese orden.
+func _card_texts(card: Button) -> Array[String]:
+	var texts: Array[String] = []
+	for node: Node in card.find_children("*", "Label", true, false):
+		texts.append((node as Label).text)
+	return texts
+
+
+## "green" o "grey" según la franja del precio de la tarjeta.
+func _price_color(card: Button) -> String:
+	for node: Node in card.find_children("*", "PanelContainer", true, false):
+		var style: StyleBox = (node as PanelContainer).get_theme_stylebox("panel")
+		if style is StyleBoxTexture:
+			var parts: PackedStringArray = (style as StyleBoxTexture).texture.resource_path.split("/")
+			return parts[parts.size() - 2]
+	return "sin franja"
 
 
 func _visible_count(sprites: Array) -> int:
@@ -140,13 +159,13 @@ func _test_vertical_layout(packed: PackedScene) -> void:
 			continue
 		_check_near(hud.global_position.y, 0.0, "[%s] el HUD arranca arriba de todo" % label, 1e-6)
 		_check(mine.global_position.y >= hud.global_position.y + hud.size.y - 0.5, "[%s] la mina está debajo del HUD" % label)
-		_check(bottom.global_position.y >= mine.global_position.y + mine.size.y - 0.5, "[%s] el panel de pestañas está debajo de la mina" % label)
+		_check(bottom.global_position.y >= mine.global_position.y + mine.size.y - 0.5, "[%s] el panel de mejoras está debajo de la mina" % label)
 		_check_near(bottom.global_position.y + bottom.size.y, phone.y, "[%s] y llega hasta el borde de abajo" % label, 1e-4)
 		for part: Control in [hud, mine, bottom]:
 			_check_near(part.size.x, DESIGN_WIDTH, "[%s] %s ocupa todo el ancho" % [label, part.name], 1e-4)
 		_check(hud.size.y <= phone.y * 0.25, "[%s] el HUD no pasa del 25%% del alto (%d de %d)" % [label, int(hud.size.y), int(phone.y)])
 		_check(mine.size.y >= 380.0, "[%s] la mina tiene lugar para la roca y la cuadrilla (%d px)" % [label, int(mine.size.y)])
-		_check(bottom.size.y >= 460.0, "[%s] el panel de abajo tiene lugar para pestañas y lista (%d px)" % [label, int(bottom.size.y)])
+		_check(bottom.size.y >= 460.0, "[%s] el panel de abajo tiene lugar para las mejoras (%d px)" % [label, int(bottom.size.y)])
 		# nada visible se sale del ancho de la pantalla (lo que está dentro de un scroll se recorta: no cuenta)
 		var overflowing: Array[String] = []
 		for node: Node in scene.find_children("*", "Control", true, false):
@@ -165,17 +184,18 @@ func _test_vertical_layout(packed: PackedScene) -> void:
 		_check(mine.get_global_rect().encloses(rock.get_global_rect()), "[%s] y entra entera en la mina" % label)
 		var rock_center: Vector2 = rock.get_global_rect().get_center()
 		var mine_center: Vector2 = mine.get_global_rect().get_center()
-		_check(absf(rock_center.x - mine_center.x) <= 1.0, "[%s] la roca está centrada en horizontal" % label)
+		# La roca va un poco corrida a la izquierda para dejarles lugar a los botones del costado.
+		_check(rock_center.x < mine_center.x and mine_center.x - rock_center.x <= 40.0, "[%s] la roca está casi centrada, corrida %d px a la izquierda" % [label, int(mine_center.x - rock_center.x)])
 		_check(rock_center.y > mine_center.y and rock_center.y <= mine_center.y + 0.15 * mine.size.y, "[%s] y un poco más abajo del centro (%d px bajo el centro de %d)" % [label, int(rock_center.y - mine_center.y), int(mine.size.y)])
 		await _free_host(scene)
 
 
 func _test_touch_targets(packed: PackedScene) -> void:
-	_section("Botones de al menos 48 px de alto en un celular de 360 px (96 px de diseño)")
+	_section("Todo lo que se toca mide al menos 48 px en un celular de 360 px (96 px de diseño)")
 	for phone: Vector2 in PHONE_SIZES:
 		var scene: Control = await _mount_host(packed, phone)
 		var label: String = "%dx%d" % [int(phone.x), int(phone.y)]
-		_economy.gold = 1.0e6 # con oro hay filas con botón de compra habilitado
+		_economy.gold = 1.0e6 # con oro hay tarjetas habilitadas
 		_economy.gold_changed.emit(_economy.gold)
 		await process_frame
 		var too_small: Array[String] = []
@@ -184,16 +204,21 @@ func _test_touch_targets(packed: PackedScene) -> void:
 			if button.name == "TapButton":
 				continue # la roca entera es el botón: es enorme
 			count += 1
-			if button.size.y < TOUCH_MIN - 0.5:
-				too_small.append("%s (%d px)" % [button.name, int(button.size.y)])
-		_check(count >= 9, "[%s] hay botones que mirar: pestañas, modos, pico y compras (%d)" % [label, count])
-		_check(too_small.is_empty(), "[%s] ningún botón mide menos de %d px de alto (%s)" % [label, int(TOUCH_MIN), str(too_small)])
-		for tab: String in ["TabCrewButton", "TabLootButton", "TabRelicsButton"]:
-			_check(_node(scene, tab).size.y >= TOUCH_MIN - 0.5, "[%s] %s mide %d px" % [label, tab, int(_node(scene, tab).size.y)])
-		# los de las otras pestañas (el botón de prestigio) y los del cartel
-		(_node(scene, "TabRelicsButton") as Button).button_pressed = true
-		await process_frame
-		_check(_node(scene, "PrestigeButton").size.y >= TOUCH_MIN - 0.5, "[%s] el botón de volver a la superficie mide %d px" % [label, int(_node(scene, "PrestigeButton").size.y)])
+			if button.size.y < TOUCH_MIN - 0.5 or button.size.x < TOUCH_MIN - 0.5:
+				too_small.append("%s (%dx%d)" % [button.name, int(button.size.x), int(button.size.y)])
+		_check(count >= 11, "[%s] hay botones que mirar: 6 mejoras, 3 laterales, sonido y opciones (%d)" % [label, count])
+		_check(too_small.is_empty(), "[%s] ninguno mide menos de %d px de lado (%s)" % [label, int(TOUCH_MIN), str(too_small)])
+		# los de adentro de los carteles de Botín y Reliquias
+		for pair: Array in [["LootButton", "LootPanel"], ["RelicsButton", "RelicsPanel"]]:
+			(_node(scene, pair[0]) as Button).pressed.emit()
+			await process_frame
+			await process_frame
+			var small: Array[String] = []
+			for node: Node in _node(scene, pair[1]).find_children("*", "Button", true, false):
+				if (node as Button).size.y < TOUCH_MIN - 0.5:
+					small.append("%s (%d px)" % [node.name, int((node as Button).size.y)])
+			_check(small.is_empty(), "[%s] los botones de %s miden %d px o más (%s)" % [label, pair[1], int(TOUCH_MIN), str(small)])
+			_node(scene, pair[1]).call("close")
 		var modal: Control = scene.get_node("Modal")
 		modal.open("Título", "Cuerpo", "Sí", "No")
 		await process_frame
@@ -207,38 +232,97 @@ func _test_touch_targets(packed: PackedScene) -> void:
 		_economy.reset()
 
 
-func _test_tabs(packed: PackedScene) -> void:
-	_section("Panel de pestañas: Cuadrilla, Botín y Reliquias")
+## Sin pestañas: las mejoras están siempre a la vista y Botín y Reliquias son botones al costado de la
+## mina que abren su cartel.
+func _test_side_buttons(packed: PackedScene) -> void:
+	_section("Botones al costado: Botín, Reliquias y el modo de compra")
+	for phone: Vector2 in PHONE_SIZES:
+		var scene: Control = await _mount_host(packed, phone)
+		var label: String = "%dx%d" % [int(phone.x), int(phone.y)]
+		for gone: String in ["TabCrewButton", "TabLootButton", "TabRelicsButton", "Mode10Button"]:
+			_check(scene.get_node_or_null("%" + gone) == null, "[%s] ya no hay %s" % [label, gone])
+		var mine: Control = _node(scene, "MineView")
+		var sides: Array[Button] = [_node(scene, "LootButton") as Button, _node(scene, "RelicsButton") as Button, _node(scene, "ModeButton") as Button]
+		var inside: bool = true
+		for side: Button in sides:
+			if not mine.get_global_rect().encloses(side.get_global_rect()) or side.get_global_rect().end.x < DESIGN_WIDTH - 16.0:
+				inside = false
+		_check(inside, "[%s] los tres están dentro de la mina, pegados al borde derecho" % label)
+		_check(sides[0].global_position.y < sides[1].global_position.y and sides[1].global_position.y < sides[2].global_position.y, "[%s] uno debajo del otro: Botín, Reliquias, modo" % label)
+		# nadie de la cuadrilla queda tapado por ellos
+		_economy.owned[0] = 40
+		_economy.owned[1] = 1
+		_economy.owned[3] = 1
+		_economy.gold_changed.emit(_economy.gold)
+		await process_frame
+		await process_frame
+		var covered: Array[String] = []
+		var crew: Array[TextureRect] = [mine.drill_sprite, mine.golem_sprite, _node(scene, "Rock") as TextureRect]
+		crew.append_array(mine.miner_sprites)
+		for sprite: TextureRect in crew:
+			for side: Button in sides:
+				if sprite.get_global_rect().intersects(side.get_global_rect()):
+					covered.append("%s/%s" % [sprite.name, side.name])
+		_check(covered.is_empty(), "[%s] no tapan a nadie (%s)" % [label, str(covered)])
+		var vignette: Control = _node(scene, "Vignette")
+		_check(sides[0].get_parent().get_index() > vignette.get_index(), "[%s] se dibujan por encima de la viñeta" % label)
+		_economy.reset()
+		await _free_host(scene)
+
 	var scene: Control = await _mount_host(packed, PHONE_SIZES[0])
-	var crew: Control = _node(scene, "CrewPage")
-	var loot: Control = _node(scene, "LootPage")
-	var relics: Control = _node(scene, "RelicsPage")
-	var tab_crew: Button = _node(scene, "TabCrewButton") as Button
-	var tab_loot: Button = _node(scene, "TabLootButton") as Button
-	var tab_relics: Button = _node(scene, "TabRelicsButton") as Button
-	_check_eq(tab_crew.text, "Cuadrilla", "primera pestaña: Cuadrilla")
-	_check_eq(tab_loot.text, "Botín", "segunda: Botín")
-	_check_eq(tab_relics.text, "Reliquias", "tercera: Reliquias")
-	_check(tab_crew.global_position.x < tab_loot.global_position.x and tab_loot.global_position.x < tab_relics.global_position.x, "van en ese orden, de izquierda a derecha")
-	_check_near(tab_crew.size.x, tab_loot.size.x, "las pestañas miden lo mismo", 0.02)
-	_check(tab_crew.button_pressed and not tab_loot.button_pressed and not tab_relics.button_pressed, "arranca en Cuadrilla")
-	_check(crew.visible and not loot.visible and not relics.visible, "y solo se ve la lista de la cuadrilla")
-	_check(_node(scene, "GeneratorList").is_visible_in_tree() and _pick_button(scene).is_visible_in_tree(), "con el pico y los generadores a la vista")
-	tab_loot.button_pressed = true
+	var loot_button: Button = _node(scene, "LootButton") as Button
+	var relics_button: Button = _node(scene, "RelicsButton") as Button
+	var loot: Control = _node(scene, "LootPanel")
+	var relics: Control = _node(scene, "RelicsPanel")
+	_check(_card_texts(loot_button).has("Botín") and _card_texts(relics_button).has("Reliquias"), "cada botón dice qué es")
+	_check(not loot.visible and not relics.visible, "arrancan cerrados")
+	loot_button.pressed.emit()
 	await process_frame
-	_check(loot.visible and not crew.visible and not relics.visible, "Botín muestra solo el botín")
-	_check(not tab_crew.button_pressed and tab_loot.button_pressed, "y la pestaña queda marcada (una sola a la vez)")
-	_check(_node(scene, "LootBonusLabel").is_visible_in_tree() and _node(scene, "OddsRow").is_visible_in_tree(), "con las probabilidades y el bonus a la vista")
-	tab_relics.button_pressed = true
+	_check(loot.visible and not relics.visible, "Botín abre el cartel del botín")
+	_check(_node(scene, "LootBonusLabel").is_visible_in_tree() and _node(scene, "OddsRow").is_visible_in_tree(), "con las probabilidades y el bonus")
+	_check_eq(loot.mouse_filter, Control.MOUSE_FILTER_STOP, "y no deja tocar lo de atrás")
+	(loot.find_child("CloseButton", true, false) as Button).pressed.emit()
+	_check(not loot.visible, "'Cerrar' lo cierra")
+	relics_button.pressed.emit()
 	await process_frame
-	_check(relics.visible and not crew.visible and not loot.visible, "Reliquias muestra solo las reliquias")
+	_check(relics.visible and not loot.visible, "Reliquias abre el cartel de reliquias")
 	_check(_node(scene, "PrestigeButton").is_visible_in_tree() and _node(scene, "RelicsLabel").is_visible_in_tree(), "con el botón de volver a la superficie")
-	tab_crew.button_pressed = true
+	(relics.find_child("CloseButton", true, false) as Button).pressed.emit()
+	_check(not relics.visible, "y se cierra")
+
+	# el modo de compra: un solo botón que va cambiando
+	var mode: Button = _node(scene, "ModeButton") as Button
+	_economy.gold = 1.0e6
+	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
-	_check(crew.visible and not loot.visible and not relics.visible, "volver a Cuadrilla la muestra de nuevo")
-	# tocar la pestaña ya activa no la apaga: el grupo no deja desmarcar (siempre hay una)
-	_check(tab_crew.button_group != null and not tab_crew.button_group.allow_unpress, "tocar la pestaña activa no la apaga (el grupo no deja desmarcar)")
-	_check(tab_crew.button_group == tab_loot.button_group and tab_loot.button_group == tab_relics.button_group, "las tres son del mismo grupo")
+	var seen: Array[String] = []
+	var prices: Array[String] = []
+	for i: int in range(4):
+		seen.append(_card_texts(mode)[0])
+		prices.append(_card_texts(_card(scene, 0))[2])
+		mode.pressed.emit()
+		await process_frame
+	_check_eq(seen, ["×1", "×10", "Máx", "×1"] as Array[String], "cada toque pasa de ×1 a ×10, a Máx y vuelve")
+	_check(not prices[0].contains("×") and prices[1].begins_with("×10") and prices[2].begins_with("×"), "y las tarjetas muestran lo que se compra en cada modo (%s)" % str(prices))
+
+	# los avisos en los botones
+	_economy.reset()
+	await process_frame
+	var loot_badge: Control = loot_button.get("badge")
+	var relics_badge: Control = relics_button.get("badge")
+	_check(not loot_badge.visible and not relics_badge.visible, "sin bonus ni reliquias no hay avisos")
+	_economy.drop_loot(3)
+	await process_frame
+	_check(loot_badge.visible and _card_texts(loot_button).any(func(t: String) -> bool: return t.contains("%")), "con bonus, el de Botín muestra cuánto (%s)" % str(_card_texts(loot_button)))
+	_economy.relics = 3
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	_check(relics_badge.visible and _card_texts(relics_button).has("3"), "con reliquias, cuántas (%s)" % str(_card_texts(relics_button)))
+	_economy.run_gold = 41000.0 # 300 m: se puede volver
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	_check(_card_texts(relics_button).has("!"), "y un ! cuando ya podés volver a la superficie (%s)" % str(_card_texts(relics_button)))
+	_economy.reset()
 	await _free_host(scene)
 
 
@@ -351,49 +435,48 @@ func _test_text_is_not_cut(packed: PackedScene) -> void:
 		var scene: Control = await _mount_host(packed, phone)
 		var label: String = "%dx%d" % [int(phone.x), int(phone.y)]
 		var cut: Array[String] = []
+		var wrapped: Array[String] = []
 		for state: Dictionary in states:
-			_economy.reset()
-			_economy.run_gold = state["run_gold"]
-			_economy.gold = state["gold"]
-			_economy.relics = state["relics"]
-			_economy.pick_level = 9
-			_economy.loot_bonus = 5.0
-			_economy.owned[0] = 1234
-			_economy.owned[2] = 1234 # Cuadrilla de dinamita: el nombre más largo
-			_economy.gold_changed.emit(_economy.gold)
-			await process_frame
-			await process_frame
-			for node: Node in scene.find_children("*", "Label", true, false):
-				var text_label: Label = node as Label
-				if not text_label.is_visible_in_tree() or text_label.autowrap_mode != TextServer.AUTOWRAP_OFF:
-					continue
-				if scene.get_node("DebugPanel").is_ancestor_of(text_label) or _inside_scroll_container(text_label, scene, "GeneratorList"):
-					continue
-				var font: Font = text_label.get_theme_font("font")
-				var font_size: int = text_label.get_theme_font_size("font_size")
-				for line: String in text_label.text.split("\n"):
-					var width: float = font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
-					if width > text_label.size.x + 0.5:
-						cut.append("%s '%s' (%d > %d px)" % [text_label.name, line, int(width), int(text_label.size.x)])
-		_check(cut.is_empty(), "[%s] los textos del HUD y de las pestañas entran en su etiqueta (%s)" % [label, str(cut)])
-		# las filas de la cuadrilla: el nombre largo se parte en dos líneas, no se corta ni agranda la fila
-		var rows: Array[Node] = _node(scene, "GeneratorList").get_children()
-		var tall_rows: Array[String] = []
-		for row: Node in rows:
-			if (row as Control).size.y > 150.0:
-				tall_rows.append("%s (%d px)" % [row.name, int((row as Control).size.y)])
-		_check(tall_rows.is_empty(), "[%s] ninguna fila de generador se agranda de más (%s)" % [label, str(tall_rows)])
-		var row_text_cut: Array[String] = []
-		for row: Node in rows:
-			for node: Node in row.find_children("*", "Label", true, false):
-				var row_label: Label = node as Label
-				var row_font: Font = row_label.get_theme_font("font")
-				var row_size: int = row_label.get_theme_font_size("font_size")
-				var full: float = row_font.get_string_size(row_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, row_size).x
-				# con autowrap el texto se parte en varias líneas (no se corta): alcanza con que la fila no crezca (arriba)
-				if row_label.autowrap_mode == TextServer.AUTOWRAP_OFF and full > row_label.size.x + 0.5:
-					row_text_cut.append("'%s' (%d > %d px)" % [row_label.text, int(full), int(row_label.size.x)])
-		_check(row_text_cut.is_empty(), "[%s] y ningún texto de las filas se corta (%s)" % [label, str(row_text_cut)])
+			for mode_taps: int in [0, 1]: # en ×1 y en ×10 (el precio más largo)
+				_economy.reset()
+				_economy.run_gold = state["run_gold"]
+				_economy.gold = state["gold"]
+				_economy.relics = state["relics"]
+				_economy.pick_level = 9
+				_economy.loot_bonus = 5.0
+				_economy.owned[0] = 1234
+				_economy.owned[2] = 1234 # Cuadrilla de dinamita: el nombre más largo
+				for tap: int in range(mode_taps):
+					(_node(scene, "ModeButton") as Button).pressed.emit()
+				_economy.gold_changed.emit(_economy.gold)
+				await process_frame
+				await process_frame
+				for node: Node in scene.find_children("*", "Label", true, false):
+					var text_label: Label = node as Label
+					if not text_label.is_visible_in_tree() or scene.get_node("DebugPanel").is_ancestor_of(text_label):
+						continue
+					if text_label.autowrap_mode != TextServer.AUTOWRAP_OFF:
+						# los nombres de las tarjetas se parten en hasta dos líneas
+						if _node(scene, "Shop").is_ancestor_of(text_label) and text_label.get_line_count() > 2:
+							wrapped.append("'%s' (%d líneas)" % [text_label.text, text_label.get_line_count()])
+						continue
+					var font: Font = text_label.get_theme_font("font")
+					var font_size: int = text_label.get_theme_font_size("font_size")
+					for line: String in text_label.text.split("\n"):
+						var width: float = font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+						if width > text_label.size.x + 0.5:
+							cut.append("%s '%s' (%d > %d px)" % [text_label.name, line, int(width), int(text_label.size.x)])
+				for tap: int in range(3 - mode_taps if mode_taps > 0 else 0):
+					(_node(scene, "ModeButton") as Button).pressed.emit() # vuelve a ×1
+		_check(cut.is_empty(), "[%s] ningún texto se corta (%s)" % [label, str(cut)])
+		_check(wrapped.is_empty(), "[%s] los nombres de las tarjetas entran en dos líneas (%s)" % [label, str(wrapped)])
+		# el contenido de cada tarjeta entra en su alto
+		var overflowing: Array[String] = []
+		for card: Node in _node(scene, "Shop").get_children():
+			var content: Control = card.get_child(0) as Control
+			if not (card as Control).get_global_rect().grow(0.5).encloses(content.get_global_rect()):
+				overflowing.append("%s (%s fuera de %s)" % [card.name, str(content.get_global_rect()), str((card as Control).get_global_rect())])
+		_check(overflowing.is_empty(), "[%s] y nada se sale de la tarjeta (%s)" % [label, str(overflowing)])
 		_economy.reset()
 		await _free_host(scene)
 
@@ -415,6 +498,9 @@ func _test_overlays_draw_on_top(packed: PackedScene) -> void:
 			with_z.append("%s (z %d)" % [node.name, (node as CanvasItem).z_index])
 	_check(with_z.is_empty(), "ningún nodo usa z_index: lo que viene después en el árbol se dibuja encima (%s)" % str(with_z))
 	_check(scene.get_node("DebugPanel").get_index() > scene.get_node("Layout").get_index(), "el panel de debug viene después de todo el layout")
+	for panel_name: String in ["LootPanel", "RelicsPanel"]:
+		var panel: Control = _node(scene, panel_name)
+		_check(panel.get_index() > scene.get_node("DebugPanel").get_index() and panel.get_index() < scene.get_node("Modal").get_index(), "%s va encima del juego y debajo del cartel" % panel_name)
 	_check(scene.get_node("Modal").get_index() > scene.get_node("DebugPanel").get_index(), "y el cartel viene último: se dibuja encima de todo")
 	_check_eq(scene.get_node("Modal").get_index(), scene.get_child_count() - 1, "es el último hijo de la escena")
 	# dentro de la mina: los de más abajo se dibujan delante (vienen después entre los hijos)
@@ -453,15 +539,6 @@ func _test_overlays_draw_on_top(packed: PackedScene) -> void:
 			_check(gradient_texture.gradient.sample(0.7).a > middle and gradient_texture.gradient.sample(0.7).a < edge, "con transición gradual (%.2f a 70%%)" % gradient_texture.gradient.sample(0.7).a)
 	_economy.reset()
 	await _free_host(scene)
-
-
-func _inside_scroll_container(control: Control, scene: Control, container_name: String) -> bool:
-	var node: Node = control.get_parent()
-	while node != null and node != scene:
-		if node.name == container_name:
-			return true
-		node = node.get_parent()
-	return false
 
 
 func _test_mine_view(packed: PackedScene) -> void:
@@ -598,10 +675,10 @@ func _test_mine_view(packed: PackedScene) -> void:
 
 
 func _test_relics_page(packed: PackedScene) -> void:
-	_section("Pestaña Reliquias: runas")
+	_section("Cartel de Reliquias: runas")
 	var scene: Control = await _mount_host(packed, PHONE_SIZES[0])
 	_economy.reset()
-	(_node(scene, "TabRelicsButton") as Button).button_pressed = true
+	(_node(scene, "RelicsButton") as Button).pressed.emit()
 	await process_frame
 	var row: Control = _node(scene, "RelicsRow")
 	_check_eq(row.get_child_count(), 0, "sin reliquias no hay runas")
@@ -619,6 +696,8 @@ func _test_relics_page(packed: PackedScene) -> void:
 	await process_frame
 	_check(row.get_child_count() <= 8, "con 40 no se desborda la fila (%d runas)" % row.get_child_count())
 	_check_eq(_label_in(scene, "RelicsLabel").text, "Reliquias: 40 · +1000% de oro", "y el contador dice la cantidad real (%s)" % _label_in(scene, "RelicsLabel").text)
+	var panel: Control = _node(scene, "RelicsPanel").find_children("*", "PanelContainer", true, false)[0] as Control
+	_check(Rect2(Vector2.ZERO, PHONE_SIZES[0]).encloses(panel.get_global_rect()), "el cartel entra en la pantalla (%s)" % str(panel.get_global_rect()))
 	_economy.reset()
 	await _free_host(scene)
 
@@ -629,123 +708,108 @@ func _test_theme(packed: PackedScene) -> void:
 	_check(scene.theme != null and scene.theme.resource_path == "res://ui/theme.tres", "la escena usa res://ui/theme.tres")
 	var font: Font = _label_in(scene, "GoldLabel").get_theme_font("font")
 	_check(font is FontVariation and (font as FontVariation).base_font.resource_path.ends_with("PixelifySans.ttf"), "las etiquetas usan Pixelify Sans")
-	var button_font: Font = _pick_button(scene).get_theme_font("font")
-	_check(button_font is FontVariation and (button_font as FontVariation).base_font.resource_path.ends_with("PixelifySans.ttf"), "los botones también")
+	var card_font: Font = (_pick_card(scene).find_children("*", "Label", true, false)[0] as Label).get_theme_font("font")
+	_check(card_font is FontVariation and (card_font as FontVariation).base_font.resource_path.ends_with("PixelifySans.ttf"), "las tarjetas también")
 	# los botones de acción usan el UI Pack: apretado = el botón plano (sin profundidad); deshabilitado = gris
-	var pressed: StyleBox = _pick_button(scene).get_theme_stylebox("pressed")
+	var prestige: Button = _node(scene, "PrestigeButton") as Button
+	var pressed: StyleBox = prestige.get_theme_stylebox("pressed")
 	_check(pressed is StyleBoxTexture and (pressed as StyleBoxTexture).texture.resource_path.ends_with("button_rectangle_flat.png"), "apretado: el botón plano, sin profundidad")
-	var disabled: StyleBox = _pick_button(scene).get_theme_stylebox("disabled")
+	var disabled: StyleBox = prestige.get_theme_stylebox("disabled")
 	_check(disabled is StyleBoxTexture and (disabled as StyleBoxTexture).texture.resource_path.contains("/grey/"), "deshabilitado: gris")
-	_check((_node(scene, "TabCrewButton") as Button).toggle_mode, "las pestañas son de selección (toggle)")
 	await _free_host(scene)
 
 
-## El pico es una fila más de la lista, con el mismo formato que los generadores (icono, nombre y nivel,
-## dato de golpe y botón de compra).
-func _test_pick_row(packed: PackedScene) -> void:
-	_section("El pico es una fila de la lista, igual que los generadores")
+## Las mejoras en una grilla de dos columnas: el pico y los cinco generadores, todos a la vista sin deslizar,
+## y la tarjeta entera es el botón de compra.
+func _test_shop_grid(packed: PackedScene) -> void:
+	_section("Mejoras en dos columnas, todas a la vista")
+	for phone: Vector2 in PHONE_SIZES:
+		var scene: Control = await _mount_host(packed, phone)
+		var label: String = "%dx%d" % [int(phone.x), int(phone.y)]
+		var shop: GridContainer = _node(scene, "Shop") as GridContainer
+		_check_eq(shop.columns, 2, "[%s] dos columnas" % label)
+		_check_eq(shop.get_child_count(), 6, "[%s] seis tarjetas: el pico y los cinco generadores" % label)
+		var cards: Array[Node] = shop.get_children()
+		var first: Control = cards[0] as Control
+		var second: Control = cards[1] as Control
+		var third: Control = cards[2] as Control
+		_check_near(first.global_position.y, second.global_position.y, "[%s] la primera y la segunda van en la misma fila" % label, 1e-6)
+		_check(third.global_position.y > first.global_position.y and is_equal_approx(third.global_position.x, first.global_position.x), "[%s] la tercera abre otra fila" % label)
+		var screen: Rect2 = Rect2(Vector2.ZERO, phone)
+		var view: Rect2 = (shop.get_parent() as Control).get_global_rect()
+		var hidden: Array[String] = []
+		var uneven: bool = false
+		for card: Node in cards:
+			var rect: Rect2 = (card as Control).get_global_rect()
+			if not screen.encloses(rect) or not view.grow(0.5).encloses(rect):
+				hidden.append(str(card.name))
+			if not rect.size.is_equal_approx(first.size):
+				uneven = true
+			_check(card is Button, "[%s] %s: la tarjeta entera es el botón" % [label, card.name])
+		_check(hidden.is_empty(), "[%s] las seis se ven enteras sin deslizar (%s)" % [label, str(hidden)])
+		_check(not uneven, "[%s] todas del mismo tamaño (%s)" % [label, str(first.size)])
+		await _free_host(scene)
+
 	var scene: Control = await _mount_host(packed, PHONE_SIZES[0])
 	_economy.reset()
 	_economy.gold = 60.0
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
-	var holder: Control = _node(scene, "PickRow")
-	_check_eq(holder.get_child_count(), 1, "la fila del pico está en la lista")
-	var pick_row: Control = holder.get_child(0) as Control
-	var first_generator: Control = _node(scene, "GeneratorList").get_child(0) as Control
-	var pick_button: Button = _pick_button(scene)
-	var buy_button: Button = _buy_button(scene, 0)
-	_check(pick_row.global_position.y < first_generator.global_position.y, "va arriba de los generadores")
-	_check(holder.get_parent() == _node(scene, "GeneratorList").get_parent(), "en el mismo scroll")
-	_check_near(pick_row.size.x, first_generator.size.x, "mide lo mismo de ancho", 0.01)
-	_check_near(pick_row.size.y, first_generator.size.y, "y de alto (%d y %d)" % [int(pick_row.size.y), int(first_generator.size.y)], 0.05)
-	_check_eq(pick_row.theme_type_variation, first_generator.theme_type_variation, "con el mismo panel (%s)" % str(pick_row.theme_type_variation))
-	_check_eq(pick_button.theme_type_variation, buy_button.theme_type_variation, "y el mismo botón (%s)" % str(pick_button.theme_type_variation))
-	_check_near(pick_button.size.x, buy_button.size.x, "del mismo tamaño (%d y %d de ancho)" % [int(pick_button.size.x), int(buy_button.size.x)], 0.01)
-	_check_near(pick_button.size.y, buy_button.size.y, "y de alto", 0.01)
-	var icons: Array[Node] = pick_row.find_children("*", "TextureRect", true, false)
-	_check(icons.size() == 1 and (icons[0] as TextureRect).texture != null, "tiene su icono")
-	if icons.size() == 1:
-		_check((icons[0] as TextureRect).texture.resource_path.ends_with("pick.png"), "el pico (pick.png)")
-		_check_near((icons[0] as TextureRect).size.x, ((first_generator.find_children("*", "TextureRect", true, false)[0]) as TextureRect).size.x, "del mismo tamaño que el de los generadores", 0.01)
-	var labels: Array[Node] = pick_row.find_children("*", "Label", true, false)
-	_check_eq(labels.size(), 2, "con un nombre y un dato, como los generadores")
-	if labels.size() == 2:
-		_check((labels[0] as Label).text.contains("Pico") and (labels[0] as Label).text.contains("0"), "nombre y nivel (%s)" % (labels[0] as Label).text)
-		_check((labels[1] as Label).text.contains("Golpe") and (labels[1] as Label).text.contains("1"), "y lo que pega (%s)" % (labels[1] as Label).text)
-	_check(pick_button.text.contains("Mejorar") and pick_button.text.contains("50"), "el botón dice Mejorar y el costo (%s)" % pick_button.text.replace("\n", " | "))
-	_check(not pick_button.disabled, "con 60 de oro se puede (cuesta 50)")
-	pick_button.pressed.emit()
+	var pick: Button = _pick_card(scene)
+	var texts: Array[String] = _card_texts(pick)
+	_check(texts.size() == 3 and texts[0].contains("Pico") and texts[0].contains("0"), "el pico: nombre y nivel (%s)" % str(texts))
+	_check(texts.size() == 3 and texts[1].contains("Golpe") and texts[2].contains("50"), "lo que pega y el precio")
+	var icons: Array[Node] = pick.find_children("*", "TextureRect", true, false)
+	_check(icons.size() == 1 and (icons[0] as TextureRect).texture.resource_path.ends_with("pick.png"), "con el icono del pico")
+	_check_eq((icons[0] as TextureRect).texture_filter, CanvasItem.TEXTURE_FILTER_NEAREST, "pixel art nítido")
+	var deaf: bool = true
+	for node: Node in pick.find_children("*", "Control", true, false):
+		if (node as Control).mouse_filter != Control.MOUSE_FILTER_IGNORE:
+			deaf = false
+	_check(deaf, "nada dentro de la tarjeta se come el toque")
+	pick.pressed.emit()
 	await process_frame
-	_check_eq(_economy.pick_level, 1, "apretarlo mejora el pico")
-	_check((labels[0] as Label).text.contains("1"), "y la fila muestra el nivel nuevo (%s)" % (labels[0] as Label).text)
-	_check(pick_button.disabled, "ya no alcanza para el siguiente (cuesta 300)")
+	_check_eq(_economy.pick_level, 1, "tocar la tarjeta mejora el pico")
+	_check(_card_texts(pick)[0].contains("1"), "y muestra el nivel nuevo (%s)" % _card_texts(pick)[0])
 	_economy.reset()
 	await _free_host(scene)
 
 
-## El color de un botón tiene un único significado: verde = se puede comprar, gris = no alcanza,
-## amarillo = solo la pestaña activa, rojo = solo el prestigio; los selectores son neutros.
+## El color tiene un único significado: verde = se puede comprar, gris = no alcanza, rojo = solo el
+## prestigio. Lo demás es neutro. (El amarillo era de la pestaña activa: ya no hay pestañas.)
 func _test_button_roles(packed: PackedScene) -> void:
-	_section("Colores de los botones: un rol por color")
+	_section("Colores: un rol por color")
 	var scene: Control = await _mount_host(packed, PHONE_SIZES[0])
 	_economy.reset()
 	_economy.gold = 20.0 # alcanza el Minero (15), no el Taladro (120) ni el pico (50)
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
-	var buy_first: Button = _buy_button(scene, 0)
-	var buy_second: Button = _buy_button(scene, 1)
-	_check(not buy_first.disabled and _style_name(buy_first) == "green", "lo que se puede comprar es verde (%s)" % _style_name(buy_first))
-	_check(buy_second.disabled and _style_name(buy_second) == "grey", "lo que no alcanza es gris (%s)" % _style_name(buy_second))
-	_check(_pick_button(scene).disabled and _style_name(_pick_button(scene)) == "grey", "el pico sin oro suficiente es gris (%s)" % _style_name(_pick_button(scene)))
+	var buy_first: Button = _card(scene, 0)
+	var buy_second: Button = _card(scene, 1)
+	_check(not buy_first.disabled and _price_color(buy_first) == "green", "lo que se puede comprar: precio en verde (%s)" % _price_color(buy_first))
+	_check(buy_second.disabled and _price_color(buy_second) == "grey", "lo que no alcanza: gris (%s)" % _price_color(buy_second))
+	_check(_pick_card(scene).disabled and _price_color(_pick_card(scene)) == "grey", "el pico sin oro suficiente, gris")
 	_check(_node(scene, "PrestigeButton").disabled and _style_name(_node(scene, "PrestigeButton") as Button) == "grey", "y el prestigio todavía no disponible también")
 	_economy.gold = 60.0
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
-	_check(not _pick_button(scene).disabled and _style_name(_pick_button(scene)) == "green", "con oro para el pico, el pico es verde (no amarillo) (%s)" % _style_name(_pick_button(scene)))
+	_check(not _pick_card(scene).disabled and _price_color(_pick_card(scene)) == "green", "con oro para el pico, verde")
 	_economy.run_gold = 41000.0 # 300 m: se puede volver a la superficie
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
-	_check(not _node(scene, "PrestigeButton").disabled and _style_name(_node(scene, "PrestigeButton") as Button) == "red", "el prestigio disponible es rojo (%s)" % _style_name(_node(scene, "PrestigeButton") as Button))
-
-	# en toda la escena: ningún botón habilitado es gris, ningún deshabilitado deja de serlo; sin azules
-	var buttons: Array[Button] = _game_buttons(scene)
-	var by_style: Dictionary = {}
-	var grey_enabled: Array[String] = []
-	var blue: Array[String] = []
-	for button: Button in buttons:
-		var style: String = _style_name(button)
-		by_style[style] = by_style.get(style, []) + [button]
-		if style == "blue":
-			blue.append(str(button.name))
-		if style == "grey" and not button.disabled:
-			grey_enabled.append(str(button.name))
-	_check(blue.is_empty(), "no queda ningún botón azul (%s)" % str(blue))
-	_check(grey_enabled.is_empty(), "ningún botón habilitado es gris: gris quiere decir que no alcanza (%s)" % str(grey_enabled))
-	var yellow_names: Array[String] = []
-	for button: Button in by_style.get("yellow", []):
-		yellow_names.append(str(button.name))
-	_check_eq(yellow_names, ["TabCrewButton"] as Array[String], "amarillo es solo la pestaña activa (%s)" % str(yellow_names))
+	_check(not _node(scene, "PrestigeButton").disabled and _style_name(_node(scene, "PrestigeButton") as Button) == "red", "el prestigio disponible es rojo")
+	var colored: Array[String] = []
 	var red_names: Array[String] = []
-	for button: Button in by_style.get("red", []):
-		red_names.append(str(button.name))
-	_check_eq(red_names, ["PrestigeButton"] as Array[String], "y rojo solo el prestigio (%s)" % str(red_names))
-	(_node(scene, "TabRelicsButton") as Button).button_pressed = true
-	await process_frame
-	yellow_names.clear()
 	for button: Button in _game_buttons(scene):
-		if _style_name(button) == "yellow":
-			yellow_names.append(str(button.name))
-	_check_eq(yellow_names, ["TabRelicsButton"] as Array[String], "al cambiar de pestaña el amarillo se muda con ella (%s)" % str(yellow_names))
-
-	# los selectores de modo y las pestañas inactivas son neutros (un estilo plano, sin color de rol)
-	for mode_name: String in ["Mode1Button", "Mode10Button", "ModeMaxButton"]:
-		var mode: Button = _node(scene, mode_name) as Button
-		_check_eq(_style_name(mode), "flat", "%s es neutro, sin color de rol (%s)" % [mode_name, _style_name(mode)])
-	var selected: StyleBox = (_node(scene, "Mode1Button") as Button).get_theme_stylebox("pressed")
-	var unselected: StyleBox = (_node(scene, "Mode1Button") as Button).get_theme_stylebox("normal")
-	_check(selected is StyleBoxFlat and unselected is StyleBoxFlat and (selected as StyleBoxFlat).bg_color != (unselected as StyleBoxFlat).bg_color, "pero el seleccionado se distingue del resto (otro relleno)")
-	_check_eq(_style_name(_node(scene, "TabCrewButton") as Button), "flat", "una pestaña inactiva también es neutra")
+		var style: String = _style_name(button)
+		if style in ["blue", "yellow", "green"]:
+			colored.append("%s (%s)" % [button.name, style])
+		if style == "red":
+			red_names.append(str(button.name))
+	_check(colored.is_empty(), "no quedan botones azules ni amarillos (%s)" % str(colored))
+	_check_eq(red_names, ["PrestigeButton"] as Array[String], "rojo solo el prestigio (%s)" % str(red_names))
+	for side_name: String in ["LootButton", "RelicsButton", "ModeButton"]:
+		_check_eq(_style_name(_node(scene, side_name) as Button), "flat", "%s es neutro" % side_name)
 
 	# los botones del cartel: el prestigio es rojo; un aviso cualquiera es neutro
 	var modal: Control = scene.get_node("Modal")
@@ -756,7 +820,7 @@ func _test_button_roles(packed: PackedScene) -> void:
 	modal.close()
 	modal.open("Aviso", "Cuerpo", "¡A seguir!")
 	await process_frame
-	_check_eq(_style_name(modal.confirm_button), "flat", "un aviso común se cierra con un botón neutro (%s)" % _style_name(modal.confirm_button))
+	_check_eq(_style_name(modal.confirm_button), "flat", "un aviso común se cierra con un botón neutro")
 	modal.close()
 	_economy.reset()
 	await _free_host(scene)
@@ -787,10 +851,36 @@ func _style_name(button: Button) -> String:
 	return "flat"
 
 
-func _test_no_loot_hides_the_loot_tab(packed: PackedScene) -> void:
+## Los avisos que salen arriba de la mina (cofre, bioma nuevo) no quedan debajo de los botones del costado.
+func _test_toasts_clear_the_side_column(packed: PackedScene) -> void:
+	_section("Los avisos de la mina no chocan con los botones del costado")
+	for phone: Vector2 in PHONE_SIZES:
+		var scene: Control = await _mount_host(packed, phone)
+		var label: String = "%dx%d" % [int(phone.x), int(phone.y)]
+		var mine: Control = _node(scene, "MineView")
+		# el aviso más ancho: cofre legendario con los porcentajes más largos
+		mine.show_toast(load("res://assets/sprites/tiny_dungeon/tile_0089.png"), "¡Cofre Legendario!", "+60% → +54.4%", Color(1.0, 0.72, 0.2))
+		mine.show_banner("Bioma Cristal", "×2.25 de oro", Color.CYAN)
+		await create_timer(0.7).timeout
+		for notice_name: String in ["ChestToast", "BiomeBanner"]:
+			var notice: Control = mine.find_child(notice_name, true, false) as Control
+			_check(notice != null, "[%s] sale %s" % [label, notice_name])
+			if notice == null:
+				continue
+			var rect: Rect2 = notice.get_global_rect()
+			var covered: Array[String] = []
+			for side_name: String in ["LootButton", "RelicsButton", "ModeButton"]:
+				if rect.intersects(_node(scene, side_name).get_global_rect()):
+					covered.append(side_name)
+			_check(covered.is_empty(), "[%s] %s no queda debajo de %s (%s)" % [label, notice_name, str(covered), str(rect)])
+			_check(rect.position.x >= 0.0 and rect.end.x <= DESIGN_WIDTH, "[%s] y entra en la pantalla" % label)
+		await _free_host(scene)
+
+
+func _test_no_loot_hides_the_loot_button(packed: PackedScene) -> void:
 	_section("Sin botín en el balance")
 	var scene: Control = await _mount_host(packed, PHONE_SIZES[0], _balance_without_loot())
-	_check(not _node(scene, "TabLootButton").visible, "no hay pestaña de Botín")
-	_check(_node(scene, "TabCrewButton").visible and _node(scene, "TabRelicsButton").visible, "pero sí las otras dos")
+	_check(not _node(scene, "LootButton").visible, "no hay botón de Botín")
+	_check(_node(scene, "RelicsButton").visible and _node(scene, "ModeButton").visible, "pero sí los otros dos")
 	_check(not _node(scene, "LootBonusLabel").is_visible_in_tree(), "y el bonus de botín no se ve")
 	await _free_host(scene)

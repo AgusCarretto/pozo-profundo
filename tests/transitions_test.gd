@@ -168,7 +168,7 @@ func _flying_relics() -> Array[TextureRect]:
 	return found
 
 
-## Deja todo listo para volver a la superficie con 2 reliquias (300 m), en la pestaña Reliquias, y confirma.
+## Deja todo listo para volver a la superficie con 2 reliquias (300 m), con el cartel de Reliquias abierto, y confirma.
 func _start_prestige() -> void:
 	_economy.reset()
 	_economy.gold = 5000.0
@@ -176,7 +176,7 @@ func _start_prestige() -> void:
 	_economy.run_gold = 41000.0
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
-	(_scene.get_node("%TabRelicsButton") as Button).button_pressed = true
+	(_scene.get_node("%RelicsButton") as Button).pressed.emit()
 	await process_frame
 	(_scene.get_node("%PrestigeButton") as Button).pressed.emit()
 	var modal: Node = _scene.get_node("Modal")
@@ -221,7 +221,7 @@ func _test_prestige_whiteout() -> void:
 	_check_eq(screen_fx.mouse_filter, Control.MOUSE_FILTER_IGNORE, "y se puede tocar de nuevo")
 	_check_eq(str(_mine().get("biome_id")), "earth", "de vuelta en Tierra")
 	root.get_node("Audio").sfx_played.disconnect(record)
-	(_scene.get_node("%TabCrewButton") as Button).button_pressed = true
+	(_scene.get_node("%RelicsPanel") as Control).call("close")
 	_economy.reset()
 	# Que termine la transición (la cola de la última reliquia) antes de la próxima vuelta a la superficie.
 	await _wait(1.0)
@@ -243,5 +243,5 @@ func _test_prestige_reduced() -> void:
 	_check(brightest > 0.0 and brightest < 0.4, "funde a oscuro en vez de a blanco (sin destello) (luminancia %.2f)" % brightest)
 	_check_eq(_economy.relics, 2, "y vuelve a la superficie igual")
 	_settings.reduce_effects = false
-	(_scene.get_node("%TabCrewButton") as Button).button_pressed = true
+	(_scene.get_node("%RelicsPanel") as Control).call("close")
 	_economy.reset()

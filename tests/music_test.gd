@@ -94,7 +94,7 @@ func _test_frenzy() -> void:
 	await process_frame
 	_section("Ir a comprar no corta el frenesí")
 	_economy.gold = 1.0e9
-	var buy: Button = _scene.get_node("%GeneratorList").get_child(0).find_children("*", "Button", true, false)[0] as Button
+	var buy: Button = _scene.get_node("%Shop").get_child(1) as Button
 	buy.pressed.emit()
 	_play(1.0, 0.0)
 	_check_eq(_playing(), "earth", "comprar sin frenesí no lo trae")
@@ -104,7 +104,7 @@ func _test_frenzy() -> void:
 		buy.pressed.emit()
 		_play(1.0, 0.0)
 	_check_eq(_playing(), "frenzy", "6 s comprando un minero por segundo, sin golpear: sigue el frenesí")
-	(_scene.get_node("%PickRow").find_children("*", "Button", true, false)[0] as Button).pressed.emit()
+	(_scene.get_node("%Shop").get_child(0) as Button).pressed.emit()
 	_play(2.5, 0.0)
 	_check_eq(_playing(), "frenzy", "mejorar el pico también lo sostiene")
 	_play(1.0, 0.0)
@@ -148,7 +148,7 @@ func _test_prestige() -> void:
 	await _settle()
 	_play(4.0, 6.0)
 	_check_eq(_playing(), "frenzy", "en frenesí")
-	(_scene.get_node("%TabRelicsButton") as Button).button_pressed = true
+	(_scene.get_node("%RelicsButton") as Button).pressed.emit()
 	(_scene.get_node("%PrestigeButton") as Button).pressed.emit()
 	var modal: Node = _scene.get_node("Modal")
 	(modal.get("confirm_button") as Button).pressed.emit()

@@ -11,7 +11,7 @@ extends SceneTree
 
 const SIZES: Array[Vector2i] = [Vector2i(360, 640), Vector2i(412, 915)]
 
-## Estados de muestra: nombre, pestaña (0 Cuadrilla, 1 Botín, 2 Reliquias) y partida. Con "options": true la
+## Estados de muestra: nombre, cartel abierto (0 ninguno, 1 Botín, 2 Reliquias) y partida. Con "options": true la
 ## captura sale con el panel de Opciones abierto; con "hits": N, se golpea N veces justo antes (números flotantes,
 ## roca aplastada); con "chest": i, cae un cofre de la rareza i; con "wait": s, se esperan s segundos antes de
 ## capturar (para agarrar una explosión o el cofre ya apoyado); con "descend": oro, después de armar el estado se baja
@@ -19,19 +19,19 @@ const SIZES: Array[Vector2i] = [Vector2i(360, 640), Vector2i(412, 915)]
 ## "prestige": true, se vuelve a la superficie (fundido y reliquias volando).
 ## `owned` sigue el orden del balance: Minero, Taladro, Dinamita, Gólem, Excavadora.
 const SHOTS: Array[Dictionary] = [
-	{ "name": "1_inicio", "tab": 0, "gold": 22.0, "run_gold": 22.0, "pick": 0, "owned": [], "loot": 0.0, "relics": 0 },
-	{ "name": "2_roca", "tab": 0, "gold": 3400.0, "run_gold": 4200.0, "pick": 3, "owned": [4, 1], "loot": 0.12, "relics": 0 },
-	{ "name": "3_cristal_botin", "tab": 1, "gold": 52000.0, "run_gold": 60000.0, "pick": 5, "owned": [8, 3, 1, 1], "loot": 0.45, "relics": 0 },
-	{ "name": "4_magma_reliquias", "tab": 2, "gold": 4.0e6, "run_gold": 5.0e6, "pick": 7, "owned": [30, 8, 5, 2, 0], "loot": 1.1, "relics": 3 },
-	{ "name": "5_abismo", "tab": 0, "gold": 9.0e8, "run_gold": 2.0e9, "pick": 9, "owned": [60, 25, 12, 6, 2], "loot": 2.0, "relics": 5 },
-	{ "name": "6_opciones", "tab": 0, "gold": 8.88e15, "run_gold": 1.0e15, "pick": 9, "owned": [60, 25, 12, 6, 2], "loot": 2.0, "relics": 40, "options": true },
-	{ "name": "7_golpe", "tab": 0, "gold": 3400.0, "run_gold": 4200.0, "pick": 3, "owned": [4, 1], "loot": 0.12, "relics": 0, "hits": 6 },
-	{ "name": "8_dinamita", "tab": 0, "gold": 52000.0, "run_gold": 60000.0, "pick": 5, "owned": [8, 3, 400, 1], "loot": 0.45, "relics": 0, "wait": 1.12 },
-	{ "name": "9_cofre", "tab": 1, "gold": 52000.0, "run_gold": 60000.0, "pick": 5, "owned": [8, 3, 1, 1], "loot": 1.0, "relics": 0, "chest": 1, "wait": 0.7 },
-	{ "name": "10_legendario", "tab": 1, "gold": 4.0e6, "run_gold": 5.0e6, "pick": 7, "owned": [30, 8, 5, 2, 0], "loot": 1.1, "relics": 3, "chest": 3, "wait": 1.2 },
-	{ "name": "11_bioma_nuevo", "tab": 0, "gold": 900.0, "run_gold": 600.0, "pick": 2, "owned": [4, 1], "loot": 0.0, "relics": 0, "descend": 700.0, "wait": 0.3 },
-	{ "name": "12_vuelta", "tab": 0, "gold": 3400.0, "run_gold": 4200.0, "pick": 3, "owned": [12, 2], "loot": 0.12, "relics": 0, "offline": 11520.0, "wait": 0.6 },
-	{ "name": "13_superficie", "tab": 2, "gold": 4.0e6, "run_gold": 5.0e6, "pick": 7, "owned": [30, 8, 5, 2, 0], "loot": 1.1, "relics": 3, "prestige": true, "wait": 0.95 },
+	{ "name": "1_inicio", "panel": 0, "gold": 22.0, "run_gold": 22.0, "pick": 0, "owned": [], "loot": 0.0, "relics": 0 },
+	{ "name": "2_roca", "panel": 0, "gold": 3400.0, "run_gold": 4200.0, "pick": 3, "owned": [4, 1], "loot": 0.12, "relics": 0 },
+	{ "name": "3_cristal_botin", "panel": 1, "gold": 52000.0, "run_gold": 60000.0, "pick": 5, "owned": [8, 3, 1, 1], "loot": 0.45, "relics": 0 },
+	{ "name": "4_magma_reliquias", "panel": 2, "gold": 4.0e6, "run_gold": 5.0e6, "pick": 7, "owned": [30, 8, 5, 2, 0], "loot": 1.1, "relics": 3 },
+	{ "name": "5_abismo", "panel": 0, "gold": 9.0e8, "run_gold": 2.0e9, "pick": 9, "owned": [60, 25, 12, 6, 2], "loot": 2.0, "relics": 5 },
+	{ "name": "6_opciones", "panel": 0, "gold": 8.88e15, "run_gold": 1.0e15, "pick": 9, "owned": [60, 25, 12, 6, 2], "loot": 2.0, "relics": 40, "options": true },
+	{ "name": "7_golpe", "panel": 0, "gold": 3400.0, "run_gold": 4200.0, "pick": 3, "owned": [4, 1], "loot": 0.12, "relics": 0, "hits": 6 },
+	{ "name": "8_dinamita", "panel": 0, "gold": 52000.0, "run_gold": 60000.0, "pick": 5, "owned": [8, 3, 400, 1], "loot": 0.45, "relics": 0, "wait": 1.12 },
+	{ "name": "9_cofre", "panel": 0, "gold": 52000.0, "run_gold": 60000.0, "pick": 5, "owned": [8, 3, 1, 1], "loot": 1.0, "relics": 0, "chest": 1, "wait": 0.7 },
+	{ "name": "10_legendario", "panel": 0, "gold": 4.0e6, "run_gold": 5.0e6, "pick": 7, "owned": [30, 8, 5, 2, 0], "loot": 1.1, "relics": 3, "chest": 3, "wait": 1.2 },
+	{ "name": "11_bioma_nuevo", "panel": 0, "gold": 900.0, "run_gold": 600.0, "pick": 2, "owned": [4, 1], "loot": 0.0, "relics": 0, "descend": 700.0, "wait": 0.3 },
+	{ "name": "12_vuelta", "panel": 0, "gold": 3400.0, "run_gold": 4200.0, "pick": 3, "owned": [12, 2], "loot": 0.12, "relics": 0, "offline": 11520.0, "wait": 0.6 },
+	{ "name": "13_superficie", "panel": 0, "gold": 4.0e6, "run_gold": 5.0e6, "pick": 7, "owned": [30, 8, 5, 2, 0], "loot": 1.1, "relics": 3, "prestige": true, "wait": 0.95 },
 ]
 
 var _out_dir: String = ""
@@ -69,10 +69,13 @@ func _run() -> void:
 			# Saltar de un estado a otro más profundo cuenta como bajar de bioma (cartel): se deja asentar el estado y
 			# se limpian los efectos (cartel, números y astillas de la captura anterior) antes de la acción de la captura.
 			await _settle()
+			# El fundido de bioma dura 0,9 s: sin esperarlo, la captura sale con la roca y el piso del anterior.
+			await create_timer(1.1).timeout
 			scene.get_node("%MineView").call("clear_effects")
-			(scene.get_node("%" + ["TabCrewButton", "TabLootButton", "TabRelicsButton"][shot["tab"]]) as Button).button_pressed = true
-			if shot["name"].begins_with("1_"):
-				scene.get_node("%Mode1Button").button_pressed = true
+			scene.get_node("%LootPanel").call("close")
+			scene.get_node("%RelicsPanel").call("close")
+			if int(shot["panel"]) > 0:
+				(scene.get_node("%LootButton" if shot["panel"] == 1 else "%RelicsButton") as Button).pressed.emit()
 			var options: Node = scene.get_node("OptionsPanel")
 			if shot.get("options", false):
 				options.call("open")

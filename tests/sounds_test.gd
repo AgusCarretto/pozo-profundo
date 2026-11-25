@@ -236,10 +236,10 @@ func _test_economy_cues() -> void:
 	_take()
 	_button("TapButton").button_down.emit()
 	_check(_take().has("hit"), "golpear la roca")
-	var buy: Button = _scene.get_node("%GeneratorList").get_child(0).find_children("*", "Button", true, false)[0] as Button
+	var buy: Button = _scene.get_node("%Shop").get_child(1) as Button
 	buy.pressed.emit()
 	_check(_take().has("buy"), "comprar un generador")
-	var pick: Button = _scene.get_node("%PickRow").find_children("*", "Button", true, false)[0] as Button
+	var pick: Button = _scene.get_node("%Shop").get_child(0) as Button
 	pick.pressed.emit()
 	_check(_take().has("pick"), "mejorar el pico")
 	var table: Array = _economy.loot_table()
@@ -254,15 +254,14 @@ func _test_economy_cues() -> void:
 func _test_ui_cues() -> void:
 	_section("La interfaz suena")
 	_take()
-	_button("TabLootButton").button_pressed = true
-	_check(_take().has("tab"), "cambiar de pestaña")
-	_button("TabLootButton").button_pressed = true
-	_check(not _take().has("tab"), "tocar la pestaña que ya está activa no suena")
-	_button("TabCrewButton").button_pressed = true
-	_take()
-	_button("Mode10Button").button_pressed = true
-	_check(_take().has("mode"), "elegir ×10")
-	_button("Mode1Button").button_pressed = true
+	_button("LootButton").pressed.emit()
+	_check(_take().has("tab"), "abrir Botín")
+	_scene.get_node("%LootPanel").call("close")
+	_check(_take().has("close"), "cerrarlo")
+	_button("ModeButton").pressed.emit()
+	_check(_take().has("mode"), "cambiar el modo de compra")
+	_button("ModeButton").pressed.emit()
+	_button("ModeButton").pressed.emit()
 	_take()
 	var modal: Control = _scene.get_node("Modal") as Control
 	modal.open("Aviso", "Cuerpo", "Listo")
@@ -300,7 +299,7 @@ func _test_prestige_cues() -> void:
 	_economy.run_gold = 41000.0 # 300 m: ya se puede
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
-	_button("TabRelicsButton").button_pressed = true
+	_button("RelicsButton").pressed.emit()
 	_take()
 	_button("PrestigeButton").pressed.emit()
 	_check(_take().has("open"), "pedir volver abre el cartel")

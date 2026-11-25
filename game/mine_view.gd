@@ -31,6 +31,9 @@ const MIN_UNIT: float = 0.6
 const MAX_UNIT: float = 1.4
 ## A qué altura de la mina queda el centro de la roca (0,5 sería justo en el medio): un poco más abajo.
 const ROCK_HEIGHT_SHARE: float = 0.55
+## Cuánto se corre a la izquierda todo el conjunto (roca y cuadrilla), a tamaño de diseño: deja libre la
+## columna de la derecha para los botones de Botín, Reliquias y modo (ver main.tscn, SideBar).
+const COMPOSITION_SHIFT: float = -32.0
 ## Cuántos píxeles de pantalla mide cada píxel de sprite, a tamaño de diseño.
 const ROCK_SCALE: int = 22
 const MINER_SCALE: int = 5
@@ -118,6 +121,8 @@ const TOAST_TIME: float = 2.2
 const TOAST_SLIDE_TIME: float = 0.25
 const TOAST_TOP: float = 16.0
 const TOAST_ICON: float = 48.0
+## Ancho que ocupan arriba a la derecha los botones del costado (main.tscn, SideBar: 100 px más sus márgenes).
+const SIDE_COLUMN_WIDTH: float = 116.0
 
 ## Cambio de bioma: el piso y la roca nuevos aparecen fundiéndose sobre los viejos en BIOME_FADE_TIME. Un cartel
 ## pasajero (no modal) anuncia el bioma: entra creciendo, queda BANNER_TIME y se desvanece.
@@ -513,7 +518,8 @@ func show_toast(icon: Texture2D, title: String, detail: String, color: Color) ->
 	texts.add_child(detail_label)
 	_fx.add_child(toast)
 	toast.size = toast.get_combined_minimum_size()
-	var target: Vector2 = Vector2(((size.x - toast.size.x) * 0.5), TOAST_TOP * _unit).round()
+	# Centrado en lo que queda libre a la izquierda de los botones del costado, para no quedar debajo.
+	var target: Vector2 = Vector2((size.x - SIDE_COLUMN_WIDTH - toast.size.x) * 0.5, TOAST_TOP * _unit).round()
 	toast.position = Vector2(target.x, -toast.size.y)
 	var tween: Tween = toast.create_tween()
 	tween.tween_property(toast, "position:y", target.y, TOAST_SLIDE_TIME).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -894,7 +900,7 @@ func _layout() -> void:
 		return
 	var unit: float = clampf(minf(size.x / DESIGN_SIZE.x, size.y / DESIGN_SIZE.y), MIN_UNIT, MAX_UNIT)
 	_unit = unit
-	var center: Vector2 = Vector2(size.x * 0.5, size.y * ROCK_HEIGHT_SHARE)
+	var center: Vector2 = Vector2(size.x * 0.5 + COMPOSITION_SHIFT * unit, size.y * ROCK_HEIGHT_SHARE)
 	_place(_rock, center, Vector2.ZERO, ROCK_SCALE, unit)
 	for index: int in range(miner_sprites.size()):
 		_place(miner_sprites[index], center, MINER_SLOTS[index], MINER_SCALE, unit)

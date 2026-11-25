@@ -101,8 +101,8 @@ func _set_run_gold(run_gold: float) -> void:
 
 
 func _button(node_name: String) -> Button:
-	if node_name == "PickButton": # el pico es una fila de la lista (%PickRow): su botón es el único de la fila
-		return _scene.get_node("%PickRow").find_children("*", "Button", true, false)[0] as Button
+	if node_name == "PickButton": # la tarjeta del pico es la primera de la grilla (la tarjeta entera es el botón)
+		return _scene.get_node("%Shop").get_child(0) as Button
 	return _scene.get_node("%" + node_name) as Button
 
 
@@ -110,12 +110,35 @@ func _label(node_name: String) -> Label:
 	return _scene.get_node("%" + node_name) as Label
 
 
+## Las tarjetas de los generadores (sin la del pico).
 func _rows() -> Array[Node]:
-	return _scene.get_node("%GeneratorList").get_children()
+	return _scene.get_node("%Shop").get_children().slice(1)
 
 
 func _row_button(index: int) -> Button:
-	return _rows()[index].find_children("*", "Button", true, false)[0] as Button
+	return _rows()[index] as Button
+
+
+## Los textos de una tarjeta o de un botón del costado, juntos.
+func _card_text(card: Node) -> String:
+	var parts: Array[String] = []
+	for label: Node in card.find_children("*", "Label", true, false):
+		parts.append((label as Label).text)
+	return " | ".join(parts)
+
+
+## El precio de una tarjeta (su tercer texto: nombre, dato, precio).
+func _price(card: Node) -> String:
+	return (card.find_children("*", "Label", true, false)[2] as Label).text
+
+
+## Toca el botón de modo hasta que diga `mode` ("×1", "×10" o "Máx") y espera a que la UI se refresque.
+func _pick_mode(mode: String) -> void:
+	for i: int in range(3):
+		if _card_text(_button("ModeButton")).begins_with(mode + " |"):
+			break
+		_button("ModeButton").pressed.emit()
+	await process_frame
 
 
 ## Deja el estado de Economy en `gold` (resto en cero) y espera a que la UI se refresque.
@@ -128,15 +151,15 @@ func _set_gold(gold: float) -> void:
 func _test_initial_screen() -> void:
 	_section("Pantalla inicial")
 	_check_eq(_label("GoldLabel").text, "0", "el oro arranca en 0")
-	_check_eq(_rows().size(), 5, "hay una fila por generador (5)")
-	_check_eq(_rows().size(), _economy.generator_count(), "una fila por generador del balance")
+	_check_eq(_rows().size(), 5, "hay una tarjeta por generador (5)")
+	_check_eq(_rows().size(), _economy.generator_count(), "una por generador del balance")
 	var any_enabled: bool = false
 	for i: int in range(_rows().size()):
 		if not _row_button(i).disabled:
 			any_enabled = true
-	_check(not any_enabled, "sin oro, ningún botón de compra está habilitado")
-	_check(_button("PickButton").disabled, "sin oro, el botón del pico está deshabilitado")
-	_check_eq(_button("Mode1Button").button_pressed, true, "el modo de compra arranca en x1")
+	_check(not any_enabled, "sin oro, ninguna tarjeta de generador está habilitada")
+	_check(_button("PickButton").disabled, "sin oro, la tarjeta del pico está deshabilitada")
+	_check(_card_text(_button("ModeButton")).begins_with("×1 |"), "el modo de compra arranca en ×1 (%s)" % _card_text(_button("ModeButton")))
 
 
 func _test_tap_hits_the_rock() -> void:
@@ -157,36 +180,33 @@ func _test_buying_a_generator() -> void:
 	await _set_gold(14.0)
 	_check(_row_button(0).disabled, "con 14 no se puede comprar el Minero (cuesta 15)")
 	await _set_gold(15.0)
-	_check(not _row_button(0).disabled, "con 15 el botón del Minero se habilita")
-	_check(_row_button(0).text.contains("15"), "el botón muestra el costo (%s)" % _row_button(0).text.replace("\n", " | "))
+	_check(not _row_button(0).disabled, "con 15 la tarjeta del Minero se habilita")
+	_check_eq(_price(_row_button(0)), "15", "la tarjeta muestra el precio")
 	_row_button(0).pressed.emit()
-	_check_eq(_economy.owned_count(0), 1, "apretar el botón compra 1 Minero")
+	_check_eq(_economy.owned_count(0), 1, "tocar la tarjeta compra 1 Minero")
 	_check_eq(_economy.gold, 0.0, "y gasta 15")
 	await process_frame
 	_check_eq(_label("GoldLabel").text, "0", "el oro en pantalla baja a 0")
-	_check(_rows()[0].find_children("*", "Label", true, false).any(func(l: Label) -> bool: return l.text.contains("×1")), "la fila muestra ×1")
+	_check(_card_text(_row_button(0)).contains("×1"), "la tarjeta muestra ×1 (%s)" % _card_text(_row_button(0)))
 	_check(_label("RateLabel").text.contains("1"), "el cartel de producción muestra 1 oro/s (%s)" % _label("RateLabel").text)
 
 
 func _test_buy_modes() -> void:
 	_section("Modos ×1 / ×10 / Máx")
 	await _set_gold(10000.0)
-	_button("Mode10Button").button_pressed = true
-	await process_frame
-	_check(_row_button(0).text.contains("×10"), "en modo ×10 el botón dice ×10 (%s)" % _row_button(0).text.replace("\n", " | "))
+	await _pick_mode("×10")
+	_check(_price(_row_button(0)).begins_with("×10 · "), "en modo ×10 el precio dice ×10 (%s)" % _price(_row_button(0)))
 	_row_button(0).pressed.emit()
-	_check_eq(_economy.owned_count(0), 10, "apretar compra 10 de una")
-	_button("ModeMaxButton").button_pressed = true
-	await process_frame
+	_check_eq(_economy.owned_count(0), 10, "tocar la tarjeta compra 10 de una")
+	await _pick_mode("Máx")
 	var expected: int = _economy.quote(0, 2)["count"]
 	_check(expected > 1, "con el oro que queda, Máx permite más de 1 (%d)" % expected)
-	_check(_row_button(0).text.contains("×%d" % expected), "en modo Máx el botón dice ×%d (%s)" % [expected, _row_button(0).text.replace("\n", " | ")])
+	_check(_price(_row_button(0)).begins_with("×%d · " % expected), "en modo Máx el precio dice ×%d (%s)" % [expected, _price(_row_button(0))])
 	var before: int = _economy.owned_count(0)
 	_row_button(0).pressed.emit()
-	_check_eq(_economy.owned_count(0), before + expected, "apretar compra %d" % expected)
-	_button("Mode1Button").button_pressed = true
-	await process_frame
-	_check(_row_button(0).text.contains("×1") and not _row_button(0).text.contains("×1\n×"), "al volver a ×1 el botón vuelve a decir ×1")
+	_check_eq(_economy.owned_count(0), before + expected, "tocar compra %d" % expected)
+	await _pick_mode("×1")
+	_check(not _price(_row_button(0)).contains("×"), "al volver a ×1 queda solo el precio (%s)" % _price(_row_button(0)))
 
 
 func _test_pick_upgrade() -> void:
@@ -195,11 +215,11 @@ func _test_pick_upgrade() -> void:
 	_check(_button("PickButton").disabled, "con 49 no se puede mejorar (cuesta 50)")
 	await _set_gold(50.0)
 	_check(not _button("PickButton").disabled, "con 50 se habilita")
-	_check(_button("PickButton").text.contains("50"), "muestra el costo (%s)" % _button("PickButton").text.replace("\n", " | "))
+	_check(_price(_button("PickButton")).contains("50"), "muestra el precio (%s)" % _price(_button("PickButton")))
 	_button("PickButton").pressed.emit()
 	_check_eq(_economy.pick_level, 1, "apretar sube el pico a nivel 1")
 	await process_frame
-	_check(_button("PickButton").text.contains("300"), "ahora muestra el costo del siguiente nivel (300)")
+	_check(_price(_button("PickButton")).contains("300"), "ahora muestra el precio del siguiente nivel (300)")
 	_button("TapButton").button_down.emit()
 	_check_eq(_economy.gold, 2.0, "y un golpe ahora vale 2")
 

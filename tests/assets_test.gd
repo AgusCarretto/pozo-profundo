@@ -23,9 +23,9 @@ const SINGLE_SPRITES: Array[String] = [
 ]
 ## Hacia dónde mira cada variante de un minero: cuánto se desplazan sus ojos (1 px) respecto del frente.
 const GAZES: Dictionary = { "left": Vector2i(-1, 0), "right": Vector2i(1, 0), "down": Vector2i(0, 1) }
-## Los colores del UI Pack que tienen un rol (amarillo: pestaña activa, verde: comprar, rojo: prestigio,
-## gris: no alcanza). El azul no se usa y por eso no se importa.
-const UI_COLORS: Array[String] = ["yellow", "green", "red", "grey"]
+## Los colores del UI Pack que tienen un rol (verde: comprar, rojo: prestigio, gris: no alcanza). El azul
+## y el amarillo no se usan (ya no hay pestañas) y por eso no se importan.
+const UI_COLORS: Array[String] = ["green", "red", "grey"]
 ## Los 8 vecinos de un píxel, en orden circular.
 const RING: Array[Vector2i] = [
 	Vector2i(0, -1), Vector2i(1, -1), Vector2i(1, 0), Vector2i(1, 1),
@@ -444,7 +444,8 @@ func _test_ui_pack_and_font() -> void:
 	for color: String in UI_COLORS:
 		for kind: String in ["button_rectangle_depth_flat", "button_rectangle_flat"]:
 			_check(ResourceLoader.exists(UI_PACK_DIR + "%s/%s.png" % [color, kind]), "existe %s/%s" % [color, kind])
-	_check(not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(UI_PACK_DIR + "blue")), "y no hay botones azules importados (no se usan)")
+	for unused: String in ["blue", "yellow"]:
+		_check(not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(UI_PACK_DIR + unused)), "no hay botones '%s' importados (no se usan)" % unused)
 	_check(FileAccess.file_exists(FONT_PATH), "existe la fuente Pixelify Sans")
 	_check(ResourceLoader.exists(FONT_PATH), "y está importada")
 	var font: Resource = load(FONT_PATH)
