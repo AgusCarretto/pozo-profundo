@@ -11,6 +11,7 @@ func _run_tests() -> void:
 	await _test_miners_swing()
 	await _test_dynamite()
 	await _test_orbit_runes()
+	await _test_troops()
 
 
 func _test_buttons_bounce() -> void:
@@ -168,6 +169,57 @@ func _test_dynamite() -> void:
 	mine.disconnect("dynamite_exploded", record)
 	_economy.reset()
 	await _wait(1.0)
+
+func _file(sprite: TextureRect) -> String:
+	return sprite.texture.resource_path.get_file()
+
+
+func _test_troops() -> void:
+	_section("Cada tropa se anima y cambia de aspecto con sus hitos")
+	var mine: Control = _mine()
+	_economy.reset()
+	_economy.gold_changed.emit(_economy.gold)
+	await _wait(0.2)
+	var mole: TextureRect = mine.get("mole_sprite")
+	var worm: TextureRect = mine.get("worm_sprite")
+	var golem: TextureRect = mine.get("golem_sprite")
+	var drill: TextureRect = mine.get("drill_sprite")
+	_check(not mole.visible and not worm.visible, "sin comprarlos no se ven el topo ni el gusano")
+	for index: int in range(6):
+		_economy.owned[index] = 1
+	_economy.gold_changed.emit(_economy.gold)
+	await _wait(0.2)
+	_check(mole.visible and worm.visible and golem.visible and drill.visible, "al comprarlos aparecen")
+	var seen: Dictionary = {}
+	var drill_positions: Dictionary = {}
+	var mole_positions: Dictionary = {}
+	var clock: SceneTreeTimer = create_timer(9.0)
+	while clock.time_left > 0.0:
+		await process_frame
+		for sprite: TextureRect in [mole, worm, golem]:
+			seen[_file(sprite)] = true
+		drill_positions[drill.position] = true
+		mole_positions[mole.position] = true
+	for expected: String in ["golem.png", "golem_0_1.png", "golem_0_2.png", "mole_hole.png", "mole_0_1.png", "mole_0_2.png", "worm_0_0.png", "worm_0_1.png", "worm_0_2.png"]:
+		_check(seen.has(expected), "se ve el cuadro %s" % expected)
+	_check(drill_positions.size() > 2, "el taladro tiembla")
+	_check(mole_positions.size() >= 2, "y el topo cambia de lugar")
+	_check((_fx().get_node("Steam") as CPUParticles2D).emitting, "el taladro echa vapor")
+	for index: int in range(6):
+		_economy.owned[index] = 100
+	_economy.gold_changed.emit(_economy.gold)
+	await _wait(0.3)
+	_check_eq(_file(drill), "drill_3.png", "a las 100 unidades el taladro es de gema")
+	_check(_file(golem).begins_with("golem_3_") and _file(worm).begins_with("worm_3_"), "gólem y gusano de cristal (%s, %s)" % [_file(golem), _file(worm)])
+	var miner: TextureRect = (mine.get("miner_sprites") as Array)[0]
+	var helmet: TextureRect = miner.get_node("Helmet") as TextureRect
+	_check(helmet.visible and _file(helmet) == "helmet_gold.png", "los mineros con casco dorado")
+	_check_eq(_file(miner.get_node("Pick") as TextureRect), "pick_gem.png", "y pico de gema")
+	_economy.reset()
+	_economy.gold_changed.emit(_economy.gold)
+	await _wait(0.3)
+	_check(not helmet.visible and _file(drill) == "drill.png", "al empezar de nuevo vuelven al primer aspecto")
+
 
 func _orbit_runes() -> Array[TextureRect]:
 	var runes: Array[TextureRect] = []

@@ -150,24 +150,37 @@ const BANNER_HEIGHT_SHARE: float = 0.3
 const SWING_PERIOD: float = 1.1
 const PICK_SCALE: int = 3
 ## Ángulos del pico (radianes; positivo = hacia la roca): bien levantado hacia atrás y el golpe.
-const SWING_RAISED: float = -1.3
-const SWING_STRIKE: float = 0.5
+const SWING_RAISED: float = -0.8
+const SWING_STRIKE: float = 1.25
 ## Partes del ciclo: levantar hasta 60%, bajar de golpe hasta 72%, volver a quieto hasta 100%.
 const SWING_RAISE_END: float = 0.6
 const SWING_STRIKE_END: float = 0.72
 ## Dónde agarra el mango (píxel del sprite pick.png) y dónde está la mano del minero (parte de su tamaño).
-const PICK_GRIP: Vector2 = Vector2(3.5, 13.5)
+const PICK_GRIP: Vector2 = Vector2(8.0, 12.5)
 const HAND: Vector2 = Vector2(0.8, 0.62)
 
-## Puestos de trabajo, en px de diseño desde el centro de la roca. Ninguno toca la roca (que mide 352):
-## los mineros ocupan primero los costados y después una fila arriba (a la derecha queda el gusano), y el gólem y el taladro quedan
-## abajo a los lados. Abajo de la roca no hay lugar: la roca va un poco más abajo del centro.
+## Puestos de trabajo, en px de diseño desde el centro de la roca. Los mineros ocupan los costados y una fila arriba
+## sin tocarla; arriba a la derecha queda el gusano y abajo el gólem, el taladro, los dinamiteros y el topo.
 const MINER_SLOTS: Array[Vector2] = [
-	Vector2(-240.0, 25.0), Vector2(240.0, 25.0), Vector2(-240.0, -95.0), Vector2(240.0, -95.0),
-	Vector2(-85.0, -222.0), Vector2(-225.0, -222.0), Vector2(225.0, -222.0),
+	Vector2(-240.0, 25.0), Vector2(240.0, 25.0), Vector2(-240.0, -95.0), Vector2(-225.0, -222.0),
+	Vector2(-115.0, -222.0), Vector2(-5.0, -222.0), Vector2(105.0, -222.0),
 ]
-const DRILL_SLOT: Vector2 = Vector2(208.0, 140.0) # corrido para que no lo tape la columna de botones
+const DRILL_SLOT: Vector2 = Vector2(240.0, 150.0) # por debajo de la columna de botones
 const GOLEM_SLOT: Vector2 = Vector2(-256.0, 135.0)
+const WORM_SLOT: Vector2 = Vector2(200.0, -150.0)
+## El topo cambia de lugar cada vez que se mete bajo tierra.
+const MOLE_SPOTS: Array[Vector2] = [Vector2(-20.0, 165.0), Vector2(-165.0, 55.0), Vector2(150.0, 25.0)]
+const MOLE_SCALE: int = 6
+const WORM_SCALE: int = 7
+## Ciclos de animación: [segundos, cuadro]. Topo: 0 bajo tierra, 1 asoma, 2 afuera.
+const MOLE_CYCLE: Array = [[0.9, 0], [0.35, 1], [1.9, 2], [0.35, 1], [0.3, 0]]
+## Gólem: 0 quieto, 1 levanta el brazo, 2 golpea. Gusano: 0 asoma, 1 erguido, 2 muerde.
+const GOLEM_CYCLE: Array = [[0.8, 0], [0.35, 1], [0.25, 2]]
+const WORM_CYCLE: Array = [[1.0, 0], [1.2, 1], [0.7, 2], [0.4, 1]]
+## Taladro: cuánto tiembla (px de diseño) y cada cuánto sale una nube de vapor.
+const DRILL_SHIVER: float = 2.0
+const STEAM_PUFFS: int = 6
+const STEAM_LIFETIME: float = 1.2
 
 ## Bioma que se está mostrando ("earth", "rock"...) y color de fondo de su paleta.
 var biome_id: String = ""
@@ -178,6 +191,8 @@ var biome_blend: float = 1.0
 var miner_sprites: Array[TextureRect] = []
 var drill_sprite: TextureRect
 var golem_sprite: TextureRect
+var mole_sprite: TextureRect
+var worm_sprite: TextureRect
 
 ## "Reducir efectos" (lo fija main.gd desde Settings): sin sacudida ni vibración, y la mitad de partículas.
 var reduce_effects: bool = false:
@@ -229,6 +244,11 @@ var _anim_time: float = 0.0
 var _chip_emitters: Array[CPUParticles2D] = []
 var _gem_emitters: Array[CPUParticles2D] = []
 var _next_chip: int = 0
+## Aspecto por nivel de cada uno (0 a 3, según sus hitos): ver set_tiers.
+var _tiers: Dictionary = {}
+var _steam: CPUParticles2D
+var _mole_spot: int = 0
+var _mole_clock: float = 0.0
 ## Excavadoras rúnicas compradas (set_machines).
 var _excavator_count: int = 0
 ## Las runas que orbitan (fijas: se muestran las que hagan falta) y sus auras.
@@ -249,6 +269,13 @@ func _ready() -> void:
 	for index: int in range(MINER_COUNT):
 		var miner: TextureRect = _make_sprite("miner_%d.png" % (index + 1), "Miner%d" % (index + 1))
 		miner_sprites.append(miner)
+		var helmet: TextureRect = TextureRect.new()
+		helmet.name = "Helmet"
+		helmet.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		helmet.stretch_mode = TextureRect.STRETCH_SCALE
+		helmet.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		helmet.visible = false
+		miner.add_child(helmet)
 		var pick: TextureRect = TextureRect.new()
 		pick.name = "Pick"
 		pick.texture = pick_texture
@@ -260,6 +287,8 @@ func _ready() -> void:
 		_pick_sides.append(1.0)
 	drill_sprite = _make_sprite("drill.png", "Drill")
 	golem_sprite = _make_sprite("golem.png", "Golem")
+	mole_sprite = _make_sprite("mole_hole.png", "Mole")
+	worm_sprite = _make_sprite("worm_0_0.png", "Worm")
 	for index: int in range(DYNAMITER_SLOTS.size()):
 		dynamiter_sprites.append(_make_sprite("dynamiter_idle.png", "Dynamiter%d" % (index + 1)))
 	_fx = Control.new()
@@ -276,6 +305,7 @@ func _ready() -> void:
 	_apply_particle_amounts()
 	for index: int in range(ORBIT_RUNES_MAX):
 		_make_orbit_rune(index)
+	_make_steam()
 	show_biome(DEFAULT_BIOME)
 	_layout()
 
@@ -808,6 +838,7 @@ func _flash_glow(at: Vector2) -> void:
 func _process(delta: float) -> void:
 	# Tiempo de juego (respeta Engine.time_scale: la pausa del legendario los frena y los tests los aceleran).
 	_anim_time += delta
+	_animate_troops(delta)
 	var now: float = _anim_time
 	_move_orbit_runes(now)
 	for index: int in range(_picks.size()):
@@ -918,16 +949,111 @@ func show_biome(id: String, animate: bool = false) -> void:
 	queue_redraw()
 
 
-## Muestra `miners` mineros (hasta MINER_COUNT) y, si se compraron, el taladro y el gólem.
+## Muestra `miners` mineros (hasta MINER_COUNT) y, si se compraron, el taladro, el gólem, el topo y el gusano.
 ## Lo que aparece después de la primera vez (una compra) crece desde los pies; la primera vez (abrir el
 ## juego con una partida guardada) se muestra quieto.
-func set_crew(miners: int, has_drill: bool, has_golem: bool) -> void:
+func set_crew(miners: int, has_drill: bool, has_golem: bool, has_mole: bool = false, has_worm: bool = false) -> void:
 	for index: int in range(miner_sprites.size()):
 		_show_member(miner_sprites[index], index < miners)
 	_show_member(drill_sprite, has_drill)
 	_show_member(golem_sprite, has_golem)
+	_show_member(mole_sprite, has_mole)
+	_show_member(worm_sprite, has_worm)
+	_steam.emitting = has_drill
+	_steam.visible = has_drill
 	_crew_shown = true
 	queue_redraw()
+
+
+## El aspecto de cada uno según sus hitos: {id del generador: 0 a 3}. Mineros: 1 = casco con linterna, 2 = además
+## pico de oro, 3 = casco dorado y pico de gema. Los demás cambian de figura.
+func set_tiers(tiers: Dictionary) -> void:
+	_tiers = tiers
+	var miner_tier: int = _tier("miner")
+	var helmet_file: String = "helmet_gold.png" if miner_tier >= 3 else "helmet_lamp.png"
+	var pick_file: String = "pick_gem.png" if miner_tier >= 3 else ("pick_gold.png" if miner_tier >= 2 else "pick.png")
+	for index: int in range(miner_sprites.size()):
+		var helmet: TextureRect = miner_sprites[index].get_node("Helmet") as TextureRect
+		helmet.visible = miner_tier >= 1
+		if helmet.visible:
+			helmet.texture = load(SPRITE_DIR + helmet_file) as Texture2D
+		_picks[index].texture = load(SPRITE_DIR + pick_file) as Texture2D
+	var drill_tier: int = _tier("steam_drill")
+	drill_sprite.texture = load(SPRITE_DIR + ("drill.png" if drill_tier == 0 else "drill_%d.png" % drill_tier)) as Texture2D
+	_animate_troops(0.0)
+
+
+func _tier(id: String) -> int:
+	return clampi(int(_tiers.get(id, 0)), 0, 3)
+
+
+## El cuadro que toca de `cycle` ([segundos, cuadro]) en el momento `time`.
+static func cycle_frame(cycle: Array, time: float) -> int:
+	var total: float = 0.0
+	for step: Array in cycle:
+		total += step[0]
+	var at: float = fposmod(time, total)
+	for step: Array in cycle:
+		if at < step[0]:
+			return step[1]
+		at -= step[0]
+	return cycle.back()[1]
+
+
+## El gólem golpea, el taladro tiembla y echa vapor, el topo entra y sale (cambiando de lugar) y el gusano muerde.
+func _animate_troops(delta: float) -> void:
+	if golem_sprite.visible:
+		var frame: int = cycle_frame(GOLEM_CYCLE, _anim_time)
+		var tier: int = _tier("stone_golem")
+		_set_texture(golem_sprite, "golem.png" if tier == 0 and frame == 0 else "golem_%d_%d.png" % [tier, frame])
+	if worm_sprite.visible:
+		_set_texture(worm_sprite, "worm_%d_%d.png" % [_tier("abyss_worm"), cycle_frame(WORM_CYCLE, _anim_time)])
+	if mole_sprite.visible:
+		var length: float = 0.0
+		for step: Array in MOLE_CYCLE:
+			length += step[0]
+		_mole_clock += delta
+		if _mole_clock >= length:
+			_mole_clock = fposmod(_mole_clock, length)
+			_mole_spot = (_mole_spot + 1) % MOLE_SPOTS.size()
+			_layout()
+		var out: int = cycle_frame(MOLE_CYCLE, _mole_clock)
+		_set_texture(mole_sprite, "mole_hole.png" if out == 0 else "mole_%d_%d.png" % [_tier("mole"), out])
+	if drill_sprite.visible and _base_positions.has(drill_sprite):
+		var shiver: Vector2 = Vector2.ZERO
+		if not reduce_effects:
+			shiver = Vector2(roundf(sin(_anim_time * 55.0) * DRILL_SHIVER * _unit), roundf(sin(_anim_time * 41.0) * DRILL_SHIVER * 0.5 * _unit))
+		drill_sprite.position = _base_positions[drill_sprite] + shake_offset + shiver
+		_steam.position = drill_sprite.position + drill_sprite.size * Vector2(0.72, 0.1)
+
+
+func _set_texture(sprite: TextureRect, file_name: String) -> void:
+	if not sprite.texture.resource_path.ends_with("/" + file_name):
+		sprite.texture = load(SPRITE_DIR + file_name) as Texture2D
+
+
+## Las nubes de vapor de la chimenea del taladro.
+func _make_steam() -> void:
+	_steam = CPUParticles2D.new()
+	_steam.name = "Steam"
+	_steam.texture = load(SPRITE_DIR + "steam.png") as Texture2D
+	_steam.amount = STEAM_PUFFS
+	_steam.lifetime = STEAM_LIFETIME
+	_steam.local_coords = false
+	_steam.direction = Vector2.UP
+	_steam.spread = 18.0
+	_steam.gravity = Vector2(0.0, -30.0)
+	_steam.initial_velocity_min = 30.0
+	_steam.initial_velocity_max = 60.0
+	_steam.scale_amount_min = 1.5
+	_steam.scale_amount_max = 3.0
+	var fade: Gradient = Gradient.new()
+	fade.set_color(0, Color(1.0, 1.0, 1.0, 0.85))
+	fade.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
+	_steam.color_ramp = fade
+	_steam.emitting = false
+	_steam.visible = false
+	_fx.add_child(_steam)
 
 
 func _show_member(sprite: TextureRect, show: bool) -> void:
@@ -989,6 +1115,8 @@ func _layout() -> void:
 		_look_at_rock(miner_sprites[index], index)
 	_place(drill_sprite, center, DRILL_SLOT, DRILL_SCALE, unit)
 	_place(golem_sprite, center, GOLEM_SLOT, GOLEM_SCALE, unit)
+	_place(mole_sprite, center, MOLE_SPOTS[_mole_spot], MOLE_SCALE, unit)
+	_place(worm_sprite, center, WORM_SLOT, WORM_SCALE, unit, 24)
 	for index: int in range(dynamiter_sprites.size()):
 		_place(dynamiter_sprites[index], center, DYNAMITER_SLOTS[index], DYNAMITER_SCALE, unit)
 	# La roca se aplasta contra el piso: el pivote va abajo al centro.
@@ -997,7 +1125,7 @@ func _layout() -> void:
 	_tap_button.position = _rock.position - margin
 	_tap_button.size = _rock.size + margin * 2.0
 	_base_positions.clear()
-	for sprite: TextureRect in [_rock, drill_sprite, golem_sprite] + miner_sprites + dynamiter_sprites:
+	for sprite: TextureRect in [_rock, drill_sprite, golem_sprite, mole_sprite, worm_sprite] + miner_sprites + dynamiter_sprites:
 		_base_positions[sprite] = sprite.position
 	_apply_shake()
 	_sort_by_depth()
@@ -1005,9 +1133,9 @@ func _layout() -> void:
 
 
 ## Pone `sprite` con su centro en `center + slot * unit`, a escala entera (cada píxel = N x N en pantalla).
-func _place(sprite: TextureRect, center: Vector2, slot: Vector2, pixel_scale: int, unit: float) -> void:
+func _place(sprite: TextureRect, center: Vector2, slot: Vector2, pixel_scale: int, unit: float, texels: int = 16) -> void:
 	var pixel: int = maxi(roundi(pixel_scale * unit), 1)
-	sprite.size = Vector2(16 * pixel, 16 * pixel)
+	sprite.size = Vector2(texels * pixel, texels * pixel)
 	sprite.position = (center + slot * unit - sprite.size * 0.5).round()
 
 
@@ -1025,6 +1153,7 @@ func _look_at_rock(sprite: TextureRect, index: int) -> void:
 func _hold_pick(index: int, side: float) -> void:
 	var miner: TextureRect = miner_sprites[index]
 	var pick: TextureRect = _picks[index]
+	(miner.get_node("Helmet") as TextureRect).size = miner.size
 	_pick_sides[index] = side
 	var pixel: float = maxf(roundf(PICK_SCALE * _unit), 1.0)
 	pick.size = Vector2(16.0, 16.0) * pixel
@@ -1039,10 +1168,13 @@ func _hold_pick(index: int, side: float) -> void:
 ## que vienen después se dibujan encima) y NO con z_index: un z_index alto pondría los sprites por encima
 ## del cartel modal y del panel de debug, que son hermanos posteriores de esta escena.
 func _sort_by_depth() -> void:
-	var sprites: Array[TextureRect] = [_rock, drill_sprite, golem_sprite]
+	var sprites: Array[TextureRect] = [_rock, drill_sprite, golem_sprite, mole_sprite, worm_sprite]
 	sprites.append_array(miner_sprites)
 	sprites.append_array(dynamiter_sprites)
-	sprites.sort_custom(func(a: TextureRect, b: TextureRect) -> bool: return a.position.y + a.size.y < b.position.y + b.size.y)
+	# El gusano muerde la roca por delante: va justo después de ella aunque sus pies estén más arriba.
+	var feet: Callable = func(sprite: TextureRect) -> float:
+		return _rock.position.y + _rock.size.y + 1.0 if sprite == worm_sprite else sprite.position.y + sprite.size.y
+	sprites.sort_custom(func(a: TextureRect, b: TextureRect) -> bool: return feet.call(a) < feet.call(b))
 	for index: int in range(sprites.size()):
 		move_child(sprites[index], index)
 

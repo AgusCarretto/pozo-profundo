@@ -32,6 +32,8 @@ const SHOTS: Array[Dictionary] = [
 	{ "name": "11_bioma_nuevo", "panel": 0, "gold": 900.0, "run_gold": 600.0, "pick": 2, "owned": [4, 1], "relics": 0, "descend": 900.0, "wait": 0.3 },
 	{ "name": "12_vuelta", "panel": 0, "gold": 3400.0, "run_gold": 4200.0, "pick": 3, "owned": [12, 2], "relics": 0, "offline": 11520.0, "wait": 0.6 },
 	{ "name": "13_superficie", "panel": 0, "gold": 4.0e6, "run_gold": 3.0e7, "pick": 7, "owned": [30, 8, 5, 2, 0], "relics": 3, "prestige": true, "wait": 0.95 },
+	{ "name": "14_tropa", "panel": 0, "gold": 3.0e8, "run_gold": 9.0e8, "pick": 8, "owned": [60, 30, 28, 8, 3, 1], "relics": 4, "dynamite": 4, "wait": 1.6 },
+	{ "name": "15_dinamitazo", "panel": 0, "gold": 3.0e6, "run_gold": 4.0e6, "pick": 5, "owned": [5, 3, 2, 1], "relics": 0, "dynamite": 2, "blast": true, "wait": 0.62 },
 ]
 
 var _out_dir: String = ""
@@ -91,6 +93,8 @@ func _run() -> void:
 				await _settle()
 				(scene.get_node("%PrestigeButton") as Button).pressed.emit()
 				(scene.get_node("Modal").get("confirm_button") as Button).pressed.emit()
+			if shot.get("blast", false):
+				economy.use_ability()
 			if shot.has("chest"):
 				economy.drop_loot(int(shot["chest"]))
 			for hit: int in range(int(shot.get("hits", 0))):
@@ -121,6 +125,7 @@ func _apply(economy: Node, shot: Dictionary) -> void:
 	economy.run_gold = shot["run_gold"]
 	economy.gold = shot["gold"]
 	economy.pick_level = shot["pick"]
+	economy.ability_level = int(shot.get("dynamite", 0))
 	economy.relics = shot["relics"]
 	var owned: Array = shot["owned"]
 	for index: int in range(owned.size()):

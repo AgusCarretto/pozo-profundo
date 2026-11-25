@@ -398,24 +398,18 @@ func _apply_biome(id: String, animate: bool = false) -> void:
 		_depth_bar.add_theme_stylebox_override("fill", tinted)
 
 
-## La cuadrilla que se ve en la mina sale de lo que compraste: mineros, y el taladro y el gólem si los tenés.
+## Lo que se ve en la mina sale de lo que compraste, con el aspecto de los hitos de cada uno.
 func _refresh_mine() -> void:
-	var miners: int = 0
-	var has_drill: bool = false
-	var has_golem: bool = false
-	var excavators: int = 0
+	var counts: Dictionary = {}
+	var tiers: Dictionary = {}
 	for index: int in range(Economy.generator_count()):
-		match Economy.generator_id(index):
-			"miner":
-				miners = Economy.owned_count(index)
-			"steam_drill":
-				has_drill = Economy.owned_count(index) > 0
-			"stone_golem":
-				has_golem = Economy.owned_count(index) > 0
-			"rune_excavator":
-				excavators = Economy.owned_count(index)
-	_mine_view.set_crew(miners, has_drill, has_golem)
-	_mine_view.set_machines(excavators)
+		var id: String = Economy.generator_id(index)
+		counts[id] = Economy.owned_count(index)
+		tiers[id] = Economy.milestone_tier(index)
+	_mine_view.set_crew(counts.get("miner", 0), counts.get("steam_drill", 0) > 0, counts.get("stone_golem", 0) > 0,
+		counts.get("mole", 0) > 0, counts.get("abyss_worm", 0) > 0)
+	_mine_view.set_tiers(tiers)
+	_mine_view.set_machines(counts.get("rune_excavator", 0))
 	_mine_view.set_dynamiters(Economy.ability_level > 0)
 	_hint_label.visible = Economy.run_gold <= 0.0
 
