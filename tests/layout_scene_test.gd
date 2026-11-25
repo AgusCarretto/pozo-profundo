@@ -282,6 +282,16 @@ func _test_side_buttons(packed: PackedScene) -> void:
 	await process_frame
 	_check(loot.visible and not relics.visible, "Botín abre el cartel del botín")
 	_check(_node(scene, "LootHintLabel").is_visible_in_tree() and _node(scene, "OddsRow").is_visible_in_tree(), "con las probabilidades y qué dan")
+	for open_panel: Control in [loot, relics]:
+		(loot_button if open_panel == loot else relics_button).pressed.emit()
+		await process_frame
+		await process_frame
+		var box: Control = open_panel.find_children("*", "PanelContainer", true, false)[0] as Control
+		var rect: Rect2 = box.get_global_rect()
+		_check(rect.position.x >= 0.0 and rect.end.x <= DESIGN_WIDTH + 0.5, "el cartel %s entra a lo ancho (%.0f a %.0f)" % [open_panel.name, rect.position.x, rect.end.x])
+		open_panel.visible = false
+	loot_button.pressed.emit()
+	await process_frame
 	_check_eq(loot.mouse_filter, Control.MOUSE_FILTER_STOP, "y no deja tocar lo de atrás")
 	(loot.find_child("CloseButton", true, false) as Button).pressed.emit()
 	_check(not loot.visible, "'Cerrar' lo cierra")
