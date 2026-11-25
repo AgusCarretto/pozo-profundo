@@ -83,7 +83,142 @@ Especificación de partida: [arbol-reliquias.md](arbol-reliquias.md).
 Por anillo: anillo 0 = 1 · anillo 1 = 174 · anillo 2 = 238 · anillo 3 = 436 · anillo 4 = 240. **Árbol completo = 1089 reliquias.** ★ = piedra angular (máximo 2 activas).
 
 ## Resultados
-<!--RESULTADOS-->
+### Bajadas seguidas (tu condición)
+Con 3 golpes/s, **árbol + logros cumple las seis bajadas**: 25:28 · 12:15 · 11:11 · 9:29 · 7:28 · 6:38 contra 28:15 · 18:06 · 12:36 · 10:34 · 8:53 · 7:10 de hoy.
+**Solo el árbol, sin las reliquias de los logros, no la cumple** de la 4.ª a la 6.ª (11:38 · 10:39 · 9:12). A 1,5 golpes/s quedaban cortas la 5.ª y la 6.ª en la prueba anterior.
+
+```
+Bajadas seguidas hasta poder volver (mediana de 7). Entre paréntesis: reliquias ganadas en total / estrellas encendidas.
+3.0 golpes/s
+  hoy             28:15 (2/0) · 18:06 (5/0) · 12:36 (7/0) · 10:34 (10/0) · 8:53 (12/0) · 7:10 (15/0)
+  arbol           28:15 (2/2) · 15:40 (5/5) · 13:32 (7/7) · 11:38 (10/10) · 10:39 (12/10) · 9:12 (15/10)
+  arbol y logros  25:28 (5/5) · 12:15 (8/8) · 11:11 (11/10) · 9:29 (15/10) · 7:28 (19/10) · 6:38 (21/10)
+1.5 golpes/s
+  hoy             30:52 (2/0) · 20:08 (4/0) · 15:05 (7/0) · 12:38 (9/0) · 9:44 (11/0) · 8:19 (14/0)
+```
+
+### Ritmo según la profundidad por reliquia
+Corridas con bonus +5% y Corazón +25% (anteriores a los últimos ajustes). Horas jugadas, 1 h por día.
+
+| Metros por reliquia | Anillo 1 completo | Anillo 2 completo | Árbol completo |
+|---|---|---|---|
+| 0,10 | 5,3 h | 7,4 h | 11,0 h |
+| 0,20 | 5,8 h | 8,8 h | 17,5 h |
+| 0,35 | 6,7 h | 13,0 h | 42,1 h |
+| 0,60 | 8,8 h | 33,0 h | más de 60 h |
+
+### Corrida de la propuesta final (0,28 m, +6%, Corazón +50%, tus cambios)
+Completa.
+
+```
+3.0 golpes/s, semilla 1. El árbol entero cuesta 1089 reliquias.
+día | reliquias ganadas (gastadas) | estrellas | niveles | resets | bajada típica | prof. récord | logros (fragmentos) | se vuelve desde
+  primer reset a los 43:12: 7 reliquias (con fragmentos) → encendió core, f_brazo, f_templado, f_ojo, o_olfato, o_botin, c_reclutas, sobran 0
+  1 |    10 (7) |  7 |   7 |   1 |  43:12 | 340 m | 21 (60) | 300 m
+  2 |    34 (34) | 11 |  22 |   7 |  10:22 | 397 m | 30 (107) | 306 m
+  3 |    87 (87) | 14 |  43 |  20 |   4:36 | 397 m | 33 (116) | 321 m
+  4 |   157 (157) | 15 |  58 |  37 |   3:38 | 433 m | 36 (138) | 340 m
+  5 |   244 (236) | 20 |  69 |  57 |   3:10 | 464 m | 41 (195) | 362 m
+  6 |   322 (317) | 21 |  76 |  76 |   3:10 | 485 m | 43 (210) | 384 m
+  7 |   396 (390) | 23 |  81 |  92 |   3:56 | 525 m | 48 (275) | 402 m
+  8 |   452 (448) | 24 |  84 | 106 |   4:08 | 525 m | 49 (280) | 417 m
+  9 |   508 (494) | 24 |  86 | 121 |   3:56 | 553 m | 50 (305) | 432 m
+ 10 |   567 (549) | 26 |  88 | 135 |   4:32 | 553 m | 53 (335) | 448 m
+ 11 |   609 (609) | 28 |  90 | 148 |   4:32 | 553 m | 53 (335) | 460 m
+ 12 |   650 (609) | 28 |  90 | 160 |   4:58 | 553 m | 54 (360) | 470 m
+ 13 |   691 (669) | 29 |  91 | 172 |   5:02 | 564 m | 56 (395) | 481 m
+ 14 |   725 (669) | 29 |  91 | 183 |   5:34 | 564 m | 57 (405) | 490 m
+ 15 |   766 (729) | 30 |  92 | 194 |   5:10 | 574 m | 59 (415) | 500 m
+ 16 |   794 (789) | 31 |  93 | 204 |   5:44 | 574 m | 59 (415) | 508 m
+ 17 |   819 (789) | 31 |  93 | 210 |  11:36 | 588 m | 59 (415) | 513 m
+ 18 |   843 (789) | 31 |  93 | 217 |   8:54 | 588 m | 59 (415) | 518 m
+ 19 |   876 (849) | 32 |  94 | 223 |  10:50 | 588 m | 60 (425) | 522 m
+ 20 |   907 (849) | 32 |  94 | 229 |  10:30 | 591 m | 62 (460) | 527 m
+ 21 |   925 (909) | 33 |  95 | 234 |   9:48 | 591 m | 63 (470) | 530 m
+ 22 |   961 (909) | 33 |  95 | 240 |   9:30 | 607 m | 64 (495) | 534 m
+ 23 |   980 (969) | 34 |  96 | 245 |  12:06 | 607 m | 64 (495) | 538 m
+ 24 |  1012 (969) | 34 |  96 | 250 |  13:06 | 609 m | 64 (495) | 542 m
+ 25 |  1031 (1029) | 35 |  97 | 255 |  12:02 | 610 m | 64 (495) | 545 m
+ 26 |  1056 (1029) | 35 |  97 | 260 |  11:52 | 610 m | 64 (495) | 549 m
+ 27 |  1085 (1029) | 35 |  97 | 264 |  16:18 | 610 m | 65 (520) | 552 m
+ 28 |  1093 (1089) | 36 |  98 | 265 |  16:02 | 620 m | 65 (520) | 553 m
+
+Hitos (día de juego, horas jugadas):
+  anillo 2 abierto: día 3 (2.0 h)
+  anillo 3 abierto: día 4 (3.3 h)
+  anillo 1 completo: día 6 (5.2 h)
+  anillo 2 completo: día 10 (9.2 h)
+  primera piedra angular: día 13 (12.4 h)
+  primer puente: día 21 (20.2 h)
+  anillo 3 completo: día 19 (18.2 h)
+  completo: día 28 (27.1 h)
+
+Cofres: 5081 · oro de cofres 38156742802516.12 · reliquias de cofres 134
+Logros: 70 en total = 630 fragmentos = 63 reliquias. Sin conseguir: La roca te teme (300.000 golpes), Leyenda viva (100 Legendarios), Mochila llena (10 reliquias en una sola bajada), Museo ambulante (20 reliquias en una sola bajada), Cielo completo (Árbol completo)
+Fragmentos acumulados: día 1: 21 logros, 60 frag. · día 2: 30 logros, 107 frag. · día 3: 33 logros, 116 frag. · día 7: 48 logros, 275 frag. · día 14: 57 logros, 405 frag. · día 21: 63 logros, 470 frag. · día 28: 65 logros, 520 frag. · día 35: 65 logros, 520 frag.
+
+Bajada nueva (mediana de 5): momento | reliquias | 300 m sin árbol → con árbol | 400 m sin árbol → con árbol
+```
+
+### Cómo se acortan las bajadas con el árbol (bajada nueva a 300 m)
+De la corrida de 0,20 m: sin nada 28:46 · tras el primer reset 14:37 · anillo 1 completo 0:41 · anillo 2 completo 0:13 · completo 0:10.
+**Problema abierto:** desde la mitad del árbol, llegar a 300 m tarda segundos. La profundidad por reliquia hace que las bajadas reales sigan durando minutos, pero conviene revisar las estrellas multiplicativas antes de programar.
+
+### Estrella por estrella (propuesta final)
+Cuánto acorta una bajada nueva pasar la estrella de 0 al máximo, con las demás de su anillo y anteriores al máximo. 3 semillas.
+
+| Estrella | Anillo | Costo | 3 golpes/s | 5 golpes/s | 1 golpe/s |
+|---|---|---|---|---|---|
+| core | 0 | 1 | 300 m: 29:19 → 19:18 (+34%) | +33% | +34% |
+| f_brazo | 1 | 13 | 300 m: 0:53 → 0:50 (+6%) | +28% | +7% |
+| f_templado | 1 | 13 | 300 m: 0:57 → 0:50 (+13%) | +28% | +7% |
+| f_ojo | 1 | 13 | 300 m: 0:53 → 0:50 (+5%) | +0% | +0% |
+| f_brutal | 2 | 53 | 350 m: 0:53 → 0:45 (+15%) | +25% | +12% |
+| f_eco | 2 | 29 | 350 m: 1:01 → 0:44 (+27%) | +18% | +9% |
+| f_combo | 3 | 48 | 400 m: 1:27 → 1:07 (+23%) | +16% | +0% |
+| f_umbral | 3 | 20 | 400 m: 1:23 → 1:06 (+20%) | +0% | +0% |
+| f_furia | 3 | 60 | 400 m: 1:06 → 0:53 (+20%) | +16% | +13% |
+| o_olfato | 1 | 13 | 300 m: 0:51 → 0:50 (+1%) | +0% | +7% |
+| o_botin | 1 | 13 | 300 m: 0:53 → 0:50 (+5%) | +0% | +7% |
+| o_gemologo | 1 | 10 | 300 m: 0:50 → 0:50 (+0%) | +0% | +0% |
+| o_dragon | 2 | 29 | 350 m: 0:44 → 0:44 (+0%) | +0% | +0% |
+| o_doble | 2 | 29 | 350 m: 0:50 → 0:44 (+11%) | +17% | +2% |
+| o_corona | 3 | 38 | 400 m: 1:07 → 1:07 (+0%) | +0% | +0% |
+| o_reliquia | 3 | 30 | 400 m: 1:07 → 1:07 (+0%) | +0% | +0% |
+| o_apostador | 3 | 60 | 400 m: 1:06 → 1:01 (+9%) | +11% | +10% |
+| c_reclutas | 1 | 13 | 300 m: 0:51 → 0:50 (+2%) | +1% | +0% |
+| c_capataz | 1 | 27 | 300 m: 1:32 → 0:50 (+45%) | +45% | +48% |
+| c_contrato | 1 | 13 | 300 m: 0:53 → 0:50 (+6%) | +0% | +7% |
+| c_bolsa | 1 | 10 | 300 m: 0:54 → 0:50 (+7%) | +0% | +11% |
+| c_ventaja | 2 | 38 | 350 m: 0:46 → 0:46 (-1%) | +5% | +13% |
+| c_hitos | 2 | 25 | 350 m: 0:49 → 0:44 (+10%) | +15% | +14% |
+| c_memoria | 3 | 30 | 400 m: 1:07 → 1:07 (+0%) | +0% | +0% |
+| c_mina | 3 | 60 | 400 m: 1:06 → 1:15 (-12%) | -23% | +19% |
+| t_mecha | 1 | 13 | 300 m: 0:50 → 0:50 (+0%) | +0% | +26% |
+| t_polvora | 1 | 13 | 300 m: 0:53 → 0:50 (+5%) | +0% | +19% |
+| t_vigilia | 1 | 10 | 300 m: 0:50 → 0:50 (+0%) | +0% | +0% |
+| t_noche | 2 | 20 | 350 m: 0:44 → 0:44 (+0%) | +0% | +0% |
+| t_descenso | 2 | 15 | 350 m: 0:46 → 0:44 (+4%) | +2% | +10% |
+| t_memoria_din | 3 | 30 | 400 m: 1:07 → 1:07 (+0%) | +0% | +0% |
+| t_cuenta | 3 | 60 | 400 m: 1:06 → 1:02 (+7%) | +5% | +13% |
+| p_suerte | 4 | 60 | 400 m: 1:06 → 1:02 (+7%) | +15% | +10% |
+| p_mineros | 4 | 60 | 400 m: 1:06 → 1:06 (+0%) | +0% | +9% |
+| p_turnos | 4 | 60 | 400 m: 1:06 → 1:06 (+0%) | +0% | +0% |
+| p_critica | 4 | 60 | 400 m: 1:06 → 1:06 (+0%) | +10% | +12% |
+
+Lectura:
+- **Demasiado fuerte:** c_capataz (+45% por 27 reliquias). El Corazón (+34% por 1) es a propósito.
+- **Perjudica:** c_mina (−12% y −23% jugando activo; solo ayuda a 1 golpe/s). Propuesta, sin simular: golpes ×0,5 en vez de ×0,25.
+- **Casi sin efecto en esta prueba:** o_gemologo, o_dragon, o_olfato, p_mineros. Hay que subirles los números.
+- **Esta prueba no las mide** (no dan 0 de verdad): c_memoria y t_memoria_din (actúan al volver), t_vigilia, t_noche y p_turnos (AFK), o_corona y o_reliquia (dan reliquias).
+- Las de anillo 1 se miden sobre bajadas de ~50 s, así que sus porcentajes tienen mucho ruido.
+
+### Falta
+1. Terminar la corrida final y mirar en qué horas se abre cada anillo.
+2. Ajustar c_mina, c_capataz y las de Fortuna, y volver a medir.
+3. Medir las estrellas que esta prueba no cubre.
+4. Cuándo aporta fragmentos cada logro: en las corridas anteriores, ~55–70 el día 1, ~110 el día 3, ~150–200 la primera semana y ~430–570 de 630 al final. Los de frenesí y secretos usan un día estimado, no simulado.
+
 
 ## Logros propuestos
 70 logros, 630 fragmentos = **63 reliquias** en total. Fácil 2, medio 5, difícil 10, épico 25.
