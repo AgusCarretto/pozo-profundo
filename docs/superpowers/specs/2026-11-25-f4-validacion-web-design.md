@@ -23,7 +23,7 @@ Efecto visual de frenesí, cola de reintentos de métricas, PWA, guardado en la 
 - **Fecha del evento:** la pone el servidor (el reloj del celular puede estar mal).
 - **Supabase:** publishable key en el header `apikey` (se acepta también la anon key, que se da de baja a fin de 2026). El SQL hace `grant insert` explícito.
 - **Configuración:** `data/online.json` (URL, key, link de Opinar), fuera de git, con `data/online.example.json` versionado. Va empaquetado: cambiarlo pide re-exportar (así sirve igual en Android). Sin URL y key no se envía nada.
-- **Retención:** consultas con días en hora de Argentina.
+- **Retención:** consultas con días en hora de Uruguay (America/Montevideo).
 - **Pantalla completa en Opciones**, no en el HUD (la fila del oro ya está llena).
 - `docs/`, `tools/`, `build/` y `tests/` quedan fuera del export.
 - **"Cristal con frenesí":** el frenesí es solo música; la captura es una ráfaga de golpes.
