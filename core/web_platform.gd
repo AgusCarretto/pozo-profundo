@@ -13,8 +13,13 @@ var _touched: bool = false
 func can_fullscreen() -> bool:
 	if not OS.has_feature("web"):
 		return false
-	var supported: Variant = JavaScriptBridge.eval("!!(document.fullscreenEnabled || document.webkitFullscreenEnabled)", true)
-	return supported is bool and supported
+	return is_true(JavaScriptBridge.eval("!!(document.fullscreenEnabled || document.webkitFullscreenEnabled)", true))
+
+
+## Si lo que devolvió JavaScriptBridge.eval es un sí. Un `true` de JavaScript no llega como bool sino como el
+## entero 1 (Godot 4.7), así que `valor is bool` da siempre falso.
+static func is_true(value: Variant) -> bool:
+	return (value is bool or value is int or value is float) and bool(value)
 
 
 func is_fullscreen() -> bool:
@@ -36,8 +41,7 @@ func open_url(url: String) -> void:
 ## consola, hasta que se completó un primer toque: al apoyar el dedo por primera vez todavía no cuenta.
 func vibrate(milliseconds: int) -> void:
 	if not _touched and OS.has_feature("web"):
-		var active: Variant = JavaScriptBridge.eval("!navigator.userActivation || navigator.userActivation.hasBeenActive", true)
-		_touched = active is bool and active
+		_touched = is_true(JavaScriptBridge.eval("!navigator.userActivation || navigator.userActivation.hasBeenActive", true))
 		if not _touched:
 			return
 	Input.vibrate_handheld(milliseconds)

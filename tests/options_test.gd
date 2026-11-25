@@ -50,11 +50,21 @@ func _initialize() -> void:
 	await _test_hud_buttons(packed)
 	await _test_mute_button(packed)
 	await _test_options_panel(packed)
+	_test_js_booleans()
 	await _test_web_options(packed)
 	await _test_credits(packed)
 	await _test_options_layout(packed)
 	_settings.from_dict(_saved_settings)
 	_finish()
+
+
+## JavaScriptBridge.eval no devuelve un bool para el true de JavaScript: en la web llega el entero 1.
+func _test_js_booleans() -> void:
+	_section("Las respuestas del navegador")
+	for yes: Variant in [true, 1, 1.0]:
+		_check_eq(WebPlatform.is_true(yes), true, "%s es sí" % str(yes))
+	for no: Variant in [false, 0, 0.0, null, "", "true"]:
+		_check_eq(WebPlatform.is_true(no), false, "%s es no" % str(no))
 
 
 func _mount(packed: PackedScene, host_size: Vector2) -> Control:

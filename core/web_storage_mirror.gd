@@ -7,6 +7,8 @@ extends RefCounted
 ## la más nueva. Todo va dentro de try/catch: en Safari privado o en un iframe con el almacenamiento bloqueado no
 ## hay copia y el juego sigue.
 
+const WebPlatform := preload("res://core/web_platform.gd")
+
 var _key: String
 ## Los callbacks de JavaScript se sueltan si nadie los retiene.
 var _page_hide: JavaScriptObject
@@ -28,7 +30,7 @@ func read() -> String:
 func write(text: String) -> bool:
 	var value: Variant = JavaScriptBridge.eval(
 		"(function(){try{window.localStorage.setItem(%s,%s);return true}catch(e){return false}})()" % [JSON.stringify(_key), JSON.stringify(text)], true)
-	return value is bool and value
+	return WebPlatform.is_true(value)
 
 
 ## Llama a `callback` cuando la página se va: al cerrarla o navegar (pagehide) y al dejar de verse
