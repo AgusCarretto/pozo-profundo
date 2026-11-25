@@ -7,6 +7,7 @@ extends "res://tests/test_base.gd"
 ## 720x1280 y uno de 412x915 a 720x1599. Usa el autoload Economy real (se reinicia entre pruebas).
 ## El cableado con Economy (golpes, compras, cartel) se prueba en main_scene_test.gd.
 
+const TestBalance := preload("res://tests/test_balance.gd")
 const BiomePalette := preload("res://game/biome_palette.gd")
 
 const MAIN_SCENE: String = "res://game/main.tscn"
@@ -49,8 +50,9 @@ func _initialize() -> void:
 	_finish()
 
 
+## El balance real con la curva de profundidad fija de los tests (ver test_balance.gd).
 func _real_balance() -> Dictionary:
-	return JSON.parse_string(FileAccess.get_file_as_string("res://data/balance.json"))
+	return TestBalance.with_fixed_curve(JSON.parse_string(FileAccess.get_file_as_string("res://data/balance.json")))
 
 
 func _balance_without_loot() -> Dictionary:

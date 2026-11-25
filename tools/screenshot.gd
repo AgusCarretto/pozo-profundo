@@ -21,17 +21,17 @@ const SIZES: Array[Vector2i] = [Vector2i(360, 640), Vector2i(412, 915)]
 const SHOTS: Array[Dictionary] = [
 	{ "name": "1_inicio", "panel": 0, "gold": 22.0, "run_gold": 22.0, "pick": 0, "owned": [], "relics": 0 },
 	{ "name": "2_roca", "panel": 0, "gold": 3400.0, "run_gold": 4200.0, "pick": 3, "owned": [4, 1], "relics": 0 },
-	{ "name": "3_cristal_botin", "panel": 1, "gold": 52000.0, "run_gold": 60000.0, "pick": 5, "owned": [8, 3, 1, 1], "relics": 0 },
-	{ "name": "4_magma_reliquias", "panel": 2, "gold": 4.0e6, "run_gold": 5.0e6, "pick": 7, "owned": [30, 8, 5, 2, 0], "relics": 3 },
+	{ "name": "3_cristal_botin", "panel": 1, "gold": 52000.0, "run_gold": 3.0e5, "pick": 5, "owned": [8, 3, 1, 1], "relics": 0 },
+	{ "name": "4_magma_reliquias", "panel": 2, "gold": 4.0e6, "run_gold": 3.0e7, "pick": 7, "owned": [30, 8, 5, 2, 0], "relics": 3 },
 	{ "name": "5_abismo", "panel": 0, "gold": 9.0e8, "run_gold": 2.0e9, "pick": 9, "owned": [60, 25, 12, 6, 2], "relics": 5 },
 	{ "name": "6_opciones", "panel": 0, "gold": 8.88e15, "run_gold": 1.0e15, "pick": 9, "owned": [60, 25, 12, 6, 2], "relics": 40, "options": true },
 	{ "name": "7_golpe", "panel": 0, "gold": 3400.0, "run_gold": 4200.0, "pick": 3, "owned": [4, 1], "relics": 0, "hits": 6 },
 	{ "name": "8_dinamita", "panel": 0, "gold": 52000.0, "run_gold": 60000.0, "pick": 5, "owned": [8, 3, 400, 1], "relics": 0, "wait": 1.12 },
 	{ "name": "9_cofre", "panel": 0, "gold": 52000.0, "run_gold": 60000.0, "pick": 5, "owned": [8, 3, 1, 1], "relics": 0, "chest": 1, "wait": 0.7 },
-	{ "name": "10_legendario", "panel": 0, "gold": 4.0e6, "run_gold": 5.0e6, "pick": 7, "owned": [30, 8, 5, 2, 0], "relics": 3, "chest": 3, "wait": 1.2 },
-	{ "name": "11_bioma_nuevo", "panel": 0, "gold": 900.0, "run_gold": 600.0, "pick": 2, "owned": [4, 1], "relics": 0, "descend": 700.0, "wait": 0.3 },
+	{ "name": "10_legendario", "panel": 0, "gold": 4.0e6, "run_gold": 3.0e7, "pick": 7, "owned": [30, 8, 5, 2, 0], "relics": 3, "chest": 3, "wait": 1.2 },
+	{ "name": "11_bioma_nuevo", "panel": 0, "gold": 900.0, "run_gold": 600.0, "pick": 2, "owned": [4, 1], "relics": 0, "descend": 900.0, "wait": 0.3 },
 	{ "name": "12_vuelta", "panel": 0, "gold": 3400.0, "run_gold": 4200.0, "pick": 3, "owned": [12, 2], "relics": 0, "offline": 11520.0, "wait": 0.6 },
-	{ "name": "13_superficie", "panel": 0, "gold": 4.0e6, "run_gold": 5.0e6, "pick": 7, "owned": [30, 8, 5, 2, 0], "relics": 3, "prestige": true, "wait": 0.95 },
+	{ "name": "13_superficie", "panel": 0, "gold": 4.0e6, "run_gold": 3.0e7, "pick": 7, "owned": [30, 8, 5, 2, 0], "relics": 3, "prestige": true, "wait": 0.95 },
 ]
 
 var _out_dir: String = ""

@@ -5,6 +5,7 @@ extends "res://tests/test_base.gd"
 ## El director mide el ritmo con su propio reloj (`clock`); acá se lo reemplaza por uno de prueba que se adelanta a
 ## mano, así el frenesí se prueba sin esperar en tiempo real. Qué suena se mira con Audio.current_music_id().
 
+const TestBalance := preload("res://tests/test_balance.gd")
 const MAIN_SCENE: String = "res://game/main.tscn"
 const STEP: float = 1.0 / 60.0
 
@@ -24,7 +25,7 @@ func _initialize() -> void:
 		_check(false, "existen los autoloads Economy y Audio")
 		_finish()
 		return
-	_check(_economy.load_balance_file("res://data/balance.json"), "carga el balance real")
+	_check(_economy.load_balance(TestBalance.with_fixed_curve(JSON.parse_string(FileAccess.get_file_as_string("res://data/balance.json")))), "carga el balance real, con la curva fija de los tests")
 	_economy.reset()
 	_scene = (load(MAIN_SCENE) as PackedScene).instantiate() as Control
 	root.add_child(_scene)

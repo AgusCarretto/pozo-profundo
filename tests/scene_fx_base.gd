@@ -5,6 +5,7 @@ extends "res://tests/test_base.gd"
 ##
 ## Cada test hereda de acá, implementa _run_tests() y no llama a _finish() (lo hace la base).
 
+const TestBalance := preload("res://tests/test_balance.gd")
 const NumberFormat := preload("res://core/number_format.gd")
 const MAIN_SCENE: String = "res://game/main.tscn"
 const PHONE: Vector2 = Vector2(720, 1280)
@@ -55,7 +56,7 @@ func _real_balance_without_loot() -> Dictionary:
 	var balance: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/balance.json"))
 	balance.erase("loot")
 	balance.erase("crit") # un crítico al azar cambiaría el número que sale de la roca
-	return balance
+	return TestBalance.with_fixed_curve(balance)
 
 
 func _mount() -> void:

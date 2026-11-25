@@ -39,6 +39,16 @@ const FULL: Dictionary = {
 }
 
 
+## Los tests de interfaz llegan a cada bioma con cifras de oro fijas: se les da una curva propia (25 m por cada
+## duplicación del oro, bioma cada 150 m, volver desde 450 m) para que ajustar el balance real no los rompa.
+static func with_fixed_curve(balance: Dictionary) -> Dictionary:
+	balance["depth"] = { "meters_scale": 25, "gold_scale": 10 }
+	balance["biomes"]["meters_each"] = 150
+	balance["prestige"]["min_depth"] = 450
+	balance["prestige"]["depth_offset"] = 350
+	return balance
+
+
 ## Copia del balance completo sin las secciones indicadas (p. ej. sin "loot" para que el
 ## azar de los cofres no mueva el oro en un test que cuenta cada moneda).
 static func make(without: Array[String] = []) -> Dictionary:

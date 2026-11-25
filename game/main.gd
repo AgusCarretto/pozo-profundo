@@ -203,6 +203,7 @@ func _ready() -> void:
 	# Si el juego arrancó con progreso offline, Economy ya lo acreditó antes de que existiera esta escena.
 	if not Economy.pending_offline_report.is_empty():
 		_show_offline_notice(Economy.pending_offline_report)
+	_show_migration_notice()
 	check_storage()
 
 
@@ -617,6 +618,18 @@ func _on_save_imported() -> void:
 	_shown_biome = -1
 	_last_chest = {}
 	_refresh()
+	_show_migration_notice()
+
+
+## Una partida de antes del balance nuevo volvió a la superficie al cargarse: se cuenta qué pasó.
+func _show_migration_notice() -> void:
+	if Economy.pending_migration_report.is_empty():
+		return
+	var gained: int = Economy.pending_migration_report["relics_gained"]
+	var body: String = "Cambiamos el balance de la mina, así que volviste a la superficie.\n\nTus reliquias siguen con vos"
+	if gained > 0:
+		body += ", y sumamos %s que ya tenías ganadas en esta bajada" % _relics_phrase(gained)
+	_modal.open("¡Mina renovada!", body + ".", "¡A cavar!", "", Economy.dismiss_migration_report)
 
 
 # --- Progreso offline --------------------------------------------------------

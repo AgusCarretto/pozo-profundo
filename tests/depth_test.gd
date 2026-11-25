@@ -278,8 +278,10 @@ func _test_real_balance_file() -> void:
 	for index: int in range(e.biome_count()):
 		names.append(e.biome_name(index))
 	_check_eq(names, ["Tierra", "Roca", "Cristal", "Magma", "Abismo"] as Array[String], "Tierra, Roca, Cristal, Magma, Abismo (en ese orden)")
-	e.run_gold = 10.0
-	_check_near(e.depth(), 25.0, "con el balance real: 10 de oro ganado -> 25 m")
-	e.run_gold = 1.8e8
-	_check_eq(e.biome_name(e.biome_index()), "Abismo", "con 1.8e8 de oro ganado se llega a Abismo")
-	_check_near(e.multiplier, 5.0625, "y el multiplicador es x1.5^4 = x5.0625")
+	e.run_gold = 8.0
+	_check_near(e.depth(), 15.0, "con el balance real: 8 de oro ganado -> 15 m")
+	e.run_gold = 8.4e6
+	_check_eq(e.biome_name(e.biome_index()), "Magma", "a los 300 m (8,4M) se llega a Magma")
+	e.run_gold = 8.6e8
+	_check_eq(e.biome_name(e.biome_index()), "Abismo", "y con 860M a Abismo (400 m)")
+	_check_near(e.multiplier, 5.0625, "con el multiplicador x1.5^4 = x5.0625")

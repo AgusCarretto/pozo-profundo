@@ -130,7 +130,7 @@ func _test_when_to_send() -> void:
 func _test_request() -> void:
 	_section("El pedido a Supabase")
 	var analytics: AnalyticsScript = _make()
-	analytics.economy.run_gold = 3.0e6
+	analytics.economy.run_gold = 1.0e7
 	analytics.economy.relics = 7
 	analytics.start_session()
 	_check_eq(_sent.size(), 1, "una sesión, un pedido")

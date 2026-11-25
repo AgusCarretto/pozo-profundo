@@ -5,6 +5,7 @@ extends "res://tests/test_base.gd"
 ## No escuchan nada: miran qué SFX pidió el juego (la señal Audio.sfx_played). Si suena bien o fuerte
 ## se decide con los auriculares puestos.
 
+const TestBalance := preload("res://tests/test_balance.gd")
 const MAIN_SCENE: String = "res://game/main.tscn"
 const CATALOG_PATH: String = "res://data/sounds.json"
 const AUDIO_DIR: String = "res://assets/audio"
@@ -73,7 +74,7 @@ func _catalog() -> Dictionary:
 func _real_balance() -> Dictionary:
 	var balance: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/balance.json"))
 	balance.erase("crit")
-	return balance
+	return TestBalance.with_fixed_curve(balance)
 
 
 func _mount() -> void:

@@ -46,6 +46,7 @@ func _initialize() -> void:
 	await _test_depth_label()
 	await _test_prestige_flow()
 	await _test_offline_notice()
+	await _test_migration_notice(packed)
 	await _test_loot_hidden_without_loot()
 	await _test_debug_panel_only_in_debug_builds()
 	# Las pruebas de botín necesitan una escena nueva: arma sus carteles al cargar.
@@ -319,13 +320,13 @@ func _test_depth_label() -> void:
 	await _set_gold(0.0)
 	_check(_label("DepthLabel").text.contains("0 m"), "en la superficie: 0 m (%s)" % _label("DepthLabel").text)
 	_check(_label("DepthLabel").text.contains("Tierra"), "bioma Tierra")
-	await _set_run_gold(700.0)
+	await _set_run_gold(900.0)
 	var text: String = _label("DepthLabel").text
-	_check(text.contains("153 m"), "con 700 de oro ganado: 153 m (%s)" % text)
+	_check(text.contains("102 m"), "con 900 de oro ganado: 102 m (%s)" % text)
 	_check(text.contains("Roca"), "bioma Roca")
 	_check(text.contains("×1.50"), "con su multiplicador ×1.50")
-	await _set_run_gold(1.8e8)
-	_check(_label("DepthLabel").text.contains("Abismo"), "con 1.8e8 de oro ganado: Abismo (%s)" % _label("DepthLabel").text)
+	await _set_run_gold(9.0e8)
+	_check(_label("DepthLabel").text.contains("Abismo"), "con 900M de oro ganado: Abismo (%s)" % _label("DepthLabel").text)
 	_economy.reset()
 
 
@@ -334,16 +335,16 @@ func _test_prestige_flow() -> void:
 	var button: Button = _button("PrestigeButton")
 	await _set_gold(0.0)
 	await _set_run_gold(600.0)
-	_check(button.disabled, "a ~148 m el botón está deshabilitado")
-	_check(button.text.contains("450 m"), "y dice desde cuándo se puede (%s)" % button.text.replace("\n", " | "))
+	_check(button.disabled, "a ~94 m el botón está deshabilitado")
+	_check(button.text.contains("300 m"), "y dice desde cuándo se puede (%s)" % button.text.replace("\n", " | "))
 	_check_eq(_label("RelicsLabel").text, "Reliquias: 0", "sin reliquias: 'Reliquias: 0' (%s)" % _label("RelicsLabel").text)
 	_check(not _modal().visible, "el cartel de confirmación está cerrado")
 
 	_economy.gold = 5000.0
 	_economy.owned[0] = 3
 	_economy.pick_level = 4
-	await _set_run_gold(2.7e6)
-	_check(not button.disabled, "a ~450 m el botón se habilita")
+	await _set_run_gold(8.4e6)
+	_check(not button.disabled, "a ~300 m el botón se habilita")
 	_check(button.text.contains("+2 reliquias"), "y promete 2 reliquias (%s)" % button.text.replace("\n", " | "))
 	_check(button.text.contains("+50%"), "y +50% de oro")
 
@@ -364,7 +365,7 @@ func _test_prestige_flow() -> void:
 	_check(_economy.gold >= 5000.0 and _economy.gold < 5010.0, "con el oro intacto (%s)" % str(_economy.gold))
 	_check_eq(_economy.owned_count(0), 3, "y la cuadrilla intacta")
 	_check_eq(_economy.pick_level, 4, "y el pico intacto")
-	_check(_economy.run_gold >= 2.7e6 and _economy.run_gold < 2.7e6 + 100.0, "y la profundidad intacta (%s)" % str(_economy.run_gold))
+	_check(_economy.run_gold >= 8.4e6 and _economy.run_gold < 8.4e6 + 100.0, "y la profundidad intacta (%s)" % str(_economy.run_gold))
 
 	button.pressed.emit()
 	_check(_modal().visible, "se puede volver a abrir")
@@ -429,6 +430,26 @@ func _test_offline_notice() -> void:
 	_economy.reset()
 
 
+## Una partida de antes de v0.5 se convierte al cargar: hay que contarle al jugador qué pasó.
+func _test_migration_notice(packed: PackedScene) -> void:
+	_section("Aviso al convertir una partida vieja")
+	_economy.reset()
+	_economy.from_dict({ "run_gold": 2.7e6, "gold": 100.0, "owned": [12, 1], "relics": 1 })
+	_scene.queue_free()
+	await process_frame
+	_scene = packed.instantiate() as Control
+	root.add_child(_scene)
+	await process_frame
+	_check(_modal().visible, "al abrir sale un aviso")
+	var body: String = _modal().body_label.text
+	_check(body.contains("superficie") and body.contains("2 reliquias"), "que dice qué pasó y cuántas reliquias se sumaron (%s)" % body.replace("\n", " | "))
+	_check(not _modal().cancel_button.visible, "es solo un aviso")
+	_modal().confirm_button.pressed.emit()
+	_check(_economy.pending_migration_report.is_empty(), "y al cerrarlo no vuelve")
+	_check_eq(_economy.relics, 3, "las reliquias están")
+	_economy.reset()
+
+
 func _test_loot_hidden_without_loot() -> void:
 	_section("Sin botín en el balance")
 	_check(not (_scene.get_node("%LootBox") as Control).visible, "el panel de cofres no se muestra si no hay botín")
@@ -470,7 +491,7 @@ func _test_debug_panel_tools() -> void:
 	_check_eq(_economy.biome_name(_economy.biome_index()), "Roca", "con 1.000 ya estás en Roca (%.0f m)" % _economy.depth())
 	panel.gold_button.pressed.emit()
 	_check_eq(_economy.gold, 1000000.0, "otra vez: el oro que tenés × 1000 = 1.000.000")
-	_check_eq(_economy.can_prestige(), false, "con dos pulsaciones todavía no se puede volver (%.0f m, hacen falta 450)" % _economy.depth())
+	_check_eq(_economy.can_prestige(), false, "con dos pulsaciones todavía no se puede volver (%.0f m, hacen falta 300)" % _economy.depth())
 	await process_frame
 	_check(_button("PrestigeButton").disabled, "y el botón de prestigio sigue deshabilitado")
 	panel.gold_button.pressed.emit()

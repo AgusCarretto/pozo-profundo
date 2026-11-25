@@ -29,6 +29,8 @@ const EconomyMath := preload("res://core/economy_math.gd")
 
 const DEFAULT_BALANCE_PATH: String = "res://data/balance.json"
 const SAVE_SECTION: String = "economy"
+## Versión de lo que se guarda. Una partida sin este dato se jugó con las reglas de la sección "legacy".
+const BALANCE_VERSION: int = 2
 const SECONDS_PER_HOUR: float = 3600.0
 const X10_COUNT: int = 10
 ## Topes para datos de partida dañados o editados a mano (evitan desbordes a infinito).
@@ -49,6 +51,9 @@ var relics: int = 0
 var pending_offline_report: Dictionary = {}
 ## El último golpe fue crítico.
 var last_hit_critical: bool = false
+## Aviso de que la partida se convirtió al balance nuevo y el jugador todavía no lo vio ({} = ninguno):
+## {relics_gained}. No se guarda.
+var pending_migration_report: Dictionary = {}
 ## Azar del botín y de los críticos. Los tests le fijan la semilla para repetir una tirada.
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
@@ -91,6 +96,8 @@ var _rarity_weights: Array[float] = []
 var _prestige: Dictionary = {}
 ## Reglas del progreso offline (max_hours, away_seconds, efficiency). Vacío = sin progreso offline.
 var _offline: Dictionary = {}
+## Profundidad y reliquias de las reglas anteriores, para convertir partidas. Vacío = no se convierte nada.
+var _legacy: Dictionary = {}
 ## Umbrales del frenesí (hits_per_second, enter_seconds, exit_seconds, window_seconds). Vacío = sin frenesí.
 var _frenzy: Dictionary = {}
 
@@ -189,6 +196,9 @@ func load_balance(balance: Dictionary) -> bool:
 		return false
 	if not (parsed_offline as Dictionary).is_empty() and parsed_offline["efficiency"] > 1.0:
 		return _fail("offline.efficiency es una fracción: tiene que estar entre 0 y 1")
+	var parsed_legacy: Variant = _read_numbers(balance, "legacy", ["meters_scale", "gold_scale", "min_depth", "depth_step", "exponent"], ["depth_offset"])
+	if parsed_legacy == null:
+		return false
 	var parsed_frenzy: Variant = _read_numbers(balance, "frenzy", ["hits_per_second", "enter_seconds", "exit_seconds", "window_seconds"])
 	if parsed_frenzy == null:
 		return false
@@ -206,6 +216,7 @@ func load_balance(balance: Dictionary) -> bool:
 	_depth = parsed_depth
 	_prestige = parsed_prestige
 	_offline = parsed_offline
+	_legacy = parsed_legacy
 	_frenzy = parsed_frenzy
 	_biomes = []
 	_biome_meters_each = 0.0
@@ -445,6 +456,7 @@ func reset() -> void:
 	_max_biome = 0
 	_revealed = 1
 	pending_offline_report = {}
+	pending_migration_report = {}
 	_reset_run()
 
 
@@ -690,6 +702,7 @@ func buy_generator(index: int, mode: int) -> int:
 
 func to_dict() -> Dictionary:
 	return {
+		"balance_version": BALANCE_VERSION,
 		"gold": gold,
 		"owned": owned.duplicate(),
 		"pick_level": pick_level,
@@ -721,7 +734,29 @@ func from_dict(data: Dictionary) -> void:
 	# Quien tiene reliquias llegó al menos hasta donde se puede volver a la superficie (partidas sin el dato).
 	if relics > 0:
 		_max_biome = maxi(_max_biome, EconomyMath.biome_index(prestige_min_depth(), _biome_meters_each, biome_count()))
+	if int(_number(data.get("balance_version"), 1.0)) < BALANCE_VERSION:
+		_migrate_old_run()
 	gold_changed.emit(gold)
+
+
+## El jugador ya vio el aviso de la conversión.
+func dismiss_migration_report() -> void:
+	pending_migration_report = {}
+
+
+## La partida en curso se jugó con la curva anterior, que no se puede traducir (la misma profundidad cuesta otro
+## oro): se entregan las reliquias que ya tenía ganadas con las reglas de entonces y se vuelve a la superficie.
+## Las reliquias de antes y lo revelado se conservan. Sin bajada en curso no hay nada que convertir.
+func _migrate_old_run() -> void:
+	var crew: bool = owned.any(func(count: int) -> bool: return count > 0)
+	if _legacy.is_empty() or (run_gold <= 0.0 and pick_level <= 0 and not crew):
+		return
+	var old_depth: float = EconomyMath.depth(run_gold, _legacy["meters_scale"], _legacy["gold_scale"])
+	var gained: int = EconomyMath.relics_for_depth(old_depth, _legacy["min_depth"], _legacy["depth_offset"], _legacy["depth_step"], _legacy["exponent"])
+	relics = mini(relics + gained, int(MAX_LOADED_RELICS))
+	_revealed = _revealed_count()
+	_reset_run()
+	pending_migration_report = { "relics_gained": gained }
 
 
 # --- Internos ----------------------------------------------------------------

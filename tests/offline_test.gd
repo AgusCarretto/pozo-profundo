@@ -361,7 +361,7 @@ func _test_boot_from_a_real_save() -> void:
 	var payload: Dictionary = {
 		"version": 1,
 		"saved_at": saved_at,
-		"sections": { "economy": { "gold": 100.0, "run_gold": 100.0, "owned": [10, 0, 0, 0, 0], "pick_level": 0 } },
+		"sections": { "economy": { "balance_version": 2, "gold": 100.0, "run_gold": 100.0, "owned": [10, 0, 0, 0, 0], "pick_level": 0 } },
 	}
 	var file: FileAccess = FileAccess.open(TEST_SAVE_PATH, FileAccess.WRITE)
 	file.store_string(JSON.stringify(payload))

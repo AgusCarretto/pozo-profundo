@@ -491,7 +491,7 @@ func _test_real_balance_file() -> void:
 	_check_eq(rates, [1.0, 5.0, 25.0, 120.0, 600.0] as Array[float], "los generadores caros rinden menos")
 	_check_eq(costs, [25.0, 600.0, 10000.0, 180000.0, 3000000.0] as Array[float], "y cuesta bastante más")
 	e.owned[0] = 1
-	_check_near(e.quote(0, EconomyScript.BuyMode.X1)["cost"], 25.0 * 1.2, "cada unidad cuesta 20% más que la anterior")
+	_check_near(e.quote(0, EconomyScript.BuyMode.X1)["cost"], 25.0 * 1.15, "cada unidad cuesta 15% más que la anterior")
 	e.owned[0] = 0
 	_check_eq(e.pick_cost(), 150.0, "el pico arranca en 150")
 	e.pick_level = 1

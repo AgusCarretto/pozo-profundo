@@ -37,6 +37,7 @@ func _initialize() -> void:
 	_test_balance_validation()
 	_test_real_balance_file()
 	_test_max_biome()
+	_test_old_saves_are_migrated()
 	for node: Node in _nodes:
 		node.free()
 	_finish()
@@ -308,14 +309,67 @@ func _test_real_balance_file() -> void:
 	var e: EconomyScript = EconomyScript.new()
 	_nodes.append(e)
 	_check_eq(e.load_balance_file("res://data/balance.json"), true, "carga el balance real (%s)" % e.last_error)
-	_check_eq(e.prestige_min_depth(), 450.0, "desde los 450 m")
+	_check_eq(e.prestige_min_depth(), 300.0, "desde los 300 m")
 	_check_eq(e.relic_bonus(), 0.25, "+25% por reliquia")
-	e.run_gold = 41000.0 # 300 m
-	_check_eq(e.prestige_relics(), 0, "a 300 m todavía no se puede")
-	e.run_gold = 2.7e6 # ~451 m
-	_check_eq(e.prestige_relics(), 2, "a ~450 m: 2 reliquias")
-	_check_eq(e.prestige(), 2, "prestige() las entrega")
-	_check_near(e.relic_multiplier(), 1.5, "x1.5")
+	e.run_gold = 8.0e6 # ~299 m
+	_check_eq(e.prestige_relics(), 0, "a 299 m todavía no se puede")
+	e.run_gold = 8.4e6 # ~300 m
+	_check_eq(e.prestige_relics(), 2, "a 300 m: 2 reliquias")
+	e.run_gold = 8.6e7 # ~350 m
+	_check_eq(e.prestige_relics(), 4, "a 350 m: 4")
+	e.run_gold = 8.6e8 # ~400 m
+	_check_eq(e.prestige_relics(), 6, "a 400 m: 6")
+	_check_eq(e.prestige(), 6, "prestige() las entrega")
+	_check_near(e.relic_multiplier(), 2.5, "x2.5")
+	var old: EconomyScript = EconomyScript.new()
+	_nodes.append(old)
+	old.load_balance_file("res://data/balance.json")
+	old.from_dict({ "run_gold": 2.7e6, "relics": 1 })
+	_check_eq(old.relics, 3, "el balance real convierte las partidas viejas")
+
+
+## Las reglas viejas (antes de v0.5), para convertir las partidas guardadas con ellas.
+const LEGACY: Dictionary = { "meters_scale": 25, "gold_scale": 10, "min_depth": 450, "depth_offset": 350, "depth_step": 50, "exponent": 1.3 }
+
+
+## Con el balance nuevo la profundidad se mide distinto: una partida vieja recibe las reliquias que ya tenía
+## ganadas con la regla anterior y vuelve a la superficie, una sola vez.
+func _test_old_saves_are_migrated() -> void:
+	_section("Partidas guardadas con el balance anterior")
+	var balance: Dictionary = TestBalance.make()
+	balance["legacy"] = LEGACY
+	var old_save: Dictionary = { "gold": 5000.0, "run_gold": 2.7e6, "owned": [30, 0], "pick_level": 4, "relics": 3, "loot_bonus": 1.2 }
+	var e: EconomyScript = _make(balance)
+	e.from_dict(old_save)
+	_check_eq(e.relics, 5, "3 que tenía + 2 que daba subir desde ~451 m con la regla vieja")
+	_check(e.gold == 0.0 and e.run_gold == 0.0 and e.owned_count(0) == 0 and e.pick_level == 0, "y la bajada se reinicia")
+	_check_eq(e.pending_migration_report, { "relics_gained": 2 }, "queda un aviso para el jugador")
+	_check(e.is_generator_revealed(1), "lo que había comprado sigue a la vista")
+	e.dismiss_migration_report()
+	_check(e.pending_migration_report.is_empty(), "que se puede cerrar")
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(e.to_dict()))
+	_check_eq(int(saved.get("balance_version", 0)), 2, "lo que se guarda ya está marcado como nuevo")
+	saved["run_gold"] = 2.7e6
+	saved["owned"] = [30, 0]
+	var again: EconomyScript = _make(balance)
+	again.from_dict(saved)
+	_check(again.relics == 5 and again.owned_count(0) == 30 and again.pending_migration_report.is_empty(), "una partida nueva no se vuelve a convertir")
+	var shallow: EconomyScript = _make(balance)
+	shallow.from_dict({ "run_gold": 600.0, "gold": 10.0, "owned": [3, 0] })
+	_check(shallow.relics == 0 and shallow.run_gold == 0.0, "sin llegar a los 450 m viejos: se reinicia sin reliquias nuevas")
+	_check_eq(shallow.pending_migration_report, { "relics_gained": 0 }, "pero se le avisa igual")
+	for nothing: Dictionary in [{}, { "relics": 4 }, { "gold": 0.0, "owned": [0, 0] }]:
+		var empty: EconomyScript = _make(balance)
+		empty.from_dict(nothing)
+		_check(empty.pending_migration_report.is_empty(), "sin bajada en curso no hay nada que convertir (%s)" % str(nothing))
+	shallow.reset()
+	_check(shallow.pending_migration_report.is_empty(), "empezar de cero borra el aviso")
+	var no_legacy: EconomyScript = _make()
+	no_legacy.from_dict(old_save)
+	_check_eq(no_legacy.owned_count(0), 30, "sin la sección legacy no se convierte nada")
+	var broken: Dictionary = TestBalance.make()
+	broken["legacy"] = { "meters_scale": 25 }
+	_check_eq(no_legacy.load_balance(broken), false, "una sección legacy incompleta -> inválido")
 
 
 ## El bioma más profundo alcanzado (índice, 0 = Tierra): sobrevive al prestigio y va en las métricas.
@@ -341,7 +395,7 @@ func _test_max_biome() -> void:
 	_nodes.append(real)
 	_check(real.load_balance_file(EconomyScript.DEFAULT_BALANCE_PATH), "carga el balance del juego")
 	real.from_dict({ "relics": 1 })
-	_check_eq(real.max_biome(), 3, "con el balance del juego (450 m) es Magma")
+	_check_eq(real.max_biome(), 3, "con el balance del juego (se sube desde los 300 m) es Magma")
 	var surface: EconomyScript = _make()
 	surface.from_dict({ "gold": 5.0, "run_gold": 5.0 })
 	_check_eq(surface.max_biome(), 0, "sin reliquias ni dato: donde está")
