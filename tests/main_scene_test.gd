@@ -39,6 +39,7 @@ func _initialize() -> void:
 	await _test_buying_a_generator()
 	await _test_buy_modes()
 	await _test_pick_upgrade()
+	await _test_one_touch_buys_once()
 	await _test_large_numbers_use_suffixes()
 	await _test_depth_label()
 	await _test_prestige_flow()
@@ -222,6 +223,45 @@ func _test_pick_upgrade() -> void:
 	_check(_price(_button("PickButton")).contains("1.80K"), "ahora muestra el precio del siguiente nivel (1.80K)")
 	_button("TapButton").button_down.emit()
 	_check_eq(_economy.gold, 2.0, "y un golpe ahora vale 2")
+
+
+## Un toque de verdad, por todo el camino de entrada: Godot además emula un click a partir de él.
+func _touch(control: Control) -> void:
+	var at: Vector2 = root.get_final_transform() * control.get_global_rect().get_center()
+	for down: bool in [true, false]:
+		var touch: InputEventScreenTouch = InputEventScreenTouch.new()
+		touch.position = at
+		touch.pressed = down
+		Input.parse_input_event(touch)
+		Input.flush_buffered_events()
+		await process_frame
+
+
+## En un celular, un botón que reacciona al apretar recibía el click emulado y también el toque: compraba de a dos.
+## Con "pressed.emit()" o con el mouse no se ve.
+func _test_one_touch_buys_once() -> void:
+	_section("Un toque en la pantalla compra una sola vez")
+	await _set_gold(10000.0)
+	await _pick_mode("×1")
+	await _touch(_row_button(0))
+	_check_eq(_economy.owned_count(0), 1, "un toque en el Minero compra 1")
+	# El minero recién comprado ya produce entre cuadro y cuadro: de ahí el margen.
+	_check(_economy.gold >= 9975.0 and _economy.gold < 9976.0, "y gasta 25 una vez (quedan %.2f)" % _economy.gold)
+	await _touch(_row_button(0))
+	_check_eq(_economy.owned_count(0), 2, "otro toque, otro Minero")
+	await _set_gold(10000.0)
+	await _pick_mode("×10")
+	await _touch(_row_button(0))
+	_check_eq(_economy.owned_count(0), 10, "en ×10 un toque compra 10, no 20")
+	await _pick_mode("×1")
+	await _set_gold(10000.0)
+	await _touch(_button("PickButton"))
+	_check_eq(_economy.pick_level, 1, "un toque sube el pico un nivel")
+	await _set_gold(0.0)
+	await _touch(_button("TapButton"))
+	_check_eq(_economy.gold, 1.0, "y un toque en la roca es un golpe")
+	await _touch(_button("TapButton"))
+	_check_eq(_economy.gold, 2.0, "dos toques, dos golpes")
 
 
 func _test_large_numbers_use_suffixes() -> void:

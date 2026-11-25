@@ -87,6 +87,14 @@ func build(icon_texture: Texture2D) -> void:
 	_price_box.add_child(_price_label)
 
 
+## Con un toque Godot entrega un click emulado y además el toque; un botón que reacciona al apretar emitía
+## `pressed` con los dos y compraba de a dos en el celular. El click emulado alcanza: el toque se descarta acá,
+## antes de que lo vea Button.
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch:
+		accept_event()
+
+
 ## Muestra la oferta: `affordable` falso deja la tarjeta deshabilitada y el precio en gris.
 func show_offer(title: String, detail: String, price: String, affordable: bool) -> void:
 	_name_label.text = title
