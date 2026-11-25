@@ -16,6 +16,7 @@ var _nodes: Array[Node] = []
 
 func _initialize() -> void:
 	_test_credit_and_report()
+	_test_away_efficiency()
 	_test_signal_and_gold_changed()
 	_test_cap_at_8_hours()
 	_test_uses_current_multiplier()
@@ -67,6 +68,37 @@ func _test_credit_and_report() -> void:
 	e.dismiss_offline_report()
 	_check(e.pending_offline_report.is_empty(), "dismiss_offline_report() lo limpia")
 	_check_eq(e.gold, 36000.0, "y el oro ya estaba acreditado")
+
+
+## Afuera la cuadrilla rinde menos; los primeros `away_seconds` pagan completo, así volver a los 2:01 no da menos
+## que volver a los 1:59.
+func _test_away_efficiency() -> void:
+	_section("AFK al 25%, con los primeros 2 minutos al 100%")
+	var quarter: Dictionary = TestBalance.make(["loot"])
+	quarter["offline"]["efficiency"] = 0.25
+	var e: EconomyScript = _make(quarter)
+	e.owned[0] = 10
+	_check_eq(e.offline_efficiency(), 0.25, "la eficiencia sale del balance")
+	var report: Dictionary = e.apply_offline(HOUR)
+	_check_near(e.gold, 10.0 * (120.0 + 3480.0 * 0.25), "1 h: 2 min completos y 58 min al 25% = 9.900")
+	_check_eq(report.get("seconds"), HOUR, "el reporte dice el tiempo real fuera")
+	_check_near(report.get("gold"), 9900.0, "y el oro que se pagó")
+	var short: EconomyScript = _make(quarter)
+	short.owned[0] = 10
+	short.apply_offline(100.0)
+	_check_near(short.gold, 1000.0, "menos de 2 min: completo")
+	var edge: EconomyScript = _make(quarter)
+	edge.owned[0] = 10
+	edge.apply_offline(121.0)
+	_check_near(edge.gold, 10.0 * 120.25, "a los 2:01 paga un poco más que a los 2:00, no menos")
+	var long: EconomyScript = _make(quarter)
+	long.owned[0] = 10
+	_check_eq(long.apply_offline(20.0 * HOUR).get("capped"), true, "el tope de 8 h es sobre el tiempo real")
+	_check_near(long.gold, 10.0 * (120.0 + (MAX_SECONDS - 120.0) * 0.25), "8 h: 72.900")
+	for bad: Variant in [-0.1, 1.5, "mucho"]:
+		var broken: Dictionary = TestBalance.make(["loot"])
+		broken["offline"]["efficiency"] = bad
+		_check_eq(e.load_balance(broken), false, "offline.efficiency = %s -> inválido" % str(bad))
 
 
 func _test_signal_and_gold_changed() -> void:
@@ -309,7 +341,7 @@ func _test_real_balance_file() -> void:
 	e.owned[0] = 10
 	e.loot_dropped.connect(func(_rarity: int, _amount: float) -> void: _fail_loot())
 	e.apply_offline(100.0 * HOUR)
-	_check_eq(e.gold, 288000.0, "100 h fuera acreditan 8 h")
+	_check_near(e.gold, 72900.0, "100 h fuera acreditan 8 h (al 25% desde el minuto 2)")
 
 
 func _fail_loot() -> void:
@@ -343,7 +375,7 @@ func _test_boot_from_a_real_save() -> void:
 	var booted: EconomyScript = EconomyScript.new()
 	root.add_child(booted) # corre _ready(): carga balance, se registra en Save y acredita el offline
 	_nodes.append(booted)
-	_check(booted.gold >= 100.0 + 72000.0 and booted.gold < 100.0 + 72000.0 + 100.0, "100 de oro + 2 h * 10 oro/s = ~72.100 (tiene %s)" % str(booted.gold))
+	_check(booted.gold >= 100.0 + 18900.0 and booted.gold < 100.0 + 18900.0 + 100.0, "100 de oro + 2 h afuera = ~19.000 (tiene %s)" % str(booted.gold))
 	_check_eq(booted.pending_offline_report.get("capped"), false, "hay aviso pendiente, sin tope")
 	_check(absf(float(booted.pending_offline_report.get("seconds", 0.0)) - 7200.0) < 5.0, "de ~2 h (%s s)" % str(booted.pending_offline_report.get("seconds")))
 	_check_eq(booted.owned_count(0), 10, "y el resto del save se cargó")

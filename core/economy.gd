@@ -85,7 +85,7 @@ var _rarities: Array[Dictionary] = []
 var _rarity_weights: Array[float] = []
 ## Reglas del prestigio (min_depth, depth_offset, depth_step, exponent, bonus_per_relic). Vacío = sin prestigio.
 var _prestige: Dictionary = {}
-## Reglas del progreso offline (max_hours, away_seconds). Vacío = sin progreso offline.
+## Reglas del progreso offline (max_hours, away_seconds, efficiency). Vacío = sin progreso offline.
 var _offline: Dictionary = {}
 ## Umbrales del frenesí (hits_per_second, enter_seconds, exit_seconds, window_seconds). Vacío = sin frenesí.
 var _frenzy: Dictionary = {}
@@ -172,9 +172,11 @@ func load_balance(balance: Dictionary) -> bool:
 	var parsed_prestige: Variant = _read_numbers(balance, "prestige", ["min_depth", "depth_step", "exponent", "bonus_per_relic"], ["depth_offset"])
 	if parsed_prestige == null:
 		return false
-	var parsed_offline: Variant = _read_numbers(balance, "offline", ["max_hours", "away_seconds"])
+	var parsed_offline: Variant = _read_numbers(balance, "offline", ["max_hours", "away_seconds"], ["efficiency"])
 	if parsed_offline == null:
 		return false
+	if not (parsed_offline as Dictionary).is_empty() and parsed_offline["efficiency"] > 1.0:
+		return _fail("offline.efficiency es una fracción: tiene que estar entre 0 y 1")
 	var parsed_frenzy: Variant = _read_numbers(balance, "frenzy", ["hits_per_second", "enter_seconds", "exit_seconds", "window_seconds"])
 	if parsed_frenzy == null:
 		return false
@@ -502,7 +504,13 @@ func offline_max_seconds() -> float:
 	return float(_offline["max_hours"]) * SECONDS_PER_HOUR
 
 
-## Acredita lo que produjo la cuadrilla durante `elapsed` segundos de ausencia, hasta el tope.
+## Cuánto rinde la cuadrilla mientras no estás (0.25 = 25%). 0 si el balance no tiene "offline".
+func offline_efficiency() -> float:
+	return _offline.get("efficiency", 0.0)
+
+
+## Acredita lo que produjo la cuadrilla durante `elapsed` segundos de ausencia, hasta el tope: los primeros
+## `away_seconds` completos y el resto a `efficiency`.
 ## Usa la producción de hoy (bioma y reliquias actuales), no la que iría subiendo por el camino:
 ## es una cuenta conservadora. No sortea cofres. Devuelve el reporte {seconds, gold, capped},
 ## o {} si no acreditó nada (ausencia nula o inválida, sin cuadrilla, o sin sección offline).
@@ -512,7 +520,7 @@ func apply_offline(elapsed: float) -> Dictionary:
 	if _offline.is_empty():
 		return {}
 	var seconds: float = EconomyMath.offline_seconds(elapsed, offline_max_seconds())
-	var gained: float = gold_per_second() * seconds
+	var gained: float = gold_per_second() * EconomyMath.offline_paid_seconds(seconds, _offline["away_seconds"], _offline["efficiency"])
 	if seconds <= 0.0 or gained <= 0.0:
 		return {}
 	_earn(gained)

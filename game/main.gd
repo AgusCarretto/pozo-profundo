@@ -594,12 +594,13 @@ func _on_save_imported() -> void:
 
 func _show_offline_notice(report: Dictionary) -> void:
 	var gold_text: String = NumberFormat.format_number(report["gold"])
+	var rate_text: String = NumberFormat.format_percent(Economy.offline_efficiency())
 	var body: String
 	if report["capped"]:
-		body = "Estuviste fuera mucho tiempo. Tu cuadrilla trabajó el máximo de %s y juntó %s de oro." % [
-			NumberFormat.format_duration(Economy.offline_max_seconds()), gold_text]
+		body = "Estuviste fuera mucho tiempo. Tu cuadrilla trabajó el máximo de %s, al %s, y juntó %s de oro." % [
+			NumberFormat.format_duration(Economy.offline_max_seconds()), rate_text, gold_text]
 	else:
-		body = "Estuviste fuera %s. Tu cuadrilla siguió minando y juntó %s de oro." % [
-			NumberFormat.format_duration(report["seconds"]), gold_text]
+		body = "Estuviste fuera %s. Sin vos la cuadrilla rinde al %s, y juntó %s de oro." % [
+			NumberFormat.format_duration(report["seconds"]), rate_text, gold_text]
 	_modal.open("¡Bienvenido de vuelta!", body, "¡A seguir!", "", Economy.dismiss_offline_report)
 	_modal.celebrate(report["gold"], NumberFormat.format_number, load(COIN_ICON) as Texture2D, Settings.reduce_effects)

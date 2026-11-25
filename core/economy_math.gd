@@ -129,6 +129,12 @@ static func pick_weighted(weights: Array[float], roll: float) -> int:
 	return chosen # roll >= 1 (o NaN): el último con peso
 
 
+## Segundos de producción que se pagan por una ausencia de `seconds`: los primeros `full_seconds` completos y el
+## resto a `efficiency` (0 a 1). Es continuo: volver un segundo después nunca paga menos.
+static func offline_paid_seconds(seconds: float, full_seconds: float, efficiency: float) -> float:
+	return minf(seconds, full_seconds) + maxf(seconds - full_seconds, 0.0) * efficiency
+
+
 ## Segundos de ausencia que se acreditan: el tiempo fuera, entre 0 y `max_seconds`.
 ## Un reloj atrasado (negativo) o inválido no acredita nada.
 static func offline_seconds(elapsed: float, max_seconds: float) -> float:

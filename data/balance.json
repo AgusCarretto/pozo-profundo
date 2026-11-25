@@ -48,7 +48,8 @@
 	},
 	"offline": {
 		"max_hours": 8,
-		"away_seconds": 120
+		"away_seconds": 120,
+		"efficiency": 0.25
 	},
 	"frenzy": {
 		"hits_per_second": 4,

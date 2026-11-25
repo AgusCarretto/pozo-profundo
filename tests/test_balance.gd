@@ -36,7 +36,7 @@ const FULL: Dictionary = {
 		],
 	},
 	"prestige": { "min_depth": 300, "depth_offset": 200, "depth_step": 50, "exponent": 1.3, "bonus_per_relic": 0.25 },
-	"offline": { "max_hours": 8, "away_seconds": 120 },
+	"offline": { "max_hours": 8, "away_seconds": 120, "efficiency": 1 },
 }
 
 
