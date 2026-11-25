@@ -8,6 +8,8 @@ var index: int = 0
 
 ## Modo de compra con el que se dibujó la tarjeta; es el que usa al tocarla.
 var _mode: int = Economy.BuyMode.X1
+## Estaba en "???" la última vez que se dibujó: al revelarse rebota.
+var _hidden: bool = false
 
 
 func setup(generator_index: int) -> void:
@@ -21,6 +23,15 @@ func setup(generator_index: int) -> void:
 ## cuántas se compran.
 func refresh(mode: int) -> void:
 	_mode = mode
+	var hidden: bool = not Economy.is_generator_revealed(index)
+	show_silhouette(hidden)
+	if hidden:
+		_hidden = true
+		show_offer("???", "Comprá el anterior", "???", false)
+		return
+	if _hidden and is_inside_tree():
+		Juice.bounce(self)
+	_hidden = false
 	var offer: Dictionary = Economy.quote(index, mode)
 	var price: String = NumberFormat.format_cost(offer["cost"])
 	if mode != Economy.BuyMode.X1:

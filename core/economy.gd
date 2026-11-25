@@ -72,6 +72,8 @@ var _last_tick_usec: int = 0
 var _last_tick_unix: float = 0.0
 ## Bioma más profundo de las bajadas anteriores (ver max_biome()).
 var _max_biome: int = 0
+## Cuántos generadores ya se revelaron en bajadas anteriores (ver is_generator_revealed()).
+var _revealed: int = 1
 var _generators: Array[Dictionary] = []
 var _cost_growth: float = 0.0
 var _pick: Dictionary = {}
@@ -252,6 +254,20 @@ func generator_id(index: int) -> String:
 	return _generators[index]["id"]
 
 
+## Un generador se descubre al comprar el anterior y, desde ahí, se ve siempre (también después de volver a la
+## superficie). Comprarlo no está prohibido acá: la interfaz es la que lo esconde.
+func is_generator_revealed(index: int) -> bool:
+	return _is_valid_index(index) and index < _revealed_count()
+
+
+func _revealed_count() -> int:
+	var count: int = _revealed
+	for index: int in range(owned.size()):
+		if owned[index] > 0:
+			count = maxi(count, index + 2)
+	return clampi(count, 1, maxi(_generators.size(), 1))
+
+
 # --- Profundidad y biomas ------------------------------------------------------
 
 ## Profundidad en metros, según el oro ganado en la partida. 0 si el balance no tiene "depth".
@@ -414,6 +430,7 @@ func prestige() -> int:
 		return 0
 	relics = mini(relics + gained, int(MAX_LOADED_RELICS))
 	_max_biome = max_biome()
+	_revealed = _revealed_count()
 	_reset_run()
 	prestiged.emit(gained)
 	return gained
@@ -434,6 +451,7 @@ func _roll_loot(chance: float) -> void:
 func reset() -> void:
 	relics = 0
 	_max_biome = 0
+	_revealed = 1
 	pending_offline_report = {}
 	_reset_run()
 
@@ -689,6 +707,7 @@ func to_dict() -> Dictionary:
 		"loot_bonus": loot_bonus,
 		"relics": relics,
 		"max_biome": max_biome(),
+		"revealed": _revealed_count(),
 	}
 
 
@@ -708,6 +727,7 @@ func from_dict(data: Dictionary) -> void:
 	if saved_owned is Array:
 		for index: int in range(mini((saved_owned as Array).size(), owned.size())):
 			owned[index] = int(clampf(_number(saved_owned[index], 0.0), 0.0, MAX_LOADED_OWNED))
+	_revealed = int(clampf(_number(data.get("revealed"), 1.0), 1.0, maxi(_generators.size(), 1)))
 	var deepest: int = maxi(biome_count() - 1, 0)
 	_max_biome = int(clampf(_number(data.get("max_biome"), 0.0), 0.0, deepest))
 	# Quien tiene reliquias llegó al menos hasta donde se puede volver a la superficie (partidas sin el dato).

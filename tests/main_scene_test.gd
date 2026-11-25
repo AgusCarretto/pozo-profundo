@@ -35,6 +35,7 @@ func _initialize() -> void:
 	await process_frame
 
 	await _test_initial_screen()
+	await _test_hidden_generator_cards()
 	await _test_tap_hits_the_rock()
 	await _test_buying_a_generator()
 	await _test_buy_modes()
@@ -165,6 +166,24 @@ func _test_initial_screen() -> void:
 	_check(not any_enabled, "sin oro, ninguna tarjeta de generador está habilitada")
 	_check(_button("PickButton").disabled, "sin oro, la tarjeta del pico está deshabilitada")
 	_check(_card_text(_button("ModeButton")).begins_with("×1 |"), "el modo de compra arranca en ×1 (%s)" % _card_text(_button("ModeButton")))
+
+
+func _test_hidden_generator_cards() -> void:
+	_section("Los generadores por descubrir son un '???'")
+	_economy.reset()
+	await _set_gold(0.0)
+	_check(_card_text(_row_button(0)).begins_with("Minero"), "el primero se ve (%s)" % _card_text(_row_button(0)))
+	for i: int in range(1, _rows().size()):
+		_check_eq(_card_text(_row_button(i)), "??? | Comprá el anterior | ???", "la tarjeta %d está oculta" % (i + 1))
+	_economy.gold = 1.0e9
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	_check(_row_button(1).disabled, "con oro de sobra igual no se puede comprar lo oculto")
+	_row_button(0).pressed.emit()
+	await process_frame
+	_check(_card_text(_row_button(1)).begins_with("Taladro a vapor") and not _row_button(1).disabled, "comprar el Minero revela el Taladro (%s)" % _card_text(_row_button(1)))
+	_check(_card_text(_row_button(2)).begins_with("???"), "pero no el que sigue")
+	_economy.reset()
 
 
 func _test_tap_hits_the_rock() -> void:

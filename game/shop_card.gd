@@ -18,6 +18,7 @@ var _name_label: Label
 var _detail_label: Label
 var _price_box: PanelContainer
 var _price_label: Label
+var _icon: TextureRect
 
 
 ## Arma la tarjeta con el icono `icon_texture` (puede ser null).
@@ -52,6 +53,7 @@ func build(icon_texture: Texture2D) -> void:
 	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top.add_child(icon)
+	_icon = icon
 
 	var texts: VBoxContainer = VBoxContainer.new()
 	texts.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -93,6 +95,11 @@ func build(icon_texture: Texture2D) -> void:
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		accept_event()
+
+
+## Algo por descubrir: el ícono queda en silueta.
+func show_silhouette(on: bool) -> void:
+	_icon.modulate = Color(0.0, 0.0, 0.0, 0.65) if on else Color.WHITE
 
 
 ## Muestra la oferta: `affordable` falso deja la tarjeta deshabilitada y el precio en gris.

@@ -27,6 +27,7 @@ func _initialize() -> void:
 	_test_hit()
 	_test_critical_hits()
 	_test_milestones()
+	_test_hidden_generators()
 	_test_buy_one()
 	_test_buy_ten()
 	_test_buy_max()
@@ -158,6 +159,40 @@ func _test_milestones() -> void:
 		var broken: Dictionary = TEST_BALANCE.duplicate(true)
 		broken["milestones"] = bad
 		_check_eq(plain.load_balance(broken), false, "milestones %s -> inválido" % str(bad))
+
+
+func _test_hidden_generators() -> void:
+	_section("Generadores ocultos hasta comprar el anterior")
+	var balance: Dictionary = TestBalance.make(["loot"])
+	balance["generators"].append({ "id": "c", "name": "C", "base_rate": 47, "base_cost": 1300 })
+	var e: EconomyScript = _make()
+	_check(e.load_balance(balance), "carga con 3 generadores (%s)" % e.last_error)
+	var seen: Callable = func(economy: EconomyScript) -> Array:
+		return [economy.is_generator_revealed(0), economy.is_generator_revealed(1), economy.is_generator_revealed(2)]
+	_check_eq(seen.call(e), [true, false, false], "al empezar solo se ve el primero")
+	e.gold = 1.0e6
+	e.buy_generator(0, BuyMode.X1)
+	_check_eq(seen.call(e), [true, true, false], "comprarlo revela el segundo")
+	e.buy_generator(1, BuyMode.X1)
+	_check_eq(seen.call(e), [true, true, true], "y así")
+	e.run_gold = 1.0e9
+	_check(e.prestige() > 0, "vuelve a la superficie")
+	_check_eq(e.owned_count(1), 0, "sin cuadrilla")
+	_check_eq(seen.call(e), [true, true, true], "pero lo revelado sigue a la vista")
+	var loaded: EconomyScript = _make()
+	loaded.load_balance(balance)
+	loaded.from_dict(JSON.parse_string(JSON.stringify(e.to_dict())))
+	_check_eq(seen.call(loaded), [true, true, true], "y se guarda")
+	loaded.reset()
+	_check_eq(seen.call(loaded), [true, false, false], "empezar de cero lo oculta")
+	loaded.from_dict({ "owned": [3, 0, 0] })
+	_check_eq(seen.call(loaded), [true, true, false], "una partida sin el dato muestra lo comprado y el siguiente")
+	for garbage: Variant in ["todo", -5, NAN, 1.0e12]:
+		var broken: EconomyScript = _make()
+		broken.load_balance(balance)
+		broken.from_dict({ "revealed": garbage })
+		_check(broken.is_generator_revealed(0) and not broken.is_generator_revealed(3), "dato basura (%s): sin explotar" % str(garbage))
+	_check(not e.is_generator_revealed(-1) and not e.is_generator_revealed(9), "un índice inexistente no está revelado")
 
 
 func _test_buy_one() -> void:
