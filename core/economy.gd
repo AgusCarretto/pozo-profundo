@@ -64,6 +64,8 @@ var last_error: String = ""
 
 ## Instante (µs) del último tick de _process; 0 = todavía sin referencia.
 var _last_tick_usec: int = 0
+## Bioma más profundo de las bajadas anteriores (ver max_biome()).
+var _max_biome: int = 0
 var _generators: Array[Dictionary] = []
 var _cost_growth: float = 0.0
 var _pick: Dictionary = {}
@@ -272,6 +274,11 @@ func next_biome_depth() -> float:
 	return next * _biome_meters_each if next >= 0 else 0.0
 
 
+## Índice del bioma más profundo al que llegaste alguna vez (0 = el de la superficie). Sobrevive al prestigio.
+func max_biome() -> int:
+	return maxi(_max_biome, biome_index())
+
+
 ## Multiplicador de oro del bioma actual (x1 si el balance no tiene biomas).
 func biome_multiplier() -> float:
 	if _biomes.is_empty():
@@ -379,6 +386,7 @@ func prestige() -> int:
 	if gained <= 0:
 		return 0
 	relics = mini(relics + gained, int(MAX_LOADED_RELICS))
+	_max_biome = max_biome()
 	_reset_run()
 	prestiged.emit(gained)
 	return gained
@@ -398,6 +406,7 @@ func _roll_loot(chance: float) -> void:
 ## Empieza una partida de cero (también sin reliquias), conservando el balance.
 func reset() -> void:
 	relics = 0
+	_max_biome = 0
 	pending_offline_report = {}
 	_reset_run()
 
@@ -605,6 +614,7 @@ func to_dict() -> Dictionary:
 		"run_gold": run_gold,
 		"loot_bonus": loot_bonus,
 		"relics": relics,
+		"max_biome": max_biome(),
 	}
 
 
@@ -624,6 +634,11 @@ func from_dict(data: Dictionary) -> void:
 	if saved_owned is Array:
 		for index: int in range(mini((saved_owned as Array).size(), owned.size())):
 			owned[index] = int(clampf(_number(saved_owned[index], 0.0), 0.0, MAX_LOADED_OWNED))
+	var deepest: int = maxi(biome_count() - 1, 0)
+	_max_biome = int(clampf(_number(data.get("max_biome"), 0.0), 0.0, deepest))
+	# Quien tiene reliquias llegó al menos hasta donde se puede volver a la superficie (partidas sin el dato).
+	if relics > 0:
+		_max_biome = maxi(_max_biome, EconomyMath.biome_index(prestige_min_depth(), _biome_meters_each, biome_count()))
 	gold_changed.emit(gold)
 
 

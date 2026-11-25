@@ -12,6 +12,8 @@ const TestBalance := preload("res://tests/test_balance.gd")
 ## Oro ganado que deja justo pasados los 300 m (~300.04 m) / justo antes (~299.2 m).
 const GOLD_AT_300M: float = 41000.0
 const GOLD_BEFORE_300M: float = 40000.0
+## Oro ganado que deja pasados los 450 m (~455 m): Magma.
+const GOLD_AT_MAGMA: float = 3.0e6
 
 var _nodes: Array[Node] = []
 
@@ -34,6 +36,7 @@ func _initialize() -> void:
 	_test_without_prestige_section()
 	_test_balance_validation()
 	_test_real_balance_file()
+	_test_max_biome()
 	for node: Node in _nodes:
 		node.free()
 	_finish()
@@ -317,3 +320,36 @@ func _test_real_balance_file() -> void:
 	_check_eq(e.prestige_relics(), 2, "a ~450 m: 2 reliquias")
 	_check_eq(e.prestige(), 2, "prestige() las entrega")
 	_check_near(e.relic_multiplier(), 1.5, "x1.5")
+
+
+## El bioma más profundo alcanzado (índice, 0 = Tierra): sobrevive al prestigio y va en las métricas.
+func _test_max_biome() -> void:
+	_section("El bioma más profundo alcanzado se recuerda")
+	var e: EconomyScript = _make()
+	_check_eq(e.max_biome(), 0, "una partida nueva: Tierra")
+	e.run_gold = GOLD_AT_MAGMA
+	_check_eq(e.max_biome(), 3, "al llegar a Magma ya cuenta")
+	_check(e.prestige() > 0, "vuelve a la superficie")
+	_check_eq(e.biome_index(), 0, "arriba otra vez")
+	_check_eq(e.max_biome(), 3, "pero recuerda Magma")
+	_check_eq(e.to_dict().get("max_biome"), 3, "y lo guarda")
+	var loaded: EconomyScript = _make()
+	loaded.from_dict(e.to_dict())
+	_check_eq(loaded.max_biome(), 3, "al cargar sigue")
+	loaded.reset()
+	_check_eq(loaded.max_biome(), 0, "empezar de cero lo borra")
+	var old: EconomyScript = _make()
+	old.from_dict({ "relics": 4, "gold": 5.0, "run_gold": 5.0 })
+	_check_eq(old.max_biome(), 2, "partida vieja con reliquias: al menos el bioma desde el que se puede subir (300 m)")
+	var real: EconomyScript = EconomyScript.new()
+	_nodes.append(real)
+	_check(real.load_balance_file(EconomyScript.DEFAULT_BALANCE_PATH), "carga el balance del juego")
+	real.from_dict({ "relics": 1 })
+	_check_eq(real.max_biome(), 3, "con el balance del juego (450 m) es Magma")
+	var surface: EconomyScript = _make()
+	surface.from_dict({ "gold": 5.0, "run_gold": 5.0 })
+	_check_eq(surface.max_biome(), 0, "sin reliquias ni dato: donde está")
+	for garbage: Variant in ["mucho", -3, NAN, 1.0e12, []]:
+		var broken: EconomyScript = _make()
+		broken.from_dict({ "max_biome": garbage })
+		_check(broken.max_biome() >= 0 and broken.max_biome() < broken.biome_count(), "un dato basura (%s) queda en un bioma que existe (%d)" % [str(garbage), broken.max_biome()])
