@@ -367,4 +367,15 @@ func _test_real_balance_file() -> void:
 	for index: int in range(e.generator_count()):
 		ids.append(e.generator_id(index))
 	_check_eq(ids, ["miner", "steam_drill", "dynamite_crew", "stone_golem", "rune_excavator"] as Array[String], "los ids del balance real, en orden")
+	# El ritmo del juego (partidas largas): costos que suben 17% por unidad y los generadores caros que rinden menos.
+	e.owned[0] = 1
+	_check_near(e.quote(0, EconomyScript.BuyMode.X1)["cost"], 15.0 * 1.17, "el segundo Minero cuesta 15 x 1.17")
+	e.owned[0] = 0
+	_check_eq(e.quote(1, EconomyScript.BuyMode.X1)["cost"], 200.0, "el Taladro arranca en 200")
+	e.owned[1] = 1
+	_check_eq(e.gold_per_second(), 5.0, "y produce 5 oro/s")
+	e.owned[1] = 0
+	e.pick_level = 1
+	_check_eq(e.pick_cost(), 400.0, "la segunda mejora del pico cuesta 50 x 8")
+	e.pick_level = 0
 	_check_eq(e.load_balance_file("res://data/no_existe.json"), false, "un archivo inexistente devuelve false")

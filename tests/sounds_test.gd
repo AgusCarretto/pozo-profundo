@@ -296,7 +296,7 @@ func _test_biome_cue() -> void:
 
 func _test_prestige_cues() -> void:
 	_section("Volver a la superficie")
-	_economy.run_gold = 41000.0 # 300 m: ya se puede
+	_economy.run_gold = 2.7e6 # ~451 m: ya se puede
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
 	_button("RelicsButton").pressed.emit()

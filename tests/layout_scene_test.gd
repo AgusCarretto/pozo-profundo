@@ -318,7 +318,7 @@ func _test_side_buttons(packed: PackedScene) -> void:
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
 	_check(relics_badge.visible and _card_texts(relics_button).has("3"), "con reliquias, cuántas (%s)" % str(_card_texts(relics_button)))
-	_economy.run_gold = 41000.0 # 300 m: se puede volver
+	_economy.run_gold = 2.7e6 # ~451 m: se puede volver
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
 	_check(_card_texts(relics_button).has("!"), "y un ! cuando ya podés volver a la superficie (%s)" % str(_card_texts(relics_button)))
@@ -368,10 +368,10 @@ func _test_hud(packed: PackedScene) -> void:
 	_check(_label_in(scene, "DepthLabel").text.contains("75 m"), "y la profundidad dice 75 m (%s)" % _label_in(scene, "DepthLabel").text)
 
 	_economy.run_gold = 700.0 # Roca x1.5
-	_economy.relics = 2 # +50%
+	_economy.relics = 2 # +30%
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
-	_check_eq(_label_in(scene, "MultLabel").text, "×2.25", "bioma ×1.5 por reliquias ×1.5 = ×2.25 (%s)" % _label_in(scene, "MultLabel").text)
+	_check_eq(_label_in(scene, "MultLabel").text, "×1.69", "bioma ×1.3 por reliquias ×1.3 = ×1.69 (%s)" % _label_in(scene, "MultLabel").text)
 	next_text = _label_in(scene, "NextBiomeLabel").text
 	_check(next_text.contains("Cristal") and next_text.contains("300"), "en Roca, el próximo es Cristal a los 300 m (%s)" % next_text)
 	_check(bar.value < 0.05, "la barra vuelve a casi vacía al cruzar a Roca (%.3f)" % bar.value)
@@ -695,7 +695,7 @@ func _test_relics_page(packed: PackedScene) -> void:
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
 	_check(row.get_child_count() <= 8, "con 40 no se desborda la fila (%d runas)" % row.get_child_count())
-	_check_eq(_label_in(scene, "RelicsLabel").text, "Reliquias: 40 · +1000% de oro", "y el contador dice la cantidad real (%s)" % _label_in(scene, "RelicsLabel").text)
+	_check_eq(_label_in(scene, "RelicsLabel").text, "Reliquias: 40 · +600% de oro", "y el contador dice la cantidad real (%s)" % _label_in(scene, "RelicsLabel").text)
 	var panel: Control = _node(scene, "RelicsPanel").find_children("*", "PanelContainer", true, false)[0] as Control
 	_check(Rect2(Vector2.ZERO, PHONE_SIZES[0]).encloses(panel.get_global_rect()), "el cartel entra en la pantalla (%s)" % str(panel.get_global_rect()))
 	_economy.reset()
@@ -794,7 +794,7 @@ func _test_button_roles(packed: PackedScene) -> void:
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
 	_check(not _pick_card(scene).disabled and _price_color(_pick_card(scene)) == "green", "con oro para el pico, verde")
-	_economy.run_gold = 41000.0 # 300 m: se puede volver a la superficie
+	_economy.run_gold = 2.7e6 # ~451 m: se puede volver a la superficie
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
 	_check(not _node(scene, "PrestigeButton").disabled and _style_name(_node(scene, "PrestigeButton") as Button) == "red", "el prestigio disponible es rojo")

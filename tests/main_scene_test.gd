@@ -219,7 +219,7 @@ func _test_pick_upgrade() -> void:
 	_button("PickButton").pressed.emit()
 	_check_eq(_economy.pick_level, 1, "apretar sube el pico a nivel 1")
 	await process_frame
-	_check(_price(_button("PickButton")).contains("300"), "ahora muestra el precio del siguiente nivel (300)")
+	_check(_price(_button("PickButton")).contains("400"), "ahora muestra el precio del siguiente nivel (400)")
 	_button("TapButton").button_down.emit()
 	_check_eq(_economy.gold, 2.0, "y un golpe ahora vale 2")
 
@@ -241,7 +241,7 @@ func _test_depth_label() -> void:
 	var text: String = _label("DepthLabel").text
 	_check(text.contains("153 m"), "con 700 de oro ganado: 153 m (%s)" % text)
 	_check(text.contains("Roca"), "bioma Roca")
-	_check(text.contains("×1.50"), "con su multiplicador ×1.50")
+	_check(text.contains("×1.30"), "con su multiplicador ×1.30")
 	await _set_run_gold(1.8e8)
 	_check(_label("DepthLabel").text.contains("Abismo"), "con 1.8e8 de oro ganado: Abismo (%s)" % _label("DepthLabel").text)
 	_economy.reset()
@@ -253,22 +253,22 @@ func _test_prestige_flow() -> void:
 	await _set_gold(0.0)
 	await _set_run_gold(600.0)
 	_check(button.disabled, "a ~148 m el botón está deshabilitado")
-	_check(button.text.contains("300 m"), "y dice desde cuándo se puede (%s)" % button.text.replace("\n", " | "))
+	_check(button.text.contains("450 m"), "y dice desde cuándo se puede (%s)" % button.text.replace("\n", " | "))
 	_check_eq(_label("RelicsLabel").text, "Reliquias: 0", "sin reliquias: 'Reliquias: 0' (%s)" % _label("RelicsLabel").text)
 	_check(not _modal().visible, "el cartel de confirmación está cerrado")
 
 	_economy.gold = 5000.0
 	_economy.owned[0] = 3
 	_economy.pick_level = 4
-	await _set_run_gold(41000.0)
-	_check(not button.disabled, "a 300 m el botón se habilita")
+	await _set_run_gold(2.7e6)
+	_check(not button.disabled, "a ~450 m el botón se habilita")
 	_check(button.text.contains("+2 reliquias"), "y promete 2 reliquias (%s)" % button.text.replace("\n", " | "))
-	_check(button.text.contains("+50%"), "y +50% de oro")
+	_check(button.text.contains("+30%"), "y +30% de oro")
 
 	button.pressed.emit()
 	_check(_modal().visible, "apretar abre la confirmación")
 	var body: String = _modal().body_label.text
-	_check(body.contains("2 reliquias") and body.contains("+50%"), "que dice cuánto ganás (%s)" % body.replace("\n", " | "))
+	_check(body.contains("2 reliquias") and body.contains("+30%"), "que dice cuánto ganás (%s)" % body.replace("\n", " | "))
 	_check(body.contains("oro") and body.contains("cuadrilla") and body.contains("pico") and body.contains("botín"), "y qué perdés: oro, cuadrilla, pico y bonus de botín")
 	# El juego sigue andando con el cartel abierto (la cuadrilla produce unos centavos por frame):
 	# lo que no puede pasar es que se reinicie algo.
@@ -282,7 +282,7 @@ func _test_prestige_flow() -> void:
 	_check(_economy.gold >= 5000.0 and _economy.gold < 5010.0, "con el oro intacto (%s)" % str(_economy.gold))
 	_check_eq(_economy.owned_count(0), 3, "y la cuadrilla intacta")
 	_check_eq(_economy.pick_level, 4, "y el pico intacto")
-	_check(_economy.run_gold >= 41000.0 and _economy.run_gold < 41010.0, "y la profundidad intacta (%s)" % str(_economy.run_gold))
+	_check(_economy.run_gold >= 2.7e6 and _economy.run_gold < 2.7e6 + 100.0, "y la profundidad intacta (%s)" % str(_economy.run_gold))
 
 	_economy.loot_bonus = 0.5
 	button.pressed.emit()
@@ -298,8 +298,8 @@ func _test_prestige_flow() -> void:
 	_check_eq(_economy.pick_level, 0, "pico en 0")
 	_check_eq(_economy.depth(), 0.0, "profundidad 0")
 	# El contador de reliquias sube cuando llegan volando: se espera a que termine la transición.
-	await _wait_until(func() -> bool: return _label("RelicsLabel").text.contains("+50%"), 4.0)
-	_check_eq(_label("RelicsLabel").text, "Reliquias: 2 · +50% de oro", "el cartel de reliquias se actualiza (%s)" % _label("RelicsLabel").text)
+	await _wait_until(func() -> bool: return _label("RelicsLabel").text.contains("+30%"), 4.0)
+	_check_eq(_label("RelicsLabel").text, "Reliquias: 2 · +30% de oro", "el cartel de reliquias se actualiza (%s)" % _label("RelicsLabel").text)
 	_check(_label("DepthLabel").text.contains("Tierra"), "de vuelta en Tierra")
 	_check(button.disabled, "y el botón vuelve a estar deshabilitado")
 	_economy.reset()
@@ -390,11 +390,12 @@ func _test_debug_panel_tools() -> void:
 	_check_eq(_economy.biome_name(_economy.biome_index()), "Roca", "con 1.000 ya estás en Roca (%.0f m)" % _economy.depth())
 	panel.gold_button.pressed.emit()
 	_check_eq(_economy.gold, 1000000.0, "otra vez: el oro que tenés × 1000 = 1.000.000")
-	_check_eq(_economy.can_prestige(), true, "con dos pulsaciones ya se puede volver a la superficie (%.0f m)" % _economy.depth())
+	_check_eq(_economy.can_prestige(), false, "con dos pulsaciones todavía no se puede volver (%.0f m, hacen falta 450)" % _economy.depth())
 	await process_frame
-	_check(not _button("PrestigeButton").disabled, "y el botón de prestigio se habilita")
+	_check(_button("PrestigeButton").disabled, "y el botón de prestigio sigue deshabilitado")
 	panel.gold_button.pressed.emit()
 	_check_eq(_economy.biome_name(_economy.biome_index()), "Abismo", "con tres pulsaciones llegás a Abismo (%.0f m)" % _economy.depth())
+	_check_eq(_economy.can_prestige(), true, "y ya se puede volver a la superficie")
 
 	await _set_gold(0.0)
 	_economy.owned[0] = 10 # 10 oro/s
@@ -512,7 +513,7 @@ func _test_last_loot_follows_the_state() -> void:
 	_check(label.text.contains("Épico"), "un cofre nuevo muestra su rareza (%s)" % label.text)
 	_check(label.has_theme_color_override("font_color"), "y su color")
 	# al volver a la superficie el bonus es 0 y el aviso también
-	_economy.run_gold = 41000.0
+	_economy.run_gold = 2.7e6
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
 	_check(_economy.prestige() > 0, "se vuelve a la superficie")

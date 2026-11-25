@@ -168,12 +168,12 @@ func _flying_relics() -> Array[TextureRect]:
 	return found
 
 
-## Deja todo listo para volver a la superficie con 2 reliquias (300 m), con el cartel de Reliquias abierto, y confirma.
+## Deja todo listo para volver a la superficie con 2 reliquias (~450 m), con el cartel de Reliquias abierto, y confirma.
 func _start_prestige() -> void:
 	_economy.reset()
 	_economy.gold = 5000.0
 	_economy.owned[0] = 3
-	_economy.run_gold = 41000.0
+	_economy.run_gold = 2.7e6
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
 	(_scene.get_node("%RelicsButton") as Button).pressed.emit()
@@ -207,7 +207,7 @@ func _test_prestige_whiteout() -> void:
 		max_flying = maxi(max_flying, flying.size())
 		for relic: TextureRect in flying:
 			flying_textures[relic.texture.resource_path.get_file()] = true
-		if alpha_at_reset >= 0.0 and flying.is_empty() and _flash().color.a == 0.0 and relics_label.text.contains("+50%"):
+		if alpha_at_reset >= 0.0 and flying.is_empty() and _flash().color.a == 0.0 and relics_label.text.contains("+30%"):
 			break
 	_check(alpha_at_reset >= 0.95, "la partida se reinicia con la pantalla blanca (no se ve el oro bajar a 0) (%.2f)" % alpha_at_reset)
 	var flash_color: Color = _flash().color
@@ -215,7 +215,7 @@ func _test_prestige_whiteout() -> void:
 	_check_eq(max_flying, 2, "las 2 reliquias vuelan")
 	_check(flying_textures.keys().all(func(file: String) -> bool: return file.begins_with("rune_")), "con forma de runa (%s)" % str(flying_textures.keys()))
 	_check(labels.has("Reliquias: 0") or labels.has("Reliquias: 1"), "el contador las va sumando al llegar (%s)" % str(labels.keys()))
-	_check_eq(relics_label.text, "Reliquias: 2 · +50% de oro", "y termina en el total")
+	_check_eq(relics_label.text, "Reliquias: 2 · +30% de oro", "y termina en el total")
 	_check(heard.count("relic") >= 2, "cada una suena al llegar (%d)" % heard.count("relic"))
 	_check_eq(_flash().color.a, 0.0, "la pantalla vuelve a verse")
 	_check_eq(screen_fx.mouse_filter, Control.MOUSE_FILTER_IGNORE, "y se puede tocar de nuevo")
