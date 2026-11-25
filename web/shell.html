@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, viewport-fit=cover">
+		<meta name="theme-color" content="#1a120e">
+		<title>$GODOT_PROJECT_NAME</title>
+		<!--
+			Pantalla de carga de Pozo Profundo. La usa el export Web (export_presets.cfg).
+			La fuente y la roca las copia tools/export_web.ps1 junto al index.html; sin ellas se ve igual,
+			con otra letra y sin el dibujo.
+		-->
+		<style>
+@font-face {
+	font-family: 'Pixelify';
+	src: url('PixelifySans.ttf');
+	font-display: swap;
+}
+
+html, body, #canvas {
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+body {
+	color: #f4ecd8;
+	background: #1a120e;
+	overflow: hidden;
+	touch-action: none;
+	/* Un toque largo sobre el juego no selecciona nada ni abre menús. */
+	user-select: none;
+	-webkit-user-select: none;
+	-webkit-touch-callout: none;
+	-webkit-tap-highlight-color: transparent;
+}
+
+#canvas {
+	display: block;
+}
+
+#canvas:focus {
+	outline: none;
+}
+
+#status {
+	position: absolute;
+	inset: 0;
+	box-sizing: border-box;
+	padding: 16px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 24px;
+	background: #1a120e;
+	font-family: 'Pixelify', monospace;
+	text-align: center;
+}
+
+#status h1 {
+	margin: 0;
+	font-size: clamp(28px, 11vw, 56px);
+	color: #f4c542;
+	text-shadow: 0 4px 0 #5a3f2e;
+}
+
+#rock {
+	width: 128px;
+	height: 128px;
+	image-rendering: pixelated;
+}
+
+#bar {
+	box-sizing: border-box;
+	width: min(280px, 72vw);
+	height: 24px;
+	padding: 3px;
+	border: 4px solid #f4ecd8;
+	background: #0d0907;
+}
+
+#fill {
+	width: 0;
+	height: 100%;
+	background: #f4c542;
+}
+
+#bar.indeterminate #fill {
+	width: 30%;
+	animation: slide 1.1s linear infinite alternate;
+}
+
+@keyframes slide {
+	from { margin-left: 0; }
+	to { margin-left: 70%; }
+}
+
+#percent {
+	min-height: 28px;
+	font-size: 22px;
+}
+
+#notice {
+	display: none;
+	max-width: 320px;
+	padding: 12px;
+	background: #5b3943;
+	border: 3px solid #9b3943;
+	font-size: 18px;
+	line-height: 1.35;
+}
+		</style>
+		$GODOT_HEAD_INCLUDE
+	</head>
+	<body>
+		<canvas id="canvas">Tu navegador no puede mostrar el juego.</canvas>
+
+		<noscript>Necesitás activar JavaScript para jugar.</noscript>
+
+		<div id="status">
+			<h1>$GODOT_PROJECT_NAME</h1>
+			<img id="rock" src="loading_rock.png" alt="" onerror="this.remove()">
+			<div id="bar" class="indeterminate" role="progressbar" aria-label="Cargando" aria-valuemin="0" aria-valuemax="100"><div id="fill"></div></div>
+			<div id="percent">Cargando…</div>
+			<div id="notice" role="alert"></div>
+		</div>
+
+		<script src="$GODOT_URL"></script>
+		<script>
+const GODOT_CONFIG = $GODOT_CONFIG;
+const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
+
+(function () {
+	const status = document.getElementById('status');
+	const bar = document.getElementById('bar');
+	const fill = document.getElementById('fill');
+	const percent = document.getElementById('percent');
+	const notice = document.getElementById('notice');
+
+	function fail(error) {
+		console.error(error);
+		const detail = error instanceof Error ? error.message : String(error);
+		bar.style.display = 'none';
+		percent.style.display = 'none';
+		notice.style.display = 'block';
+		notice.textContent = 'No se pudo abrir el juego. Recargá la página o probá con Chrome o Safari actualizados. (' + detail + ')';
+	}
+
+	function onProgress(current, total) {
+		if (current > 0 && total > 0) {
+			const done = Math.min(100, Math.floor((current / total) * 100));
+			bar.classList.remove('indeterminate');
+			bar.setAttribute('aria-valuenow', done);
+			fill.style.width = done + '%';
+			// Con todo descargado todavía falta compilar y arrancar: unos segundos en un celular.
+			percent.textContent = done < 100 ? 'Cargando… ' + done + '%' : 'Preparando la mina…';
+		} else {
+			bar.classList.add('indeterminate');
+			percent.textContent = 'Cargando…';
+		}
+	}
+
+	try {
+		const missing = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED });
+		if (missing.length !== 0) {
+			fail('Falta: ' + missing.join(', '));
+			return;
+		}
+		new Engine(GODOT_CONFIG).startGame({ onProgress: onProgress }).then(() => status.remove(), fail);
+	} catch (error) {
+		fail(error);
+	}
+}());
+		</script>
+	</body>
+</html>

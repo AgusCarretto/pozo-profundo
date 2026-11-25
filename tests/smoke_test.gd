@@ -14,6 +14,7 @@ var _failures: int = 0
 func _initialize() -> void:
 	_test_project_settings()
 	_test_autoloads()
+	_test_export_settings()
 	_test_core_independence()
 	await _test_main_scene()
 	# Igual que test_base._finish(): cortar el audio y esperar un ciclo de mezcla, o Godot reporta el último
@@ -55,6 +56,25 @@ func _test_autoloads() -> void:
 	print("Autoloads")
 	for autoload_name: String in ["Save", "Settings", "Audio", "Economy", "Analytics"]:
 		_check(root.get_node_or_null(autoload_name) != null, "autoload %s presente" % autoload_name)
+
+
+## Lo que hace falta para publicar en la web (F4): versión, preset de export y pantalla de carga propia.
+func _test_export_settings() -> void:
+	print("Export web")
+	_check(ProjectSettings.get_setting("application/config/version", "") == "0.4.0", "versión = 0.4.0")
+	_check(ProjectSettings.get_setting("application/boot_splash/show_image", true) == false, "sin el logo de Godot al arrancar")
+	var preset: ConfigFile = ConfigFile.new()
+	_check(preset.load("res://export_presets.cfg") == OK, "se lee export_presets.cfg")
+	var excluded: PackedStringArray = str(preset.get_value("preset.0", "exclude_filter", "")).split(",")
+	for pattern: String in ["tests/*", "docs/*", "tools/*", "build/*", "data/online.example.json"]:
+		_check(excluded.has(pattern), "el export no lleva %s" % pattern)
+	var included: PackedStringArray = str(preset.get_value("preset.0", "include_filter", "")).split(",")
+	_check(included.has("assets/fonts/OFL.txt"), "el export lleva la licencia de la fuente")
+	var shell: String = str(preset.get_value("preset.0.options", "html/custom_html_shell", ""))
+	_check(shell == "res://web/shell.html", "usa la pantalla de carga propia")
+	var html: String = FileAccess.get_file_as_string("res://web/shell.html") if FileAccess.file_exists("res://web/shell.html") else ""
+	for piece: String in ["$GODOT_URL", "$GODOT_CONFIG", "$GODOT_PROJECT_NAME", "$GODOT_HEAD_INCLUDE", "onProgress"]:
+		_check(html.contains(piece), "la pantalla de carga tiene %s" % piece)
 
 
 ## Regla del CLAUDE.md: lo de core/ no puede depender de nada de game/.
