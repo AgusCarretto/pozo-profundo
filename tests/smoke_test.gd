@@ -21,7 +21,8 @@ func _initialize() -> void:
 	var audio: Node = root.get_node_or_null("Audio")
 	if audio != null and audio.has_method("silence"):
 		audio.call("silence")
-		await create_timer(0.1).timeout
+		# Un OGG que sonaba tarda más de 0,1 s en soltarse. (Los tests lentos ya devolvieron Engine.time_scale a 1.)
+		await create_timer(0.3).timeout
 	print("")
 	if _failures == 0:
 		print("OK: todos los checks pasaron")

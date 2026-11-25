@@ -112,5 +112,14 @@
 			"volume_db": -2
 		}
 	},
-	"music": {}
+	"music": {
+		"earth": { "file": "res://assets/music/town_theme.ogg", "loop_offset": 14.15 },
+		"rock": "res://assets/music/level_1.ogg",
+		"crystal": { "file": "res://assets/music/crystal_cave.ogg", "loop_offset": 0.35 },
+		"magma": "res://assets/music/level_2.ogg",
+		"abyss": "res://assets/music/level_2.ogg",
+		"frenzy": { "file": "res://assets/music/fast_fight.ogg", "loop_offset": 0.22984127 },
+		"prestige": { "file": "res://assets/music/ending.ogg", "loop": false },
+		"options": "res://assets/music/title_screen.ogg"
+	}
 }

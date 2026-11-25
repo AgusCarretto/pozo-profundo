@@ -31,6 +31,8 @@ func _initialize() -> void:
 	await _test_silence()
 	await _test_volumes_follow_settings()
 	await _test_music_crossfade()
+	_test_music_entries()
+	await _test_music_resume()
 	await process_frame
 	_test_real_autoload()
 	for node: Node in _nodes:
@@ -296,6 +298,86 @@ func _test_music_crossfade() -> void:
 	audio.stop_music(FADE)
 	await create_timer(FADE * 3.0).timeout
 	_check(not first.playing and not second.playing, "stop_music la apaga con fundido")
+	_drop(audio)
+
+
+## Un tema del catálogo puede ser solo la ruta (loopea entero) o {file, loop, loop_offset}: loop_offset es el segundo
+## al que vuelve al terminar (lo que está antes es la intro y suena una sola vez). Se prueba con un OGG de verdad
+## (los WAV no tienen loop_offset).
+func _test_music_entries() -> void:
+	_section("Temas con intro: loop y punto de loop")
+	var ogg: String = "res://assets/music/title_screen.ogg"
+	var audio: AudioScript = _make_audio()
+	var catalog: Dictionary = _catalog()
+	catalog["music"] = {
+		"plain": ogg,
+		"intro": { "file": "res://assets/music/fast_fight.ogg", "loop_offset": 0.25 },
+		"once": { "file": "res://assets/music/ending.ogg", "loop": false },
+	}
+	_check(audio.load_catalog(catalog), "acepta temas como ruta o como {file, loop, loop_offset} (%s)" % audio.last_error)
+	var plain: AudioStreamOggVorbis = load(ogg) as AudioStreamOggVorbis
+	var intro: AudioStreamOggVorbis = load("res://assets/music/fast_fight.ogg") as AudioStreamOggVorbis
+	var once: AudioStreamOggVorbis = load("res://assets/music/ending.ogg") as AudioStreamOggVorbis
+	_check(plain.loop and plain.loop_offset == 0.0, "un tema que es solo la ruta loopea entero")
+	_check(intro.loop and is_equal_approx(intro.loop_offset, 0.25), "con loop_offset vuelve a ese segundo (%.3f)" % intro.loop_offset)
+	_check(not once.loop, "con loop: false suena una vez")
+	var bad: Array[Dictionary] = [
+		{ "music": { "a": { "loop_offset": 1.0 } } },
+		{ "music": { "a": { "file": ogg, "loop_offset": -1.0 } } },
+		{ "music": { "a": { "file": ogg, "loop_offset": 999.0 } } },
+		{ "music": { "a": { "file": ogg, "loop": "sí" } } },
+		{ "music": { "a": { "file": _song_a, "loop_offset": 1.0 } } },
+		{ "music": { "a": { "file": ogg, "loop_offset": 1.0 }, "b": { "file": ogg, "loop_offset": 2.0 } } },
+		{ "music": { "a": 5 } },
+	]
+	var reasons: Array[String] = [
+		"un tema sin archivo", "un punto de loop negativo", "un punto de loop después del final", "un loop que no es sí/no",
+		"un punto de loop en un sonido que no lo soporta (WAV)", "el mismo archivo con dos puntos de loop distintos",
+		"un tema que no es ruta ni diccionario",
+	]
+	for index: int in range(bad.size()):
+		_check(not audio.load_catalog(bad[index]), "rechaza %s" % reasons[index])
+		_check(audio.last_error != "", "y dice por qué (%s)" % audio.last_error)
+	_check(is_equal_approx(intro.loop_offset, 0.25), "un catálogo rechazado no toca los temas cargados")
+	_check(audio.load_catalog({ "music": { "a": ogg, "b": ogg } }), "dos temas pueden usar el mismo archivo (Magma y Abismo)")
+	_drop(audio)
+
+
+## Volver a un tema que ya sonó lo retoma donde quedó (salir del frenesí no reinicia el tema del bioma), salvo que
+## se pida desde el principio.
+func _test_music_resume() -> void:
+	_section("Música: volver a un tema lo retoma")
+	var audio: AudioScript = _make_audio()
+	_check(audio.play_music("earth", 0.0), "suena Tierra")
+	_check_eq(audio.current_music_id(), "earth", "y lo dice current_music_id")
+	await create_timer(0.5).timeout
+	var left_at: float = audio.current_music_player().get_playback_position()
+	_check(left_at > 0.3, "avanza (%.2f s)" % left_at)
+	audio.play_music("rock", FADE)
+	_check_eq(audio.current_music_id(), "rock", "cambia a Roca")
+	await create_timer(FADE * 3.0).timeout
+	audio.play_music("earth", FADE)
+	var position: float = audio.current_music_player().get_playback_position()
+	_check(position >= left_at - 0.05, "volver a Tierra la retoma donde quedó (%.2f s; había quedado en %.2f s)" % [position, left_at])
+	await create_timer(FADE * 3.0).timeout
+	audio.play_music("rock", FADE)
+	await create_timer(FADE * 0.5).timeout
+	# A mitad del fundido (Tierra todavía suena, bajando) se vuelve a Tierra: sigue el mismo reproductor, sin saltar.
+	var fading: AudioStreamPlayer = null
+	for player: AudioStreamPlayer in [audio.get_node("Music0"), audio.get_node("Music1")]:
+		if player.playing and player.stream.resource_path == _song_a:
+			fading = player
+	_check(fading != null, "a mitad del fundido Tierra sigue sonando")
+	var fading_at: float = fading.get_playback_position() if fading != null else 0.0
+	audio.play_music("earth", FADE)
+	_check(audio.current_music_player() == fading and fading.get_playback_position() >= fading_at, "volver a mitad del fundido sigue desde ahí, sin cortar")
+	await create_timer(FADE * 3.0).timeout
+	_check_near(audio.current_music_player().volume_linear, 1.0, "y sube a volumen completo", 1e-3)
+	audio.play_music("rock", 0.0)
+	audio.play_music("earth", 0.0, true)
+	_check(audio.current_music_player().get_playback_position() < 0.1, "con from_start arranca de cero (%.2f s)" % audio.current_music_player().get_playback_position())
+	audio.stop_music(0.0)
+	_check_eq(audio.current_music_id(), "", "sin música, current_music_id es \"\"")
 	_drop(audio)
 
 

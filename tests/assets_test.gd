@@ -474,7 +474,7 @@ func _test_credits() -> void:
 		if not ok:
 			uncovered.append(relative)
 	_check(uncovered.is_empty(), "todo archivo de assets/ está bajo una ruta de CREDITS.md (sin crédito: %s)" % str(uncovered))
-	for needle: String in ["Kenney", "CC0", "Pixelify Sans", "OFL", "Open Font License", "kenney.nl/assets/tiny-dungeon", "kenney.nl/assets/ui-pack"]:
+	for needle: String in ["Kenney", "CC0", "Pixelify Sans", "OFL", "Open Font License", "kenney.nl/assets/tiny-dungeon", "kenney.nl/assets/ui-pack", "pixelsphere.org", "The Cynic Project", "soundcloud.com/mutkanto", "Ville Nousiainen", "Juhani Junkala"]:
 		_check(credits.contains(needle), "CREDITS.md menciona '%s'" % needle)
 
 

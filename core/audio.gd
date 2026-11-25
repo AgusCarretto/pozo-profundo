@@ -5,15 +5,20 @@ extends Node
 ## Qué suena con cada evento lo dice un catálogo en datos (res://data/sounds.json), no el código:
 ##   {
 ##     "sfx":   { "<id>": { "files": ["res://...ogg", ...], "pitch": [0.9, 1.1], "volume_db": -2 } },
-##     "music": { "<id>": "res://...ogg" }
+##     "music": { "<id>": "res://...ogg"  o  { "file": "res://...ogg", "loop": true, "loop_offset": 12.5 } }
 ##   }
 ## `pitch` y `volume_db` son opcionales (1 y 0 dB). Cada play_sfx() elige una variante al azar (nunca la
 ## misma dos veces seguidas) y un tono dentro del rango: así cien golpes no suenan como uno repetido.
 ## Hay SFX_VOICES reproductores para los SFX; si están todos sonando se corta el más viejo.
 ##
+## Un tema loopea salvo `"loop": false`. `loop_offset` (segundos, solo OGG/MP3) es adonde vuelve al terminar: lo de
+## antes es la intro y suena una sola vez. Se aplica al recurso cargado, así que dos temas pueden compartir archivo
+## (y entonces pasar de uno al otro no lo reinicia) pero no con loops distintos.
+##
 ## La música suena en el bus "Music" y los SFX en "SFX" (los dos mandan a Master); Audio los crea si no
 ## existen. Los volúmenes y el silencio vienen de Settings (que va antes en los autoloads) y se aplican a
-## los buses cada vez que cambian. play_music() cambia de tema con un fundido cruzado.
+## los buses cada vez que cambian. play_music() cambia de tema con un fundido cruzado y retoma un tema que ya
+## sonó donde había quedado (salvo que se pida desde el principio).
 
 ## Sonó el SFX `id` (no se emite si no sonó: id desconocido, silencio o volumen 0).
 signal sfx_played(id: String)
@@ -45,6 +50,10 @@ var last_error: String = ""
 var _sfx: Dictionary = {}
 ## id -> AudioStream
 var _music: Dictionary = {}
+## AudioStream -> segundo en el que quedó la última vez que dejó de sonar (para retomarlo).
+var _music_positions: Dictionary = {}
+## Id del catálogo del tema que suena ("" = ninguno o un stream suelto).
+var _current_music_id: String = ""
 ## id -> índice de la última variante que sonó (para no repetirla).
 var _last_variant: Dictionary = {}
 ## Reproductores de SFX, del que se usó hace más tiempo al más reciente.
@@ -67,7 +76,9 @@ func _ready() -> void:
 	for index: int in range(SFX_VOICES):
 		_voices.append(_make_player("Sfx%d" % index, SFX_BUS))
 	for index: int in range(2):
-		_music_players.append(_make_player("Music%d" % index, MUSIC_BUS))
+		var player: AudioStreamPlayer = _make_player("Music%d" % index, MUSIC_BUS)
+		player.finished.connect(_on_music_finished.bind(player))
+		_music_players.append(player)
 	if settings == null:
 		settings = get_node_or_null("/root/Settings") as SettingsScript
 	if settings != null:
@@ -89,6 +100,8 @@ func _exit_tree() -> void:
 func silence() -> void:
 	_kill_music_tween()
 	_current_music = -1
+	_current_music_id = ""
+	_music_positions.clear()
 	for player: AudioStreamPlayer in _voices + _music_players:
 		player.stop()
 		player.stream = null
@@ -121,11 +134,23 @@ func load_catalog(catalog: Dictionary) -> bool:
 	var raw_music: Variant = catalog.get("music", {})
 	if not (raw_music is Dictionary):
 		return _fail("'music' tiene que ser un diccionario")
+	# AudioStream -> {loop, loop_offset} que le toca (se aplica recién cuando todo el catálogo es válido).
+	var loops: Dictionary = {}
 	for id: Variant in raw_music:
-		var stream: AudioStream = _load_stream(raw_music[id], "el tema '%s'" % id)
-		if stream == null:
+		var entry: Variant = _read_music(str(id), raw_music[id])
+		if entry == null:
 			return false
+		var stream: AudioStream = entry["stream"]
+		var settings_here: Dictionary = { "loop": entry["loop"], "loop_offset": entry["loop_offset"] }
+		if loops.has(stream) and loops[stream] != settings_here:
+			return _fail("el tema '%s' usa el mismo archivo que otro con otro loop (%s)" % [id, stream.resource_path])
+		loops[stream] = settings_here
 		music[str(id)] = stream
+	for stream: AudioStream in loops:
+		if "loop" in stream:
+			stream.set("loop", loops[stream]["loop"])
+		if "loop_offset" in stream:
+			stream.set("loop_offset", loops[stream]["loop_offset"])
 	_sfx = sfx
 	_music = music
 	_last_variant.clear()
@@ -195,42 +220,51 @@ func _take_voice() -> AudioStreamPlayer:
 # --- Música ------------------------------------------------------------------
 
 ## Cambia al tema `id` del catálogo con un fundido cruzado de `fade` segundos. Si ya está sonando no lo
-## reinicia. Devuelve false (y no cambia nada) si el tema no está en el catálogo.
-func play_music(id: String, fade: float = DEFAULT_MUSIC_FADE) -> bool:
+## reinicia. Si ya sonó antes, lo retoma donde quedó, salvo con `from_start`. Devuelve false (y no cambia
+## nada) si el tema no está en el catálogo.
+func play_music(id: String, fade: float = DEFAULT_MUSIC_FADE, from_start: bool = false) -> bool:
 	if not _music.has(id):
 		return false
-	play_music_stream(_music[id], fade)
+	play_music_stream(_music[id], fade, from_start)
+	_current_music_id = id
 	return true
 
 
-func play_music_stream(stream: AudioStream, fade: float = DEFAULT_MUSIC_FADE) -> void:
+func play_music_stream(stream: AudioStream, fade: float = DEFAULT_MUSIC_FADE, from_start: bool = false) -> void:
 	if _music_players.is_empty() or stream == null:
 		return
+	_current_music_id = ""
 	var current: AudioStreamPlayer = current_music_player()
-	if current != null and current.stream == stream and current.playing:
+	if current != null and current.stream == stream and current.playing and not from_start:
 		return
 	var next_index: int = 0 if _current_music != 0 else 1
 	var next: AudioStreamPlayer = _music_players[next_index]
 	_kill_music_tween()
-	next.stream = stream
-	next.volume_linear = 0.0 if fade > 0.0 else 1.0
-	next.play()
+	# Si el otro reproductor todavía suena este mismo tema (se estaba yendo en un fundido), sigue desde ahí.
+	if not (next.playing and next.stream == stream and not from_start):
+		_remember_position(next)
+		next.stop()
+		next.stream = stream
+		next.volume_linear = 0.0 if fade > 0.0 else 1.0
+		next.play(0.0 if from_start else _resume_position(stream))
 	_current_music = next_index
 	if fade <= 0.0:
+		next.volume_linear = 1.0
 		if current != null:
-			current.stop()
+			_stop_player(current)
 		return
 	_music_tween = create_tween().set_parallel(true)
 	_music_tween.tween_property(next, "volume_linear", 1.0, fade)
 	if current != null:
 		_music_tween.tween_property(current, "volume_linear", 0.0, fade)
-		_music_tween.chain().tween_callback(current.stop)
+		_music_tween.chain().tween_callback(_stop_player.bind(current))
 
 
 ## Apaga la música con un fundido de `fade` segundos.
 func stop_music(fade: float = DEFAULT_MUSIC_FADE) -> void:
 	_kill_music_tween()
 	_current_music = -1
+	_current_music_id = ""
 	var playing: Array[AudioStreamPlayer] = []
 	for player: AudioStreamPlayer in _music_players:
 		if player.playing:
@@ -239,14 +273,41 @@ func stop_music(fade: float = DEFAULT_MUSIC_FADE) -> void:
 		return
 	if fade <= 0.0:
 		for player: AudioStreamPlayer in playing:
-			player.stop()
+			_stop_player(player)
 		return
 	_music_tween = create_tween().set_parallel(true)
 	for player: AudioStreamPlayer in playing:
 		_music_tween.tween_property(player, "volume_linear", 0.0, fade)
 	_music_tween.chain().tween_callback(func() -> void:
 		for player: AudioStreamPlayer in playing:
-			player.stop())
+			_stop_player(player))
+
+
+## El id del catálogo del tema que suena (o al que se está entrando); "" si no hay música.
+func current_music_id() -> String:
+	return _current_music_id if current_music_player() != null else ""
+
+
+func _stop_player(player: AudioStreamPlayer) -> void:
+	_remember_position(player)
+	player.stop()
+
+
+## Anota dónde quedó el tema de `player` para retomarlo (si está sonando: uno parado ya lo anotó al pararse).
+func _remember_position(player: AudioStreamPlayer) -> void:
+	if player.stream != null and player.playing:
+		_music_positions[player.stream] = player.get_playback_position()
+
+
+## Un tema que no loopea y terminó solo la próxima vez vuelve a empezar.
+func _on_music_finished(player: AudioStreamPlayer) -> void:
+	if player.stream != null:
+		_music_positions.erase(player.stream)
+
+
+func _resume_position(stream: AudioStream) -> float:
+	var position: float = _music_positions.get(stream, 0.0)
+	return position if position < stream.get_length() else 0.0
 
 
 ## El reproductor del tema actual (o al que se está entrando); null si no hay música.
@@ -332,6 +393,27 @@ func _read_sfx(id: String, raw: Variant) -> Variant:
 		if volume_db < VOLUME_DB_LIMITS.x or volume_db > VOLUME_DB_LIMITS.y:
 			return _fail_null("el SFX '%s': 'volume_db' va de %d a %d" % [id, VOLUME_DB_LIMITS.x, VOLUME_DB_LIMITS.y])
 	return { "streams": streams, "pitch_min": pitch_min, "pitch_max": pitch_max, "volume_db": volume_db }
+
+
+## Un tema del catálogo: la ruta sola o {file, loop, loop_offset}. Devuelve {stream, loop, loop_offset} o null.
+func _read_music(id: String, raw: Variant) -> Variant:
+	var entry: Dictionary = { "file": raw } if raw is String else (raw if raw is Dictionary else {})
+	if not (raw is String or raw is Dictionary):
+		return _fail_null("el tema '%s' tiene que ser una ruta o un diccionario" % id)
+	if not entry.has("file"):
+		return _fail_null("el tema '%s' necesita 'file'" % id)
+	var stream: AudioStream = _load_stream(entry["file"], "el tema '%s'" % id)
+	if stream == null:
+		return null
+	var loop: Variant = entry.get("loop", true)
+	if not (loop is bool):
+		return _fail_null("el tema '%s': 'loop' tiene que ser true o false" % id)
+	var offset: Variant = entry.get("loop_offset", 0.0)
+	if not _is_number(offset) or float(offset) < 0.0 or float(offset) >= stream.get_length():
+		return _fail_null("el tema '%s': 'loop_offset' va de 0 a lo que dura (%.2f s)" % [id, stream.get_length()])
+	if float(offset) > 0.0 and not ("loop_offset" in stream):
+		return _fail_null("el tema '%s': 'loop_offset' solo sirve en OGG o MP3 (%s)" % [id, stream.resource_path])
+	return { "stream": stream, "loop": loop, "loop_offset": float(offset) }
 
 
 ## Carga `path` como AudioStream; null (y last_error) si no es una ruta a un sonido que existe.
