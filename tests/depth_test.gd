@@ -282,4 +282,4 @@ func _test_real_balance_file() -> void:
 	_check_near(e.depth(), 25.0, "con el balance real: 10 de oro ganado -> 25 m")
 	e.run_gold = 1.8e8
 	_check_eq(e.biome_name(e.biome_index()), "Abismo", "con 1.8e8 de oro ganado se llega a Abismo")
-	_check_near(e.multiplier, 2.8561, "y el multiplicador es x1.3^4 = x2.8561")
+	_check_near(e.multiplier, 5.0625, "y el multiplicador es x1.5^4 = x5.0625")

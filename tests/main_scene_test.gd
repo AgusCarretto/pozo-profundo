@@ -177,14 +177,14 @@ func _test_tap_hits_the_rock() -> void:
 
 func _test_buying_a_generator() -> void:
 	_section("Compra de un generador")
-	await _set_gold(14.0)
-	_check(_row_button(0).disabled, "con 14 no se puede comprar el Minero (cuesta 15)")
-	await _set_gold(15.0)
-	_check(not _row_button(0).disabled, "con 15 la tarjeta del Minero se habilita")
-	_check_eq(_price(_row_button(0)), "15", "la tarjeta muestra el precio")
+	await _set_gold(24.0)
+	_check(_row_button(0).disabled, "con 24 no se puede comprar el Minero (cuesta 25)")
+	await _set_gold(25.0)
+	_check(not _row_button(0).disabled, "con 25 la tarjeta del Minero se habilita")
+	_check_eq(_price(_row_button(0)), "25", "la tarjeta muestra el precio")
 	_row_button(0).pressed.emit()
 	_check_eq(_economy.owned_count(0), 1, "tocar la tarjeta compra 1 Minero")
-	_check_eq(_economy.gold, 0.0, "y gasta 15")
+	_check_eq(_economy.gold, 0.0, "y gasta 25")
 	await process_frame
 	_check_eq(_label("GoldLabel").text, "0", "el oro en pantalla baja a 0")
 	_check(_card_text(_row_button(0)).contains("×1"), "la tarjeta muestra ×1 (%s)" % _card_text(_row_button(0)))
@@ -211,15 +211,15 @@ func _test_buy_modes() -> void:
 
 func _test_pick_upgrade() -> void:
 	_section("Mejora del pico")
-	await _set_gold(49.0)
-	_check(_button("PickButton").disabled, "con 49 no se puede mejorar (cuesta 50)")
-	await _set_gold(50.0)
-	_check(not _button("PickButton").disabled, "con 50 se habilita")
-	_check(_price(_button("PickButton")).contains("50"), "muestra el precio (%s)" % _price(_button("PickButton")))
+	await _set_gold(149.0)
+	_check(_button("PickButton").disabled, "con 149 no se puede mejorar (cuesta 150)")
+	await _set_gold(150.0)
+	_check(not _button("PickButton").disabled, "con 150 se habilita")
+	_check(_price(_button("PickButton")).contains("150"), "muestra el precio (%s)" % _price(_button("PickButton")))
 	_button("PickButton").pressed.emit()
 	_check_eq(_economy.pick_level, 1, "apretar sube el pico a nivel 1")
 	await process_frame
-	_check(_price(_button("PickButton")).contains("400"), "ahora muestra el precio del siguiente nivel (400)")
+	_check(_price(_button("PickButton")).contains("1.80K"), "ahora muestra el precio del siguiente nivel (1.80K)")
 	_button("TapButton").button_down.emit()
 	_check_eq(_economy.gold, 2.0, "y un golpe ahora vale 2")
 
@@ -241,7 +241,7 @@ func _test_depth_label() -> void:
 	var text: String = _label("DepthLabel").text
 	_check(text.contains("153 m"), "con 700 de oro ganado: 153 m (%s)" % text)
 	_check(text.contains("Roca"), "bioma Roca")
-	_check(text.contains("×1.30"), "con su multiplicador ×1.30")
+	_check(text.contains("×1.50"), "con su multiplicador ×1.50")
 	await _set_run_gold(1.8e8)
 	_check(_label("DepthLabel").text.contains("Abismo"), "con 1.8e8 de oro ganado: Abismo (%s)" % _label("DepthLabel").text)
 	_economy.reset()
@@ -263,12 +263,12 @@ func _test_prestige_flow() -> void:
 	await _set_run_gold(2.7e6)
 	_check(not button.disabled, "a ~450 m el botón se habilita")
 	_check(button.text.contains("+2 reliquias"), "y promete 2 reliquias (%s)" % button.text.replace("\n", " | "))
-	_check(button.text.contains("+30%"), "y +30% de oro")
+	_check(button.text.contains("+50%"), "y +50% de oro")
 
 	button.pressed.emit()
 	_check(_modal().visible, "apretar abre la confirmación")
 	var body: String = _modal().body_label.text
-	_check(body.contains("2 reliquias") and body.contains("+30%"), "que dice cuánto ganás (%s)" % body.replace("\n", " | "))
+	_check(body.contains("2 reliquias") and body.contains("+50%"), "que dice cuánto ganás (%s)" % body.replace("\n", " | "))
 	_check(body.contains("oro") and body.contains("cuadrilla") and body.contains("pico") and body.contains("botín"), "y qué perdés: oro, cuadrilla, pico y bonus de botín")
 	# El juego sigue andando con el cartel abierto (la cuadrilla produce unos centavos por frame):
 	# lo que no puede pasar es que se reinicie algo.
@@ -298,8 +298,8 @@ func _test_prestige_flow() -> void:
 	_check_eq(_economy.pick_level, 0, "pico en 0")
 	_check_eq(_economy.depth(), 0.0, "profundidad 0")
 	# El contador de reliquias sube cuando llegan volando: se espera a que termine la transición.
-	await _wait_until(func() -> bool: return _label("RelicsLabel").text.contains("+30%"), 4.0)
-	_check_eq(_label("RelicsLabel").text, "Reliquias: 2 · +30% de oro", "el cartel de reliquias se actualiza (%s)" % _label("RelicsLabel").text)
+	await _wait_until(func() -> bool: return _label("RelicsLabel").text.contains("+50%"), 4.0)
+	_check_eq(_label("RelicsLabel").text, "Reliquias: 2 · +50% de oro", "el cartel de reliquias se actualiza (%s)" % _label("RelicsLabel").text)
 	_check(_label("DepthLabel").text.contains("Tierra"), "de vuelta en Tierra")
 	_check(button.disabled, "y el botón vuelve a estar deshabilitado")
 	_economy.reset()

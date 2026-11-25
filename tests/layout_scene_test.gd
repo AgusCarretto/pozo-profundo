@@ -368,10 +368,10 @@ func _test_hud(packed: PackedScene) -> void:
 	_check(_label_in(scene, "DepthLabel").text.contains("75 m"), "y la profundidad dice 75 m (%s)" % _label_in(scene, "DepthLabel").text)
 
 	_economy.run_gold = 700.0 # Roca x1.5
-	_economy.relics = 2 # +30%
+	_economy.relics = 2 # +50%
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
-	_check_eq(_label_in(scene, "MultLabel").text, "×1.69", "bioma ×1.3 por reliquias ×1.3 = ×1.69 (%s)" % _label_in(scene, "MultLabel").text)
+	_check_eq(_label_in(scene, "MultLabel").text, "×2.25", "bioma ×1.5 por reliquias ×1.5 = ×2.25 (%s)" % _label_in(scene, "MultLabel").text)
 	next_text = _label_in(scene, "NextBiomeLabel").text
 	_check(next_text.contains("Cristal") and next_text.contains("300"), "en Roca, el próximo es Cristal a los 300 m (%s)" % next_text)
 	_check(bar.value < 0.05, "la barra vuelve a casi vacía al cruzar a Roca (%.3f)" % bar.value)
@@ -695,7 +695,7 @@ func _test_relics_page(packed: PackedScene) -> void:
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
 	_check(row.get_child_count() <= 8, "con 40 no se desborda la fila (%d runas)" % row.get_child_count())
-	_check_eq(_label_in(scene, "RelicsLabel").text, "Reliquias: 40 · +600% de oro", "y el contador dice la cantidad real (%s)" % _label_in(scene, "RelicsLabel").text)
+	_check_eq(_label_in(scene, "RelicsLabel").text, "Reliquias: 40 · +1000% de oro", "y el contador dice la cantidad real (%s)" % _label_in(scene, "RelicsLabel").text)
 	var panel: Control = _node(scene, "RelicsPanel").find_children("*", "PanelContainer", true, false)[0] as Control
 	_check(Rect2(Vector2.ZERO, PHONE_SIZES[0]).encloses(panel.get_global_rect()), "el cartel entra en la pantalla (%s)" % str(panel.get_global_rect()))
 	_economy.reset()
@@ -752,13 +752,13 @@ func _test_shop_grid(packed: PackedScene) -> void:
 
 	var scene: Control = await _mount_host(packed, PHONE_SIZES[0])
 	_economy.reset()
-	_economy.gold = 60.0
+	_economy.gold = 160.0
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
 	var pick: Button = _pick_card(scene)
 	var texts: Array[String] = _card_texts(pick)
 	_check(texts.size() == 3 and texts[0].contains("Pico") and texts[0].contains("0"), "el pico: nombre y nivel (%s)" % str(texts))
-	_check(texts.size() == 3 and texts[1].contains("Golpe") and texts[2].contains("50"), "lo que pega y el precio")
+	_check(texts.size() == 3 and texts[1].contains("Golpe") and texts[2].contains("150"), "lo que pega y el precio")
 	var icons: Array[Node] = pick.find_children("*", "TextureRect", true, false)
 	_check(icons.size() == 1 and (icons[0] as TextureRect).texture.resource_path.ends_with("pick.png"), "con el icono del pico")
 	_check_eq((icons[0] as TextureRect).texture_filter, CanvasItem.TEXTURE_FILTER_NEAREST, "pixel art nítido")
@@ -781,7 +781,7 @@ func _test_button_roles(packed: PackedScene) -> void:
 	_section("Colores: un rol por color")
 	var scene: Control = await _mount_host(packed, PHONE_SIZES[0])
 	_economy.reset()
-	_economy.gold = 20.0 # alcanza el Minero (15), no el Taladro (120) ni el pico (50)
+	_economy.gold = 30.0 # alcanza el Minero (25), no el Taladro (600) ni el pico (150)
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
 	var buy_first: Button = _card(scene, 0)
@@ -790,7 +790,7 @@ func _test_button_roles(packed: PackedScene) -> void:
 	_check(buy_second.disabled and _price_color(buy_second) == "grey", "lo que no alcanza: gris (%s)" % _price_color(buy_second))
 	_check(_pick_card(scene).disabled and _price_color(_pick_card(scene)) == "grey", "el pico sin oro suficiente, gris")
 	_check(_node(scene, "PrestigeButton").disabled and _style_name(_node(scene, "PrestigeButton") as Button) == "grey", "y el prestigio todavía no disponible también")
-	_economy.gold = 60.0
+	_economy.gold = 160.0
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
 	_check(not _pick_card(scene).disabled and _price_color(_pick_card(scene)) == "green", "con oro para el pico, verde")

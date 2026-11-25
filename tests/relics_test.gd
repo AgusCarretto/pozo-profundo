@@ -310,10 +310,10 @@ func _test_real_balance_file() -> void:
 	_nodes.append(e)
 	_check_eq(e.load_balance_file("res://data/balance.json"), true, "carga el balance real (%s)" % e.last_error)
 	_check_eq(e.prestige_min_depth(), 450.0, "desde los 450 m")
-	_check_eq(e.relic_bonus(), 0.15, "+15% por reliquia")
+	_check_eq(e.relic_bonus(), 0.25, "+25% por reliquia")
 	e.run_gold = 41000.0 # 300 m
 	_check_eq(e.prestige_relics(), 0, "a 300 m todavía no se puede")
 	e.run_gold = 2.7e6 # ~451 m
 	_check_eq(e.prestige_relics(), 2, "a ~450 m: 2 reliquias")
 	_check_eq(e.prestige(), 2, "prestige() las entrega")
-	_check_near(e.relic_multiplier(), 1.3, "x1.3")
+	_check_near(e.relic_multiplier(), 1.5, "x1.5")

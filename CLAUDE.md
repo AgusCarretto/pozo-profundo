@@ -63,19 +63,19 @@ CREDITS.md     # licencia y autor de CADA asset de terceros (obligatorio)
 - **Tests y audio**: un sonido que sigue sonando al salir deja "resources still in use at exit" (el runner lo cuenta como falla). `test_base._finish()` llama a `Audio.silence()` y espera 0,3 s antes de `quit()` (un OGG que sonaba tarda más de 0,1 s en soltarse; ojo, con `ignore_time_scale` no alcanza); un test que no herede de `test_base.gd` tiene que hacer lo mismo.
 
 ## Balance (ajustable en data/balance.json)
-Ritmo buscado: **primer reset a los 12–15 min** de juego (antes 2–3 min); las bajadas siguientes, 9–14 min. Medido simulando un jugador que compra lo que más rinde, con 1,5 a 4 golpes/s. Los cofres no se tocaron.
-- Generadores (oro/s base, costo base, crecimiento de costo ×1.17 por unidad):
-  - Minero 1 / 15 · Taladro a vapor 5 / 200 · Cuadrilla de dinamita 25 / 2.500 · Gólem de piedra 120 / 30.000 · Excavadora rúnica 600 / 400.000
-- Costo de comprar k unidades: `c * 1.17^n * (1.17^k - 1) / 0.17`
-- Pico: golpe = `2^nivel * mult + 2% del oro/s`; costo = `50 * 8^nivel`
-- Profundidad: `25 * log2(1 + oroDeEstaPartida / 10)` metros; bioma nuevo cada 150 m; multiplicador de bioma `1.3^índice`
+Ritmo buscado: **primer reset a los 13–18 min** de juego (con el balance de la demo eran 2–3 min); las bajadas siguientes, 8–14 min. Decisión: la dificultad está en los **precios**; lo que produce cada cosa (generadores, golpe, biomas, reliquias) no se recorta, así cada compra se nota. Medido simulando un jugador que compra lo que más rinde, con 1,5 a 4 golpes/s. Los cofres no se tocaron.
+- Generadores (oro/s base, costo base, crecimiento de costo ×1.2 por unidad):
+  - Minero 1 / 25 · Taladro a vapor 8 / 600 · Cuadrilla de dinamita 47 / 10.000 · Gólem de piedra 260 / 180.000 · Excavadora rúnica 1.400 / 3.000.000
+- Costo de comprar k unidades: `c * 1.2^n * (1.2^k - 1) / 0.2`
+- Pico: golpe = `2^nivel * mult + 3% del oro/s`; costo = `150 * 12^nivel`
+- Profundidad: `25 * log2(1 + oroDeEstaPartida / 10)` metros; bioma nuevo cada 150 m; multiplicador de bioma `1.5^índice`
   - `oroDeEstaPartida` es el oro *ganado* en la partida (gastar no te hace retroceder). Pasado Abismo se queda en Abismo.
 - Botín: 1,5% por golpe, 0,5%/s pasivo si hay cuadrilla. Rarezas: Común 70% (+1%), Raro 22% (+4%), Épico 7% (+15%), Legendario 1% (+60%) de bonus de oro. Las probabilidades se muestran en el juego.
   - El cofre no da oro en el momento: su bonus se *suma* a un bonus de botín **bruto** acumulable de la partida (Común +1%, Raro +4%, Épico +15%, Legendario +60%). Lo que multiplica el oro es el **efectivo**, con rendimientos decrecientes: `efectivo = cap × (1 − e^(−bruto / cap))`, con `cap = 3` (`loot.bonus_cap` en balance.json): techo de +300%, que nunca se alcanza. Con poco bruto rinde casi 1 a 1 (+10% bruto → +9,8%); +100% bruto → +85%; +300% bruto → +190%.
   - En pantalla se muestra el efectivo ("Bonus de botín: +27%"); el bruto solo va en el panel de debug. Se guarda el bruto y se reinicia al volver a la superficie. Sin sección `loot` en el balance no hay botín (efectivo 0).
-- Reliquias: desde 450 m, `floor(((prof - 350) / 50)^1.3)`; cada una +15% de oro permanente.
-  - Suman (`1 + 0.15 * reliquias`). Volver a la superficie pide confirmación y reinicia oro, cuadrilla, pico, profundidad y bonus de botín; las reliquias se conservan.
-- Multiplicador final de oro: `bioma × (1 + botín efectivo) × (1 + 0.15 × reliquias)`.
+- Reliquias: desde 450 m, `floor(((prof - 350) / 50)^1.3)`; cada una +25% de oro permanente.
+  - Suman (`1 + 0.25 * reliquias`). Volver a la superficie pide confirmación y reinicia oro, cuadrilla, pico, profundidad y bonus de botín; las reliquias se conservan.
+- Multiplicador final de oro: `bioma × (1 + botín efectivo) × (1 + 0.25 × reliquias)`.
 - Frenesí (solo música, no da oro): 4 golpes en el último segundo, sostenido 2 s, lo prende; 3 s sin ese ritmo lo apagan (`frenzy` en balance.json).
 - Progreso offline: hasta 8 horas.
   - Acredita la producción de hoy (bioma y reliquias actuales) por el tiempo fuera, sin sortear cofres. Avisa al volver si estuviste fuera 60 s o más; un hueco largo entre frames en la sesión (pestaña web o app en segundo plano) cuenta igual.

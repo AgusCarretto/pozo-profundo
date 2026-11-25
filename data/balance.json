@@ -1,17 +1,17 @@
 {
-	"cost_growth": 1.17,
+	"cost_growth": 1.2,
 	"generators": [
-		{ "id": "miner", "name": "Minero", "base_rate": 1, "base_cost": 15 },
-		{ "id": "steam_drill", "name": "Taladro a vapor", "base_rate": 5, "base_cost": 200 },
-		{ "id": "dynamite_crew", "name": "Cuadrilla de dinamita", "base_rate": 25, "base_cost": 2500 },
-		{ "id": "stone_golem", "name": "Gólem de piedra", "base_rate": 120, "base_cost": 30000 },
-		{ "id": "rune_excavator", "name": "Excavadora rúnica", "base_rate": 600, "base_cost": 400000 }
+		{ "id": "miner", "name": "Minero", "base_rate": 1, "base_cost": 25 },
+		{ "id": "steam_drill", "name": "Taladro a vapor", "base_rate": 8, "base_cost": 600 },
+		{ "id": "dynamite_crew", "name": "Cuadrilla de dinamita", "base_rate": 47, "base_cost": 10000 },
+		{ "id": "stone_golem", "name": "Gólem de piedra", "base_rate": 260, "base_cost": 180000 },
+		{ "id": "rune_excavator", "name": "Excavadora rúnica", "base_rate": 1400, "base_cost": 3000000 }
 	],
 	"pick": {
 		"power_base": 2,
-		"cost_base": 50,
-		"cost_growth": 8,
-		"passive_share": 0.02
+		"cost_base": 150,
+		"cost_growth": 12,
+		"passive_share": 0.03
 	},
 	"depth": {
 		"meters_scale": 25,
@@ -19,7 +19,7 @@
 	},
 	"biomes": {
 		"meters_each": 150,
-		"mult_growth": 1.3,
+		"mult_growth": 1.5,
 		"list": [
 			{ "id": "earth", "name": "Tierra" },
 			{ "id": "rock", "name": "Roca" },
@@ -44,7 +44,7 @@
 		"depth_offset": 350,
 		"depth_step": 50,
 		"exponent": 1.3,
-		"bonus_per_relic": 0.15
+		"bonus_per_relic": 0.25
 	},
 	"offline": {
 		"max_hours": 8,

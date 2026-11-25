@@ -367,15 +367,23 @@ func _test_real_balance_file() -> void:
 	for index: int in range(e.generator_count()):
 		ids.append(e.generator_id(index))
 	_check_eq(ids, ["miner", "steam_drill", "dynamite_crew", "stone_golem", "rune_excavator"] as Array[String], "los ids del balance real, en orden")
-	# El ritmo del juego (partidas largas): costos que suben 17% por unidad y los generadores caros que rinden menos.
+	# El ritmo del juego (partidas largas): lo difícil son los precios; lo que produce cada cosa no se recorta.
+	var rates: Array[float] = []
+	var costs: Array[float] = []
+	for index: int in range(e.generator_count()):
+		e.owned.fill(0)
+		costs.append(e.quote(index, EconomyScript.BuyMode.X1)["cost"])
+		e.owned[index] = 1
+		rates.append(e.gold_per_second())
+	e.owned.fill(0)
+	_check_eq(rates, [1.0, 8.0, 47.0, 260.0, 1400.0] as Array[float], "cada generador produce lo de siempre")
+	_check_eq(costs, [25.0, 600.0, 10000.0, 180000.0, 3000000.0] as Array[float], "y cuesta bastante más")
 	e.owned[0] = 1
-	_check_near(e.quote(0, EconomyScript.BuyMode.X1)["cost"], 15.0 * 1.17, "el segundo Minero cuesta 15 x 1.17")
+	_check_near(e.quote(0, EconomyScript.BuyMode.X1)["cost"], 25.0 * 1.2, "cada unidad cuesta 20% más que la anterior")
 	e.owned[0] = 0
-	_check_eq(e.quote(1, EconomyScript.BuyMode.X1)["cost"], 200.0, "el Taladro arranca en 200")
-	e.owned[1] = 1
-	_check_eq(e.gold_per_second(), 5.0, "y produce 5 oro/s")
-	e.owned[1] = 0
+	_check_eq(e.pick_cost(), 150.0, "el pico arranca en 150")
 	e.pick_level = 1
-	_check_eq(e.pick_cost(), 400.0, "la segunda mejora del pico cuesta 50 x 8")
+	_check_eq(e.pick_cost(), 1800.0, "y la segunda mejora cuesta 150 x 12")
+	_check_near(e.hit_value(), 2.0, "pegando lo de siempre (2 en nivel 1)")
 	e.pick_level = 0
 	_check_eq(e.load_balance_file("res://data/no_existe.json"), false, "un archivo inexistente devuelve false")
