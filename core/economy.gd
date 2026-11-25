@@ -10,6 +10,8 @@ signal gold_changed(gold: float)
 ## Un golpe a la roca sumó `amount` de oro. Si fue crítico, last_hit_critical ya está puesto.
 signal hit_landed(amount: float)
 signal generator_bought(index: int, count: int)
+## Una compra llevó al generador `index` a `threshold` unidades: desde ahí produce más.
+signal milestone_reached(index: int, threshold: int)
 signal pick_upgraded(level: int)
 ## Cayó un cofre de la rareza `rarity` (índice de loot_table()) y sumó `bonus` (0.04 = +4%)
 ## al bonus BRUTO de botín de la partida (el efectivo sube menos: rendimientos decrecientes).
@@ -75,6 +77,9 @@ var _cost_growth: float = 0.0
 var _pick: Dictionary = {}
 ## Golpes críticos (chance, multiplier). Vacío = sin críticos.
 var _crit: Dictionary = {}
+## Hitos: con estas cantidades (crecientes) un generador multiplica su producción por _milestone_multiplier.
+var _milestones: Array[int] = []
+var _milestone_multiplier: float = 1.0
 ## Secciones opcionales del balance: vacías = ese sistema está apagado (profundidad 0 m, bioma único x1).
 var _depth: Dictionary = {}
 var _biomes: Array[Dictionary] = []
@@ -169,6 +174,9 @@ func load_balance(balance: Dictionary) -> bool:
 		return false
 	if not (parsed_crit as Dictionary).is_empty() and (parsed_crit["chance"] > 1.0 or parsed_crit["multiplier"] < 1.0):
 		return _fail("crit: la chance va de 0 a 1 y el multiplicador es de 1 o más")
+	var parsed_milestones: Variant = _read_milestones(balance)
+	if parsed_milestones == null:
+		return false
 	var parsed_depth: Variant = _read_numbers(balance, "depth", ["meters_scale", "gold_scale"])
 	if parsed_depth == null:
 		return false
@@ -195,6 +203,11 @@ func load_balance(balance: Dictionary) -> bool:
 	_generators = parsed_generators
 	_pick = parsed_pick
 	_crit = parsed_crit
+	_milestones = []
+	_milestone_multiplier = 1.0
+	if not (parsed_milestones as Dictionary).is_empty():
+		_milestones.assign(parsed_milestones["at"])
+		_milestone_multiplier = parsed_milestones["multiplier"]
 	_depth = parsed_depth
 	_prestige = parsed_prestige
 	_offline = parsed_offline
@@ -443,18 +456,48 @@ func owned_count(index: int) -> int:
 	return owned[index]
 
 
-## Oro por segundo que aporta el generador `index` (unidades * oro/s base * multiplicador).
+## Oro por segundo que aporta el generador `index` (unidades * oro/s base * hitos * multiplicador).
 func generator_output(index: int) -> float:
 	if not _is_valid_index(index):
 		return 0.0
-	return owned[index] * float(_generators[index]["base_rate"]) * multiplier
+	return _base_output(index) * multiplier
 
 
 func gold_per_second() -> float:
 	var base_total: float = 0.0
 	for index: int in range(_generators.size()):
-		base_total += owned[index] * float(_generators[index]["base_rate"])
+		base_total += _base_output(index)
 	return base_total * multiplier
+
+
+## Cuánto multiplican los hitos que ya alcanzó el generador `index` (1 = ninguno).
+func milestone_multiplier(index: int) -> float:
+	if not _is_valid_index(index):
+		return 1.0
+	var reached: int = 0
+	for threshold: int in _milestones:
+		if owned[index] >= threshold:
+			reached += 1
+	return pow(_milestone_multiplier, reached)
+
+
+## Por cuánto multiplica cada hito (2 = el doble). 1 si no hay hitos.
+func milestone_step() -> float:
+	return _milestone_multiplier
+
+
+## Cantidad del próximo hito del generador `index`; 0 si ya no queda ninguno (o no hay hitos).
+func next_milestone(index: int) -> int:
+	if not _is_valid_index(index):
+		return 0
+	for threshold: int in _milestones:
+		if owned[index] < threshold:
+			return threshold
+	return 0
+
+
+func _base_output(index: int) -> float:
+	return owned[index] * float(_generators[index]["base_rate"]) * milestone_multiplier(index)
 
 
 ## Producción pasiva según un reloj monotónico (µs, p. ej. Time.get_ticks_usec()) y, de respaldo, la hora de
@@ -625,8 +668,12 @@ func buy_generator(index: int, mode: int) -> int:
 		return 0
 	var count: int = offer["count"]
 	gold -= offer["cost"]
+	var before: int = owned[index]
 	owned[index] += count
 	generator_bought.emit(index, count)
+	for threshold: int in _milestones:
+		if before < threshold and owned[index] >= threshold:
+			milestone_reached.emit(index, threshold)
 	gold_changed.emit(gold)
 	return count
 
@@ -707,6 +754,29 @@ func _read_numbers(balance: Dictionary, section: String, positive_keys: Array[St
 			_fail("%s.%s tiene que ser >= 0" % [section, key])
 			return null
 		numbers[key] = value
+	return numbers
+
+
+## Lee la sección opcional "milestones": {at: [25, 50, 100], multiplier}. Mismo contrato que _read_numbers.
+func _read_milestones(balance: Dictionary) -> Variant:
+	var numbers: Variant = _read_numbers(balance, "milestones", ["multiplier"])
+	if numbers == null or (numbers as Dictionary).is_empty():
+		return numbers
+	if numbers["multiplier"] < 1.0:
+		_fail("milestones.multiplier tiene que ser 1 o más")
+		return null
+	var raw: Variant = (balance["milestones"] as Dictionary).get("at")
+	if not (raw is Array) or (raw as Array).is_empty():
+		_fail("milestones.at necesita al menos una cantidad")
+		return null
+	var thresholds: Array[int] = []
+	for entry: Variant in raw:
+		var threshold: int = int(_number(entry, 0.0))
+		if threshold <= 0 or (not thresholds.is_empty() and threshold <= thresholds.back()):
+			_fail("milestones.at tiene que ser una lista creciente de cantidades > 0")
+			return null
+		thresholds.append(threshold)
+	numbers["at"] = thresholds
 	return numbers
 
 

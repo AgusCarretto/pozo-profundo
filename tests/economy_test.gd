@@ -26,6 +26,7 @@ func _initialize() -> void:
 	_test_initial_state()
 	_test_hit()
 	_test_critical_hits()
+	_test_milestones()
 	_test_buy_one()
 	_test_buy_ten()
 	_test_buy_max()
@@ -119,6 +120,44 @@ func _test_critical_hits() -> void:
 		var broken: Dictionary = TEST_BALANCE.duplicate(true)
 		broken["crit"] = bad
 		_check_eq(often.load_balance(broken), false, "crit %s -> inválido" % str(bad))
+
+
+func _test_milestones() -> void:
+	_section("Hitos: con 25, 50 y 100 unidades ese generador produce el doble")
+	var balance: Dictionary = TEST_BALANCE.duplicate(true)
+	balance["milestones"] = { "at": [25, 50, 100], "multiplier": 2 }
+	var e: EconomyScript = _make()
+	_check(e.load_balance(balance), "carga con la sección milestones (%s)" % e.last_error)
+	for pair: Array in [[0, 1.0, 25], [24, 1.0, 25], [25, 2.0, 50], [49, 2.0, 50], [50, 4.0, 100], [99, 4.0, 100], [100, 8.0, 0], [500, 8.0, 0]]:
+		e.owned[0] = pair[0]
+		_check_eq(e.milestone_multiplier(0), pair[1], "%d unidades -> x%d" % [pair[0], int(pair[1])])
+		_check_eq(e.next_milestone(0), pair[2], "%d unidades -> próximo hito %d" % [pair[0], pair[2]])
+	e.owned[0] = 25
+	e.owned[1] = 2
+	_check_eq(e.generator_output(0), 50.0, "25 x 1 oro/s x2 = 50")
+	_check_eq(e.generator_output(1), 16.0, "el otro generador no cambia")
+	_check_eq(e.gold_per_second(), 66.0, "y el total lo suma")
+	var reached: Array[Vector2i] = []
+	e.milestone_reached.connect(func(index: int, threshold: int) -> void: reached.append(Vector2i(index, threshold)))
+	e.owned[0] = 20
+	e.gold = 1.0e12
+	e.buy_generator(0, BuyMode.X10)
+	_check_eq(reached, [Vector2i(0, 25)] as Array[Vector2i], "x10 de 20 a 30 avisa el hito de 25 una vez")
+	e.buy_generator(0, BuyMode.X1)
+	_check_eq(reached.size(), 1, "comprar sin cruzar un hito no avisa")
+	reached.clear()
+	e.owned[0] = 0
+	e.gold = EconomyMath.bulk_cost(15.0, 1.15, 0, 60) + 0.01
+	e.buy_generator(0, BuyMode.MAX)
+	_check_eq(reached, [Vector2i(0, 25), Vector2i(0, 50)] as Array[Vector2i], "Máx de 0 a 60 avisa los dos")
+	var plain: EconomyScript = _make()
+	plain.owned[0] = 100
+	_check(plain.milestone_multiplier(0) == 1.0 and plain.next_milestone(0) == 0, "sin la sección no hay hitos")
+	_check(e.milestone_multiplier(9) == 1.0 and e.next_milestone(-1) == 0, "un generador inexistente no explota")
+	for bad: Variant in [{ "at": [], "multiplier": 2 }, { "at": [50, 25], "multiplier": 2 }, { "at": [0], "multiplier": 2 }, { "at": [25], "multiplier": 0.5 }, { "multiplier": 2 }, [25]]:
+		var broken: Dictionary = TEST_BALANCE.duplicate(true)
+		broken["milestones"] = bad
+		_check_eq(plain.load_balance(broken), false, "milestones %s -> inválido" % str(bad))
 
 
 func _test_buy_one() -> void:

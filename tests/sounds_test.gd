@@ -25,7 +25,7 @@ const MUSIC_INTROS: Dictionary = { "earth": 10.0, "frenzy": 1.5 }
 ## El prestigio suena una vez; el resto loopea.
 const MUSIC_ONCE: Array[String] = ["prestige"]
 ## Los SFX que el juego pide sí o sí (los de los cofres se agregan por rareza del balance).
-const REQUIRED_SFX: Array[String] = ["hit", "crit", "buy", "pick", "tab", "mode", "toggle", "open", "close", "prestige", "biome", "dynamite", "coins", "relic"]
+const REQUIRED_SFX: Array[String] = ["hit", "crit", "milestone", "buy", "pick", "tab", "mode", "toggle", "open", "close", "prestige", "biome", "dynamite", "coins", "relic"]
 
 var _economy: Node
 var _audio: Node
@@ -253,6 +253,12 @@ func _test_economy_cues() -> void:
 	var buy: Button = _scene.get_node("%Shop").get_child(1) as Button
 	buy.pressed.emit()
 	_check(_take().has("buy"), "comprar un generador")
+	_economy.owned[0] = 24
+	_economy.gold = 1.0e6
+	await process_frame
+	_take()
+	buy.pressed.emit()
+	_check(_take().has("milestone"), "llegar a un hito suena")
 	var pick: Button = _scene.get_node("%Shop").get_child(0) as Button
 	pick.pressed.emit()
 	_check(_take().has("pick"), "mejorar el pico")

@@ -7,6 +7,10 @@
 		{ "id": "stone_golem", "name": "Gólem de piedra", "base_rate": 120, "base_cost": 180000 },
 		{ "id": "rune_excavator", "name": "Excavadora rúnica", "base_rate": 600, "base_cost": 3000000 }
 	],
+	"milestones": {
+		"at": [25, 50, 100],
+		"multiplier": 2
+	},
 	"pick": {
 		"power_base": 2,
 		"cost_base": 150,

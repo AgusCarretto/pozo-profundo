@@ -38,6 +38,7 @@ func _initialize() -> void:
 	await _test_tap_hits_the_rock()
 	await _test_buying_a_generator()
 	await _test_buy_modes()
+	await _test_milestone_card()
 	await _test_pick_upgrade()
 	await _test_one_touch_buys_once()
 	await _test_large_numbers_use_suffixes()
@@ -211,6 +212,25 @@ func _test_buy_modes() -> void:
 	_check_eq(_economy.owned_count(0), before + expected, "tocar compra %d" % expected)
 	await _pick_mode("×1")
 	_check(not _price(_row_button(0)).contains("×"), "al volver a ×1 queda solo el precio (%s)" % _price(_row_button(0)))
+
+
+func _test_milestone_card() -> void:
+	_section("La tarjeta muestra el camino al hito, y llegar se festeja")
+	await _set_gold(1.0e7)
+	_economy.owned[0] = 24
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	_check(_card_text(_row_button(0)).contains("24/s · 24/25"), "con 24: lo que produce y 24/25 (%s)" % _card_text(_row_button(0)))
+	_row_button(0).pressed.emit()
+	await process_frame
+	_check(_card_text(_row_button(0)).contains("50/s · 25/50"), "al llegar a 25 produce el doble y apunta a 50 (%s)" % _card_text(_row_button(0)))
+	var toast: Node = _scene.get_node("%MineView").find_child("ChestToast", true, false)
+	_check(toast != null and _card_text(toast).contains("¡Minero ×25!") and _card_text(toast).contains("producen el doble"), "y sale un aviso (%s)" % (_card_text(toast) if toast != null else "nada"))
+	_economy.owned[0] = 100
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	_check(_card_text(_row_button(0)).contains("800/s · ×8"), "pasado el último, cuánto multiplica (%s)" % _card_text(_row_button(0)))
+	_economy.reset()
 
 
 func _test_pick_upgrade() -> void:

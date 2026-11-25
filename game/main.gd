@@ -9,6 +9,8 @@ extends Control
 const BiomePalette := preload("res://game/biome_palette.gd")
 const DebugPanel := preload("res://game/debug_panel.gd")
 const GeneratorCard := preload("res://game/generator_card.gd")
+const GeneratorArt := preload("res://game/generator_art.gd")
+const Palette := preload("res://game/palette.gd")
 const Modal := preload("res://game/modal.gd")
 const MineView := preload("res://game/mine_view.gd")
 const NumberFormat := preload("res://core/number_format.gd")
@@ -184,6 +186,7 @@ func _ready() -> void:
 	Economy.prestiged.connect(_mark_dirty.unbind(1))
 	Economy.loot_dropped.connect(_on_loot_dropped)
 	Economy.hit_landed.connect(_on_hit_landed)
+	Economy.milestone_reached.connect(_on_milestone_reached)
 	_mine_view.dynamite_exploded.connect(func(_at: Vector2) -> void: Audio.play_sfx("dynamite"))
 	Economy.offline_progress.connect(_show_offline_notice)
 	# Guardado del navegador: la copia de la partida y sus avisos.
@@ -217,6 +220,16 @@ func _on_tap() -> void:
 func _on_hit_landed(amount: float) -> void:
 	var critical: bool = Economy.last_hit_critical
 	_mine_view.play_hit(("¡+%s!" if critical else "+%s") % NumberFormat.format_number(amount), critical)
+
+
+## Un generador llegó a un hito: aviso en la mina y rebote de su tarjeta (el sonido lo pone SoundCues).
+func _on_milestone_reached(index: int, threshold: int) -> void:
+	var title: String = "¡%s ×%d!" % [Economy.generator_name(index), threshold]
+	var step: float = Economy.milestone_step()
+	var detail: String = "producen el doble" if is_equal_approx(step, 2.0) else "producen ×%.1f" % step
+	_mine_view.show_toast(GeneratorArt.icon(Economy.generator_id(index)), title, detail, Palette.YELLOW)
+	if index < _cards.size():
+		Juice.bounce(_cards[index])
 
 
 ## Silencia todo o devuelve el sonido. El click suena solo al devolverlo (silenciado no suena nada).

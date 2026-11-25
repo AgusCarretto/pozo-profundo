@@ -27,9 +27,21 @@ func refresh(mode: int) -> void:
 		price = "×%d · %s" % [offer["count"], price]
 	show_offer(
 		"%s  ×%d" % [Economy.generator_name(index), Economy.owned_count(index)],
-		"Produce %s/s" % NumberFormat.format_number(Economy.generator_output(index)),
+		_detail(),
 		price,
 		offer["affordable"])
+
+
+## Lo que produce y cuánto falta para el próximo hito ("42/s · 21/25"); pasado el último, cuánto multiplica.
+func _detail() -> String:
+	var output: String = "%s/s" % NumberFormat.format_number(Economy.generator_output(index))
+	var next: int = Economy.next_milestone(index)
+	if next > 0:
+		return "%s · %d/%d" % [output, Economy.owned_count(index), next]
+	var bonus: float = Economy.milestone_multiplier(index)
+	if bonus > 1.0:
+		return "%s · ×%d" % [output, int(bonus)]
+	return "Produce %s" % output
 
 
 func _on_buy_pressed() -> void:
