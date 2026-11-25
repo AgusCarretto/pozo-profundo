@@ -6,7 +6,7 @@ extends SceneTree
 ##
 ## El jugador simulado golpea sin parar a un ritmo fijo y compra lo que antes se paga solo (contando la espera); si
 ## lo mejor tarda más de PATIENCE segundos en poder pagarse, compra mientras tanto otra cosa. Solo compra lo que ya
-## está revelado. Es optimista: una persona hace pausas y compra peor, así que tarda algo más. No toca la partida
+## está revelado. Usa la habilidad (la dinamita) entre 0 y ABILITY_DELAY segundos después de que está lista. Es optimista: una persona hace pausas y compra peor, así que tarda algo más. No toca la partida
 ## guardada.
 
 const EconomyScript := preload("res://core/economy.gd")
@@ -15,8 +15,11 @@ const NumberFormat := preload("res://core/number_format.gd")
 
 const STEP: float = 0.25
 const PATIENCE: float = 90.0
+const ABILITY_DELAY: float = 20.0
 const MAX_SECONDS: float = 4.0 * 3600.0
 const TAPS: Array[float] = [1.5, 3.0, 5.0]
+## Índice con el que se anota la mejora de la habilidad entre las opciones de compra.
+const ABILITY: int = -2
 ## Se mira de comprar de a una o, si falta poco, de un salto hasta el próximo hito.
 const MILESTONE_REACH: int = 12
 
@@ -58,8 +61,8 @@ func _first_descent(runs: int) -> void:
 		print("  %.1f golpes/s: 100 m %s · 200 m %s · 300 m %s (p10 %s, p90 %s)" % [
 			taps, _clock(_median(results, "100")), _clock(_median(results, "200")), _clock(_median(results, "time")),
 			_clock(times[int(times.size() * 0.1)]), _clock(times[int(times.size() * 0.9)])])
-		print("      oro: golpes %d%% · cuadrilla %d%% · cofres %d%% | compras %d, espera más larga %s | cofres %d, con legendario %d de %d" % [
-			roundi(_median(results, "from_hits") * 100.0), roundi(_median(results, "from_crew") * 100.0), roundi(_median(results, "from_chests") * 100.0),
+		print("      oro: golpes %d%% · cuadrilla %d%% · cofres %d%% · dinamita %d%% | compras %d, espera más larga %s | cofres %d, con legendario %d de %d" % [
+			roundi(_median(results, "from_hits") * 100.0), roundi(_median(results, "from_crew") * 100.0), roundi(_median(results, "from_chests") * 100.0), roundi(_median(results, "from_ability") * 100.0),
 			int(_median(results, "purchases")), _clock(_median(results, "longest_wait")), int(_median(results, "chests")),
 			results.filter(func(r: Dictionary) -> bool: return r["legendary"]).size(), results.size()])
 		print("      %s" % results[0]["story"])
@@ -93,7 +96,7 @@ func _abyss() -> void:
 ## Juega desde el estado actual de `economy` hasta `target` metros.
 func _play(economy: EconomyScript, taps: float, target: float) -> Dictionary:
 	var result: Dictionary = { "chests": 0, "legendary": false, "purchases": 0, "longest_wait": 0.0, "100": 0.0, "200": 0.0 }
-	var from: Dictionary = { "hits": 0.0, "chests": 0.0 }
+	var from: Dictionary = { "hits": 0.0, "chests": 0.0, "ability": 0.0 }
 	var story: PackedStringArray = PackedStringArray()
 	var clock: Array[float] = [0.0]
 	var last_chest_amount: Array[float] = [0.0]
@@ -110,8 +113,18 @@ func _play(economy: EconomyScript, taps: float, target: float) -> Dictionary:
 	var start_run_gold: float = economy.run_gold
 	var pending_hits: float = 0.0
 	var last_purchase: float = 0.0
+	var random: RandomNumberGenerator = RandomNumberGenerator.new()
+	random.seed = economy.rng.seed + 1
+	var use_at: float = -1.0
 	while clock[0] < MAX_SECONDS and economy.depth() < target:
 		economy.tick(STEP)
+		economy.advance_ability(STEP)
+		if economy.ability_ready():
+			if use_at < 0.0:
+				use_at = clock[0] + random.randf() * ABILITY_DELAY
+			if clock[0] >= use_at:
+				from["ability"] += economy.use_ability()
+				use_at = -1.0
 		pending_hits += taps * STEP
 		while pending_hits >= 1.0:
 			last_chest_amount[0] = 0.0
@@ -132,7 +145,8 @@ func _play(economy: EconomyScript, taps: float, target: float) -> Dictionary:
 	result["time"] = clock[0]
 	result["from_hits"] = from["hits"] / earned
 	result["from_chests"] = from["chests"] / earned
-	result["from_crew"] = maxf(1.0 - result["from_hits"] - result["from_chests"], 0.0)
+	result["from_ability"] = from["ability"] / earned
+	result["from_crew"] = maxf(1.0 - result["from_hits"] - result["from_chests"] - result["from_ability"], 0.0)
 	result["story"] = " · ".join(story)
 	return result
 
@@ -148,7 +162,10 @@ func _shop(economy: EconomyScript, taps: float, story: PackedStringArray, time: 
 		var best: Dictionary = _best_option(economy, taps)
 		if best.is_empty() or best["cost"] > economy.gold:
 			break
-		if best["index"] < 0:
+		if best["index"] == ABILITY:
+			economy.upgrade_ability()
+			story.append("Dinamita Nv %d %s" % [economy.ability_level, _clock(time)])
+		elif best["index"] < 0:
 			economy.upgrade_pick()
 		else:
 			if economy.owned_count(best["index"]) == 0:
@@ -181,6 +198,13 @@ func _best_option(economy: EconomyScript, taps: float) -> Dictionary:
 	var pick_gain: float = _income(economy, taps) - now
 	economy.pick_level -= 1
 	_add_option(options, -1, 1, pick_cost, pick_gain, now, economy.gold)
+	if economy.ability_revealed() and economy.ability_level < economy.ability_max_level():
+		var before: float = economy.ability_reward()
+		var cost: float = economy.ability_cost()
+		economy.ability_level += 1
+		var gain_each: float = economy.ability_reward() - before
+		economy.ability_level -= 1
+		_add_option(options, ABILITY, 1, cost, gain_each / (economy.ability_cooldown() + ABILITY_DELAY * 0.5), now, economy.gold)
 	options.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["score"] < b["score"])
 	for option: Dictionary in options:
 		if option["wait"] <= PATIENCE:
