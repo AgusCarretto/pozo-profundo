@@ -341,7 +341,8 @@ func _build_slider() -> void:
 	_theme.set_icon("grabber", "HSlider", _knob(Palette.FROST))
 	_theme.set_icon("grabber_highlight", "HSlider", _knob(Palette.WHITE))
 	_theme.set_icon("grabber_disabled", "HSlider", _knob(Palette.STEEL))
-	_theme.set_constant("center_grabber", "HSlider", 1)
+	# La perilla queda adentro del slider: centrada sobresalía media perilla en cada punta y se salía del cartel.
+	_theme.set_constant("center_grabber", "HSlider", 0)
 
 
 ## Interruptor del CheckButton (reducir efectos): apagado = riel oscuro con la perilla a la izquierda;

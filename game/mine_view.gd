@@ -122,6 +122,11 @@ const TOAST_TIME: float = 2.2
 const TOAST_SLIDE_TIME: float = 0.25
 const TOAST_TOP: float = 16.0
 const TOAST_ICON: float = 48.0
+## Aire del aviso: entre su contenido y su borde, y entre el cartel y los costados (px de diseño).
+const TOAST_PADDING: float = 16.0
+const TOAST_SIDE_GAP: float = 16.0
+## Si no entra, la letra se achica hasta este tamaño.
+const TOAST_FONT_MIN: int = 22
 ## Ancho que ocupan arriba a la derecha los botones del costado (main.tscn, SideBar: 100 px más sus márgenes).
 const SIDE_COLUMN_WIDTH: float = 116.0
 
@@ -488,11 +493,15 @@ func show_toast(icon: Texture2D, title: String, detail: String, color: Color) ->
 	toast.name = "ChestToast"
 	toast.theme_type_variation = &"CardPanel"
 	toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Primero a la escena: fuera de ella no hereda el tema y devolvería el estilo por defecto, sin relleno.
+	_fx.add_child(toast)
 	var style: StyleBox = toast.get_theme_stylebox("panel", &"CardPanel")
 	if style is StyleBoxFlat:
 		var bordered: StyleBoxFlat = (style as StyleBoxFlat).duplicate()
 		bordered.border_color = color
 		bordered.set_border_width_all(4)
+		bordered.content_margin_left = TOAST_PADDING
+		bordered.content_margin_right = TOAST_PADDING
 		toast.add_theme_stylebox_override("panel", bordered)
 	var row: HBoxContainer = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 14)
@@ -519,10 +528,15 @@ func show_toast(icon: Texture2D, title: String, detail: String, color: Color) ->
 	detail_label.text = detail
 	detail_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	texts.add_child(detail_label)
-	_fx.add_child(toast)
+	# Centrado en lo que queda libre a la izquierda de los botones del costado, con aire de los dos lados: si el
+	# texto no entra, se achica la letra de a poco.
+	var free_width: float = size.x - SIDE_COLUMN_WIDTH
+	var labels: Array[Label] = [title_label, detail_label]
+	while toast.get_combined_minimum_size().x > free_width - 2.0 * TOAST_SIDE_GAP and title_label.get_theme_font_size("font_size") > TOAST_FONT_MIN:
+		for label: Label in labels:
+			label.add_theme_font_size_override("font_size", label.get_theme_font_size("font_size") - 2)
 	toast.size = toast.get_combined_minimum_size()
-	# Centrado en lo que queda libre a la izquierda de los botones del costado, para no quedar debajo.
-	var target: Vector2 = Vector2((size.x - SIDE_COLUMN_WIDTH - toast.size.x) * 0.5, TOAST_TOP * _unit).round()
+	var target: Vector2 = Vector2((free_width - toast.size.x) * 0.5, TOAST_TOP * _unit).round()
 	toast.position = Vector2(target.x, -toast.size.y)
 	var tween: Tween = toast.create_tween()
 	tween.tween_property(toast, "position:y", target.y, TOAST_SLIDE_TIME).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)

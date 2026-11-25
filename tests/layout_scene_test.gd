@@ -860,6 +860,21 @@ func _style_name(button: Button) -> String:
 	return "flat"
 
 
+## El aviso del cofre, aun el más largo, no queda pegado al borde de la pantalla ni su contenido al borde del cartel.
+func _check_toast_breathes(scene: Control, mine: Control, label: String) -> void:
+	var toast: Control = mine.find_child("ChestToast", true, false) as Control
+	if toast == null:
+		return
+	var rect: Rect2 = toast.get_global_rect()
+	var side: float = _node(scene, "LootButton").get_global_rect().position.x
+	_check(rect.position.x >= 16.0 - 0.5 and rect.end.x <= side - 8.0 + 0.5, "[%s] el aviso del cofre deja aire a la izquierda y antes de los botones (%.0f a %.0f; botones en %.0f)" % [label, rect.position.x, rect.end.x, side])
+	var inner: Rect2 = (toast.get_child(0) as Control).get_global_rect()
+	_check(inner.position.x - rect.position.x >= 12.0 and rect.end.x - inner.end.x >= 12.0, "[%s] y su contenido no toca el borde (%.0f px a la izquierda, %.0f a la derecha)" % [label, inner.position.x - rect.position.x, rect.end.x - inner.end.x])
+	var style: StyleBoxFlat = toast.get_theme_stylebox("panel") as StyleBoxFlat
+	var card: StyleBoxFlat = scene.theme.get_stylebox("panel", "CardPanel") as StyleBoxFlat
+	_check(style != null and style.bg_color == card.bg_color, "[%s] con el fondo de las tarjetas del tema" % label)
+
+
 ## Los avisos que salen arriba de la mina (cofre, bioma nuevo) no quedan debajo de los botones del costado.
 func _test_toasts_clear_the_side_column(packed: PackedScene) -> void:
 	_section("Los avisos de la mina no chocan con los botones del costado")
@@ -883,6 +898,7 @@ func _test_toasts_clear_the_side_column(packed: PackedScene) -> void:
 					covered.append(side_name)
 			_check(covered.is_empty(), "[%s] %s no queda debajo de %s (%s)" % [label, notice_name, str(covered), str(rect)])
 			_check(rect.position.x >= 0.0 and rect.end.x <= DESIGN_WIDTH, "[%s] y entra en la pantalla" % label)
+		_check_toast_breathes(scene, mine, label)
 		await _free_host(scene)
 
 

@@ -321,4 +321,11 @@ func _test_options_layout(packed: PackedScene) -> void:
 			if width > text_label.size.x + 0.5:
 				cut.append(text_label.text)
 		_check(cut.is_empty(), "[%s] ningún texto se corta (%s)" % [label, str(cut)])
+		# La perilla "centrada" sobresale media perilla en cada punta del slider: así se salía del cartel.
+		for slider_name: String in ["music_slider", "sfx_slider"]:
+			var slider: HSlider = panel.get(slider_name) as HSlider
+			var overflow: float = slider.get_theme_icon("grabber").get_width() * 0.5 if slider.get_theme_constant("center_grabber") == 1 else 0.0
+			var left: float = slider.get_global_rect().position.x - overflow
+			var right: float = slider.get_global_rect().end.x + overflow
+			_check(left >= rect.position.x + 12.0 and right <= rect.end.x - 12.0, "[%s] la perilla de %s no se sale del cartel en 0%% ni en 100%% (%.0f a %.0f; cartel %.0f a %.0f)" % [label, slider_name, left, right, rect.position.x, rect.end.x])
 		await _free(scene)
