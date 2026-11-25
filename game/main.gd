@@ -14,6 +14,7 @@ const Palette := preload("res://game/palette.gd")
 const Modal := preload("res://game/modal.gd")
 const MineView := preload("res://game/mine_view.gd")
 const NumberFormat := preload("res://core/number_format.gd")
+const OnlineConfig := preload("res://core/online_config.gd")
 const OptionsPanel := preload("res://game/options_panel.gd")
 const ScreenFx := preload("res://game/screen_fx.gd")
 const Juice := preload("res://game/juice.gd")
@@ -207,8 +208,6 @@ func _ready() -> void:
 	# Guardado del navegador: la copia de la partida y sus avisos.
 	_options.restore_code_entered.connect(_on_restore_code)
 	Save.imported.connect(_on_save_imported)
-	Economy.generator_bought.connect(_warn_fragile_storage.unbind(2))
-	Economy.pick_upgraded.connect(_warn_fragile_storage.unbind(1))
 	_refresh()
 	_built = true
 
@@ -217,6 +216,8 @@ func _ready() -> void:
 		_show_offline_notice(Economy.pending_offline_report)
 	_show_migration_notice()
 	check_storage()
+	check_ios_card()
+	_options.platform.request_persistent_storage()
 
 
 func _process(_delta: float) -> void:
@@ -632,14 +633,27 @@ func check_storage() -> void:
 	_modal.open("No se puede guardar", "Este navegador no deja guardar: al cerrar se pierde la partida.\n\nProbá sin modo privado, con las cookies permitidas, o en otro navegador.", "Entendido")
 
 
-## En iPhone dentro de itch.io el navegador puede borrar la partida: se avisa una vez, recién con la primera compra
-## (ya hay algo que perder y no interrumpe la entrada al juego).
-func _warn_fragile_storage() -> void:
-	if Settings.storage_notice_seen or _modal.visible or _prestiging or not _options.platform.has_fragile_storage():
+## En iPhone o iPad dentro de itch.io el navegador borra la partida: apenas se abre, se manda a jugar al link propio
+## y a agregarlo a la pantalla de inicio. Esa app tiene su propio almacenamiento (separado también de Safari), así
+## que lo que haya acá se lleva copiando el código.
+func check_ios_card() -> void:
+	var url: String = OnlineConfig.play_url()
+	if url == "" or not _options.platform.has_fragile_storage():
 		return
-	Settings.storage_notice_seen = true
-	_modal.open("Cuidá tu partida", "En iPhone y iPad el navegador puede borrar la partida al cerrarlo.\n\nGuardá una copia cada tanto (Opciones » Guardar copia), y jugá sin modo privado y siempre desde el mismo navegador.",
-		"Guardar copia", "Después", _options.show_backup)
+	var has_game: bool = Economy.run_gold > 0.0 or Economy.relics > 0
+	var steps: Array[String] = ["Tocá «Abrir el juego».", "En el navegador: Compartir (el cuadrado con la flecha) » «Agregar a inicio»."]
+	if has_game:
+		steps = ["Tocá «Copiar mi partida».", steps[0], steps[1], "Entrá desde ese ícono y en Opciones » Restaurar copia, pegá tu código."]
+	else:
+		steps.append("Entrá siempre desde ese ícono.")
+	_options.platform.show_card({
+		"title": "En iPhone tu partida puede borrarse acá",
+		"text": "Jugá desde %s y agregalo a tu pantalla de inicio." % url.trim_prefix("https://").trim_suffix("/"),
+		"steps": steps,
+		"url": url,
+		"copy_text": Save.export_code() if has_game else "",
+		"labels": { "open": "Abrir el juego", "copy": "Copiar mi partida", "copied": "¡Copiada!", "copy_failed": "No se pudo copiar: usá Opciones » Guardar copia.", "dismiss": "Seguir acá" },
+	})
 
 
 func _on_restore_code(code: String) -> void:

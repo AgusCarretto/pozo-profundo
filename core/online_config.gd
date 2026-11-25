@@ -8,6 +8,8 @@ extends RefCounted
 ## service_role se rechaza.
 
 const DEFAULT_PATH: String = "res://data/online.json"
+## Direcciones públicas del juego: a diferencia de la configuración, van en git.
+const LINKS_PATH: String = "res://data/links.json"
 
 
 ## { "supabase_url", "supabase_key", "feedback_url" }, siempre con las tres claves.
@@ -28,6 +30,14 @@ static func load_file(path: String = DEFAULT_PATH) -> Dictionary:
 		"supabase_key": key,
 		"feedback_url": _web_url(_text(data, "feedback_url")),
 	}
+
+
+## La dirección donde se juega con el guardado propio (GitHub Pages); "" si no hay.
+static func play_url(path: String = LINKS_PATH) -> String:
+	if not FileAccess.file_exists(path):
+		return ""
+	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	return _web_url(_text(data, "play_url")) if data is Dictionary else ""
 
 
 static func _text(data: Dictionary, key: String) -> String:

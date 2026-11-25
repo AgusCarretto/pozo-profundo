@@ -48,11 +48,6 @@ var reduce_effects: bool = false:
 			changed.emit()
 
 
-## El jugador ya vio el aviso de que su navegador puede borrar la partida. No cambia nada en pantalla (sin
-## `changed`). Si el navegador borra el guardado, se borra también esto y el aviso vuelve: es lo que se quiere.
-var storage_notice_seen: bool = false
-
-
 func _ready() -> void:
 	var save: Node = get_node_or_null("/root/Save")
 	if save != null and save.has_method("register_section"):
@@ -66,7 +61,6 @@ func to_dict() -> Dictionary:
 		"sfx_volume": sfx_volume,
 		"muted": muted,
 		"reduce_effects": reduce_effects,
-		"storage_notice_seen": storage_notice_seen,
 	}
 
 
@@ -85,9 +79,6 @@ func from_dict(data: Dictionary) -> void:
 	var reduce: Variant = data.get("reduce_effects")
 	if reduce is bool:
 		reduce_effects = reduce
-	var notice: Variant = data.get("storage_notice_seen")
-	if notice is bool:
-		storage_notice_seen = notice
 
 
 ## `value` recortado a [0, 1]; si no es un número finito, `current`.

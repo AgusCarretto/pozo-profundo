@@ -68,6 +68,61 @@ const SCRIPT: String = """
 }
 """
 
+## Un cartel del navegador con un link de verdad: en iPhone solo un toque directo sobre un <a> abre otra pestaña.
+## Recibe { title, text, steps: [..], url, copy_text, labels: { open, copy, copied, copy_failed, dismiss } };
+## con copy_text vacío no hay botón de copiar.
+const CARD_SCRIPT: String = """
+(function (card) {
+	var old = document.getElementById('game-card');
+	if (old) old.remove();
+	var labels = card.labels || {};
+	function add(parent, tag, style, content) {
+		var node = document.createElement(tag);
+		node.style.cssText = style;
+		if (content !== undefined) node.textContent = content;
+		parent.appendChild(node);
+		return node;
+	}
+	var wrap = add(document.body, 'div', 'position:fixed;inset:0;z-index:1000;overflow:auto;display:flex;padding:12px;box-sizing:border-box;background:rgba(0,0,0,.85);font-family:Pixelify,sans-serif;color:#f4ecd8');
+	wrap.id = 'game-card';
+	var box = add(wrap, 'div', 'width:100%;max-width:420px;margin:auto;box-sizing:border-box;padding:14px;display:flex;flex-direction:column;gap:10px;background:#1a120e;border:3px solid #f4c542');
+	add(box, 'div', 'font-size:22px;line-height:1.25;text-align:center;color:#f4c542', card.title);
+	add(box, 'div', 'font-size:17px;line-height:1.35', card.text);
+	var list = add(box, 'ol', 'margin:0;padding-left:22px;font-size:16px;line-height:1.4');
+	(card.steps || []).forEach(function (step) { add(list, 'li', 'margin-bottom:4px', step); });
+	var status = add(box, 'div', 'min-height:18px;font-size:15px;text-align:center;color:#69ffd4');
+	var style = 'display:block;box-sizing:border-box;width:100%;min-height:48px;padding:12px;font:18px Pixelify,sans-serif;text-align:center;text-decoration:none;border:0;';
+	if (card.copy_text) {
+		var copy = add(box, 'button', style + 'color:#1a120e;background:#f4ecd8', labels.copy);
+		copy.type = 'button';
+		copy.addEventListener('click', function () {
+			function byHand() {
+				var area = add(box, 'textarea', 'position:absolute;left:-999px');
+				area.value = card.copy_text;
+				area.select();
+				area.setSelectionRange(0, area.value.length);
+				var done = false;
+				try { done = document.execCommand('copy'); } catch (error) {}
+				area.remove();
+				status.textContent = done ? labels.copied : labels.copy_failed;
+			}
+			if (navigator.clipboard && navigator.clipboard.writeText) {
+				navigator.clipboard.writeText(card.copy_text).then(function () { status.textContent = labels.copied; }, byHand);
+			} else {
+				byHand();
+			}
+		});
+	}
+	var link = add(box, 'a', style + 'color:#1a120e;background:#f4c542', labels.open);
+	link.href = card.url;
+	link.target = '_blank';
+	link.rel = 'noopener';
+	var dismiss = add(box, 'button', style + 'color:#f4ecd8;background:#3d2b20', labels.dismiss);
+	dismiss.type = 'button';
+	dismiss.addEventListener('click', function () { wrap.remove(); });
+})
+"""
+
 ## El callback de JavaScript se suelta si nadie lo retiene.
 var _done: JavaScriptObject
 
@@ -85,6 +140,16 @@ func ask_text(title: String, hint: String, labels: Dictionary, on_text: Callable
 	_done = JavaScriptBridge.create_callback(func(args: Array) -> void: on_text.call(str(args[0])))
 	window.__gameTextDialogDone = _done
 	_open(title, hint, "", "ask", labels)
+
+
+## Muestra el cartel con link (ver CARD_SCRIPT).
+func show_card(card: Dictionary) -> void:
+	JavaScriptBridge.eval(build_card_script(card), true)
+
+
+## El JavaScript del cartel, con los datos como un literal.
+static func build_card_script(card: Dictionary) -> String:
+	return CARD_SCRIPT.strip_edges() + "(" + JSON.stringify(card, "", false) + ")"
 
 
 ## El JavaScript completo: la función de SCRIPT llamada con los textos como literales.

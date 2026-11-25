@@ -8,6 +8,7 @@ extends "res://tests/test_base.gd"
 const MAIN_SCENE: String = "res://game/main.tscn"
 const WebPlatform := preload("res://core/web_platform.gd")
 const WebTextDialog := preload("res://core/web_text_dialog.gd")
+const OnlineConfig := preload("res://core/online_config.gd")
 const ICON_DIR: String = "res://assets/ui/game_icons/"
 const LINK: String = "https://ejemplo.com/opinar"
 const TOUCH_MIN: float = 96.0
@@ -24,6 +25,7 @@ class FakePlatform extends WebPlatform:
 	var blocked: bool = false
 	var shown: Array[String] = []
 	var asked: Array[Callable] = []
+	var cards: Array[Dictionary] = []
 
 	func can_backup() -> bool:
 		return backup
@@ -39,6 +41,9 @@ class FakePlatform extends WebPlatform:
 
 	func ask_text(_title: String, _hint: String, _labels: Dictionary, on_text: Callable) -> void:
 		asked.append(on_text)
+
+	func show_card(card: Dictionary) -> void:
+		cards.append(card)
 
 	func can_fullscreen() -> bool:
 		return supported
@@ -78,6 +83,7 @@ func _initialize() -> void:
 	await _test_storage_notices(packed)
 	_test_ios_detection()
 	_test_dialog_script()
+	_test_play_url()
 	await _test_options_layout(packed)
 	_settings.from_dict(_saved_settings)
 	_finish()
@@ -248,7 +254,7 @@ func _test_web_options(packed: PackedScene) -> void:
 	if version == null or full == null or feedback == null:
 		await _free(scene)
 		return
-	_check_eq(version.text, "Versión 0.6.0", "muestra la versión")
+	_check_eq(version.text, "Versión 0.6.1", "muestra la versión")
 	_check(version.is_visible_in_tree(), "a la vista")
 	_check(not full.visible, "si el navegador no permite pantalla completa, no hay botón")
 	_check(not feedback.visible, "sin link no hay Opinar")
@@ -371,27 +377,39 @@ func _test_backup(packed: PackedScene) -> void:
 
 
 func _test_storage_notices(packed: PackedScene) -> void:
-	_section("Avisos de guardado: iPhone dentro de itch.io, o navegador que no deja guardar")
+	_section("En iPhone dentro de itch.io: cartel para mudarse al link propio")
 	var economy: Node = root.get_node("Economy")
-	_settings.storage_notice_seen = false
+	var save: Node = root.get_node("Save")
 	economy.reset()
 	var platform: FakePlatform = FakePlatform.new()
 	var scene: Control = await _mount(packed, PHONE_SIZES[0])
 	(scene.get_node("OptionsPanel") as Control).set("platform", platform)
 	var modal: Control = scene.get_node("Modal") as Control
+	scene.call("check_ios_card")
+	_check(platform.cards.is_empty(), "donde el guardado es normal no sale nada")
+	platform.fragile = true
+	scene.call("check_ios_card")
+	_check_eq(platform.cards.size(), 1, "en iPhone dentro del iframe sale el cartel apenas se abre")
+	if platform.cards.size() == 1:
+		var card: Dictionary = platform.cards[0]
+		_check(str(card["title"]).contains("iPhone") and str(card["title"]).contains("borrarse"), "avisa que la partida puede borrarse (%s)" % card["title"])
+		_check_eq(card["url"], OnlineConfig.play_url(), "el botón abre el link propio")
+		_check(str(card["text"]).contains("aguscarretto.github.io/pozo-profundo") and str(card["text"]).contains("pantalla de inicio"), "y dice adónde ir y que lo agregue al inicio (%s)" % card["text"])
+		var steps: String = " | ".join(PackedStringArray(card["steps"]))
+		_check(steps.contains("Compartir") and steps.contains("Agregar a inicio"), "con una mini guía (%s)" % steps)
+		_check_eq(card["copy_text"], "", "sin partida no hay nada que llevar")
+	economy.run_gold = 5000.0
+	economy.owned[0] = 4
+	platform.cards.clear()
+	scene.call("check_ios_card")
+	if platform.cards.size() == 1:
+		var with_game: Dictionary = platform.cards[0]
+		_check_eq(save.read_code(with_game["copy_text"]).get("sections", {}).get("economy", {}).get("owned", [0])[0], 4.0, "con partida, se puede copiar para llevarla")
+		_check(" | ".join(PackedStringArray(with_game["steps"])).contains("Restaurar copia"), "y la guía dice dónde pegarla")
+	economy.reset()
 	economy.gold = 1.0e6
 	economy.buy_generator(0, 0)
-	_check(not modal.visible, "donde el guardado es normal, comprar no avisa nada")
-
-	platform.fragile = true
-	economy.buy_generator(0, 0)
-	_check(modal.visible and modal.body_label.text.contains("iPhone"), "en iPhone, al comprar avisa que la partida se puede borrar")
-	_check_eq(_settings.storage_notice_seen, true, "y lo anota")
-	_check_eq(_settings.to_dict().get("storage_notice_seen"), true, "en lo que se guarda")
-	modal.confirm_button.pressed.emit()
-	_check_eq(platform.shown.size(), 1, "desde el aviso se guarda la copia")
-	economy.upgrade_pick()
-	_check(not modal.visible, "no se repite")
+	_check(not modal.visible, "ya no hay un segundo aviso al comprar")
 
 	scene.call("check_storage")
 	_check(not modal.visible, "si el navegador deja guardar, al abrir no hay aviso")
@@ -401,6 +419,16 @@ func _test_storage_notices(packed: PackedScene) -> void:
 	modal.confirm_button.pressed.emit()
 	economy.reset()
 	await _free(scene)
+
+
+## El link del juego fuera de itch.io sale de data/links.json.
+func _test_play_url() -> void:
+	_section("El link propio del juego")
+	_check_eq(OnlineConfig.play_url(), "https://aguscarretto.github.io/pozo-profundo/", "está en data/links.json")
+	_check_eq(OnlineConfig.play_url("res://data/no_existe.json"), "", "sin archivo, vacío")
+	_check_eq(OnlineConfig.play_url("res://data/balance.json"), "", "sin el dato, vacío")
+	var script: String = WebTextDialog.build_card_script({ "title": "100% \"seguro\"", "url": "https://ejemplo.com/" })
+	_check(script.contains("target = '_blank'") and script.ends_with("({\"title\":\"100% \\\"seguro\\\"\",\"url\":\"https://ejemplo.com/\"})"), "el cartel del navegador usa un link de verdad (%s)" % script.right(70))
 
 
 ## El iPad se presenta como una Mac: se lo reconoce por la pantalla táctil.

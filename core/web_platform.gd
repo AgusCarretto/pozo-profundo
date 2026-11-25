@@ -45,6 +45,19 @@ func storage_blocked() -> bool:
 	return not is_true(JavaScriptBridge.eval("(function(){try{localStorage.setItem('__probe','1');localStorage.removeItem('__probe');return true}catch(e){return false}})()", true))
 
 
+## Un cartel del navegador con un link y, si hace falta, un texto para copiar (ver web_text_dialog.gd).
+func show_card(card: Dictionary) -> void:
+	_dialog.show_card(card)
+
+
+## En un iPhone o iPad abierto desde la pantalla de inicio, pide que el navegador no descarte el almacenamiento
+## (WebKit lo concede a esas apps). Fuera de ahí no se pide: algunos navegadores preguntan al usuario.
+func request_persistent_storage() -> void:
+	if not OS.has_feature("web"):
+		return
+	JavaScriptBridge.eval("(function(){var home=window.navigator.standalone===true;if(home&&navigator.storage&&navigator.storage.persist){navigator.storage.persist().catch(function(){})}})()", true)
+
+
 ## Muestra un texto para copiarlo (ver web_text_dialog.gd).
 func show_text(title: String, hint: String, text: String, labels: Dictionary) -> void:
 	_dialog.show_text(title, hint, text, labels)
