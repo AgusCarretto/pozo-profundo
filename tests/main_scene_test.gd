@@ -69,8 +69,11 @@ func _balance_without_loot() -> Dictionary:
 	return balance
 
 
+## El balance real, sin críticos (los tests cuentan el oro golpe a golpe).
 func _real_balance() -> Dictionary:
-	return JSON.parse_string(FileAccess.get_file_as_string("res://data/balance.json"))
+	var balance: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/balance.json"))
+	balance.erase("crit")
+	return balance
 
 
 ## Reemplaza la escena por una nueva, cargando antes `balance` en Economy.

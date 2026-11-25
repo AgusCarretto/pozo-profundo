@@ -25,7 +25,7 @@ const MUSIC_INTROS: Dictionary = { "earth": 10.0, "frenzy": 1.5 }
 ## El prestigio suena una vez; el resto loopea.
 const MUSIC_ONCE: Array[String] = ["prestige"]
 ## Los SFX que el juego pide sí o sí (los de los cofres se agregan por rareza del balance).
-const REQUIRED_SFX: Array[String] = ["hit", "buy", "pick", "tab", "mode", "toggle", "open", "close", "prestige", "biome", "dynamite", "coins", "relic"]
+const REQUIRED_SFX: Array[String] = ["hit", "crit", "buy", "pick", "tab", "mode", "toggle", "open", "close", "prestige", "biome", "dynamite", "coins", "relic"]
 
 var _economy: Node
 var _audio: Node
@@ -69,8 +69,11 @@ func _catalog() -> Dictionary:
 	return parsed if parsed is Dictionary else {}
 
 
+## El balance real, sin críticos: con uno al azar sonaría "crit" en vez de "hit".
 func _real_balance() -> Dictionary:
-	return JSON.parse_string(FileAccess.get_file_as_string("res://data/balance.json"))
+	var balance: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/balance.json"))
+	balance.erase("crit")
+	return balance
 
 
 func _mount() -> void:
@@ -236,6 +239,17 @@ func _test_economy_cues() -> void:
 	_take()
 	_button("TapButton").button_down.emit()
 	_check(_take().has("hit"), "golpear la roca")
+	var sure: Dictionary = _real_balance()
+	sure["crit"] = { "chance": 1.0, "multiplier": 2.0 }
+	_economy.load_balance(sure)
+	_take()
+	_button("TapButton").button_down.emit()
+	var critical: Array[String] = _take()
+	_check(critical.has("crit") and not critical.has("hit"), "un crítico suena distinto (%s)" % str(critical))
+	_economy.load_balance(_real_balance())
+	_economy.gold = 1.0e6
+	await process_frame
+	_take()
 	var buy: Button = _scene.get_node("%Shop").get_child(1) as Button
 	buy.pressed.emit()
 	_check(_take().has("buy"), "comprar un generador")

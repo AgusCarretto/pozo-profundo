@@ -54,6 +54,7 @@ func _balance() -> Dictionary:
 func _real_balance_without_loot() -> Dictionary:
 	var balance: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/balance.json"))
 	balance.erase("loot")
+	balance.erase("crit") # un crítico al azar cambiaría el número que sale de la roca
 	return balance
 
 

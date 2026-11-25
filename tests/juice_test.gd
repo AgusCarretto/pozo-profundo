@@ -5,6 +5,7 @@ extends "res://tests/scene_fx_base.gd"
 ## Los helpers y el armado de la escena están en scene_fx_base.gd.
 
 const WebPlatform := preload("res://core/web_platform.gd")
+const Palette := preload("res://game/palette.gd")
 
 
 ## Anota las vibraciones pedidas.
@@ -19,6 +20,7 @@ func _run_tests() -> void:
 	await _test_fx_layer()
 	await _test_floating_number()
 	await _test_floating_number_cap()
+	await _test_critical_hit()
 	await _test_rock_squash()
 	await _test_shake()
 	await _test_reduce_effects()
@@ -74,6 +76,29 @@ func _test_floating_number_cap() -> void:
 	_check(_floaters().size() <= cap, "60 golpes dejan como mucho %d números (%d)" % [cap, _floaters().size()])
 	await _wait(1.5)
 	_check_eq(_floaters().size(), 0, "y se van todos")
+
+
+func _test_critical_hit() -> void:
+	_section("Un golpe crítico se nota")
+	await _wait(1.0)
+	_tap()
+	var normal: Label = _floaters().back()
+	var normal_size: int = normal.get_theme_font_size("font_size")
+	var normal_color: Color = normal.get_theme_color("font_color")
+	await _wait(1.0)
+	var sure: Dictionary = _balance()
+	sure["crit"] = { "chance": 1.0, "multiplier": 2.0 }
+	_economy.load_balance(sure)
+	var gems: int = int(_mine().get("gem_bursts"))
+	_tap()
+	var crit: Label = _floaters().back()
+	_check_eq(crit.text, "¡+%s!" % NumberFormat.format_number(_economy.hit_value() * 2.0), "dice el doble, entre signos (%s)" % crit.text)
+	_check(crit.get_theme_font_size("font_size") > normal_size, "con la letra más grande")
+	_check(crit.get_theme_color("font_color") != normal_color, "y de otro color")
+	_check(crit.get_theme_color("font_color") != Palette.RED, "que no es el rojo del prestigio")
+	_check_eq(int(_mine().get("gem_bursts")), gems + 1, "y siempre saltan gemas")
+	_economy.load_balance(_balance())
+	await _wait(1.0)
 
 
 func _test_rock_squash() -> void:

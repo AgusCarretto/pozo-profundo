@@ -215,7 +215,8 @@ func _on_tap() -> void:
 
 ## Cada golpe se ve: la roca se aplasta, la mina se sacude y sale el oro que dio flotando.
 func _on_hit_landed(amount: float) -> void:
-	_mine_view.play_hit("+%s" % NumberFormat.format_number(amount))
+	var critical: bool = Economy.last_hit_critical
+	_mine_view.play_hit(("¡+%s!" if critical else "+%s") % NumberFormat.format_number(amount), critical)
 
 
 ## Silencia todo o devuelve el sonido. El click suena solo al devolverlo (silenciado no suena nada).

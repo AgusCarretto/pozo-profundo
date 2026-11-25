@@ -7,7 +7,7 @@ extends Node
 
 ## El oro cambió (golpe, compra, producción pasiva, carga de partida).
 signal gold_changed(gold: float)
-## Un golpe a la roca sumó `amount` de oro.
+## Un golpe a la roca sumó `amount` de oro. Si fue crítico, last_hit_critical ya está puesto.
 signal hit_landed(amount: float)
 signal generator_bought(index: int, count: int)
 signal pick_upgraded(level: int)
@@ -50,7 +50,9 @@ var loot_bonus: float = 0.0
 var relics: int = 0
 ## Aviso del progreso offline que el jugador todavía no vio ({} = ninguno). No se guarda.
 var pending_offline_report: Dictionary = {}
-## Azar del botín. Los tests le fijan la semilla para repetir una tirada.
+## El último golpe fue crítico.
+var last_hit_critical: bool = false
+## Azar del botín y de los críticos. Los tests le fijan la semilla para repetir una tirada.
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 ## Multiplicador global de oro: bioma x (1 + botín efectivo) x (1 + 0.25 x reliquias).
@@ -71,6 +73,8 @@ var _max_biome: int = 0
 var _generators: Array[Dictionary] = []
 var _cost_growth: float = 0.0
 var _pick: Dictionary = {}
+## Golpes críticos (chance, multiplier). Vacío = sin críticos.
+var _crit: Dictionary = {}
 ## Secciones opcionales del balance: vacías = ese sistema está apagado (profundidad 0 m, bioma único x1).
 var _depth: Dictionary = {}
 var _biomes: Array[Dictionary] = []
@@ -160,6 +164,11 @@ func load_balance(balance: Dictionary) -> bool:
 			return _fail("pick.%s es inválido" % key)
 		parsed_pick[key] = value
 
+	var parsed_crit: Variant = _read_numbers(balance, "crit", ["multiplier"], ["chance"])
+	if parsed_crit == null:
+		return false
+	if not (parsed_crit as Dictionary).is_empty() and (parsed_crit["chance"] > 1.0 or parsed_crit["multiplier"] < 1.0):
+		return _fail("crit: la chance va de 0 a 1 y el multiplicador es de 1 o más")
 	var parsed_depth: Variant = _read_numbers(balance, "depth", ["meters_scale", "gold_scale"])
 	if parsed_depth == null:
 		return false
@@ -185,6 +194,7 @@ func load_balance(balance: Dictionary) -> bool:
 	_cost_growth = growth
 	_generators = parsed_generators
 	_pick = parsed_pick
+	_crit = parsed_crit
 	_depth = parsed_depth
 	_prestige = parsed_prestige
 	_offline = parsed_offline
@@ -563,9 +573,12 @@ func hit_value() -> float:
 	return EconomyMath.hit_value(pick_level, _pick["power_base"], multiplier, gold_per_second(), _pick["passive_share"])
 
 
-## Un golpe a la roca. Devuelve el oro ganado.
+## Un golpe a la roca, que puede salir crítico. Devuelve el oro ganado.
 func hit() -> float:
 	var amount: float = hit_value()
+	last_hit_critical = not _crit.is_empty() and _crit["chance"] > 0.0 and rng.randf() < _crit["chance"]
+	if last_hit_critical:
+		amount *= float(_crit["multiplier"])
 	_earn(amount)
 	hit_landed.emit(amount)
 	_roll_loot(_loot_hit_chance)

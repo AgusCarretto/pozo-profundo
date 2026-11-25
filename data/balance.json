@@ -13,6 +13,10 @@
 		"cost_growth": 12,
 		"passive_share": 0.06
 	},
+	"crit": {
+		"chance": 0.08,
+		"multiplier": 2
+	},
 	"depth": {
 		"meters_scale": 25,
 		"gold_scale": 10

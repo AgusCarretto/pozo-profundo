@@ -11,6 +11,14 @@
 			"pitch": [0.9, 1.12],
 			"volume_db": -3
 		},
+		"crit": {
+			"files": [
+				"res://assets/audio/impact_sounds/impactMining_000.ogg",
+				"res://assets/audio/impact_sounds/impactMining_002.ogg"
+			],
+			"pitch": [1.35, 1.45],
+			"volume_db": 1
+		},
 		"buy": {
 			"files": ["res://assets/audio/rpg_audio/handleCoins.ogg"],
 			"pitch": [0.95, 1.08],

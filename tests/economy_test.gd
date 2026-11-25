@@ -25,6 +25,7 @@ var _nodes: Array[Node] = []
 func _initialize() -> void:
 	_test_initial_state()
 	_test_hit()
+	_test_critical_hits()
 	_test_buy_one()
 	_test_buy_ten()
 	_test_buy_max()
@@ -81,6 +82,43 @@ func _test_hit() -> void:
 	_check_eq(e.gold, 1.0, "el oro sube 1")
 	_check_eq(hits, [1.0] as Array[float], "emite hit_landed(1)")
 	_check_eq(golds, [1.0] as Array[float], "emite gold_changed(1)")
+
+
+func _test_critical_hits() -> void:
+	_section("Golpes críticos")
+	var sure: Dictionary = TEST_BALANCE.duplicate(true)
+	sure["crit"] = { "chance": 1.0, "multiplier": 2.0 }
+	var e: EconomyScript = _make()
+	_check(e.load_balance(sure), "carga con la sección crit")
+	var hits: Array[float] = []
+	var flags: Array[bool] = []
+	e.hit_landed.connect(func(amount: float) -> void:
+		hits.append(amount)
+		flags.append(e.last_hit_critical))
+	_check_eq(e.hit(), 2.0, "un crítico vale el doble")
+	_check_eq(e.gold, 2.0, "y eso es lo que entra")
+	_check_eq(hits, [2.0] as Array[float], "hit_landed lleva el monto del crítico")
+	_check_eq(flags, [true] as Array[bool], "y last_hit_critical ya está puesto al avisar")
+	_check_eq(e.hit_value(), 1.0, "el 'Golpe' que se muestra es el normal")
+	var never: EconomyScript = _make()
+	never.hit()
+	_check(never.gold == 1.0 and not never.last_hit_critical, "sin sección crit no hay críticos")
+	var real: Dictionary = TEST_BALANCE.duplicate(true)
+	real["crit"] = { "chance": 0.08, "multiplier": 2.0 }
+	var often: EconomyScript = _make()
+	often.load_balance(real)
+	often.rng.seed = 7
+	var crits: int = 0
+	for i: int in range(20000):
+		often.hit()
+		if often.last_hit_critical:
+			crits += 1
+	_check(absf(crits - 1600.0) < 150.0, "8%% de chance: ~1600 de 20000 (%d)" % crits)
+	_check_eq(often.gold, 20000.0 + crits, "cada crítico sumó un golpe de más")
+	for bad: Dictionary in [{ "chance": 1.5, "multiplier": 2.0 }, { "chance": -0.1, "multiplier": 2.0 }, { "chance": 0.1, "multiplier": 0.5 }, { "chance": 0.1 }]:
+		var broken: Dictionary = TEST_BALANCE.duplicate(true)
+		broken["crit"] = bad
+		_check_eq(often.load_balance(broken), false, "crit %s -> inválido" % str(bad))
 
 
 func _test_buy_one() -> void:

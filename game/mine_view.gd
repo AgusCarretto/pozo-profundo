@@ -70,6 +70,8 @@ const FLOAT_LANES: Array[float] = [-0.26, 0.12, -0.08, 0.28, 0.0, -0.3, 0.2]
 const FLOAT_JITTER: float = 0.04
 ## Golpe: vibración corta (solo hace algo en celulares).
 const VIBRATION_MS: int = 25
+## Crítico: sacude más fuerte, siempre saltan gemas y el número va con su propio estilo (CritLabel).
+const CRIT_SHAKE: float = 2.0
 ## Golpe: astillas de la roca (chips_<bioma>.png, 4 dibujos en 2x2) y, a veces, gemas. Cada golpe usa el
 ## emisor siguiente de un grupo fijo (así una tanda no corta a la anterior). Con reduce_effects, la mitad.
 const CHIP_EMITTERS: int = 4
@@ -211,6 +213,8 @@ var _base_positions: Dictionary = {}
 var _squash_tween: Tween
 var _shake_tween: Tween
 var _shake_direction: Vector2 = Vector2.RIGHT
+## Fuerza de la sacudida en curso (1 = un golpe normal).
+var _shake_force: float = 1.0
 var _next_lane: int = 0
 ## Reloj de las animaciones en loop (picos, runas): segundos de juego desde que arrancó la mina.
 var _anim_time: float = 0.0
@@ -271,13 +275,15 @@ func _ready() -> void:
 # --- Golpe -------------------------------------------------------------------
 
 ## Lo que se ve y se siente al golpear: la roca se aplasta, la mina se sacude, sale `text` flotando y el
-## celular vibra. Con reduce_effects no hay sacudida ni vibración (el número y el aplastado quedan).
-func play_hit(text: String) -> void:
+## celular vibra. Con reduce_effects no hay sacudida ni vibración (el número y el aplastado quedan). Un golpe
+## `critical` se nota más: número grande, gemas seguras y más sacudida.
+func play_hit(text: String, critical: bool = false) -> void:
 	_squash_rock()
-	_burst_particles()
-	_spawn_floater(text)
+	_burst_particles(critical)
+	_spawn_floater(text, critical)
 	if reduce_effects:
 		return
+	_shake_force = CRIT_SHAKE if critical else 1.0
 	_shake()
 	vibrations += 1
 	platform.vibrate(VIBRATION_MS)
@@ -304,7 +310,7 @@ func _shake() -> void:
 
 ## `progress` de 0 a 1: oscila (tres idas y vueltas) y se achica hasta cero.
 func _shake_step(progress: float) -> void:
-	var amplitude: float = SHAKE_STRENGTH * _unit * (1.0 - progress)
+	var amplitude: float = SHAKE_STRENGTH * _shake_force * _unit * (1.0 - progress)
 	shake_offset = (_shake_direction * amplitude * cos(progress * TAU * 3.0)).round()
 
 
@@ -564,15 +570,16 @@ func clear_effects() -> void:
 	shake_offset = Vector2.ZERO
 
 
-## Una tanda de astillas desde la parte de arriba de la roca y, con suerte (GEM_CHANCE), unas gemas.
-func _burst_particles() -> void:
+## Una tanda de astillas desde la parte de arriba de la roca y, con suerte (GEM_CHANCE) o seguro si
+## `sure_gems`, unas gemas.
+func _burst_particles(sure_gems: bool = false) -> void:
 	var rock_rect: Rect2 = Rect2(_base_positions.get(_rock, _rock.position), _rock.size)
 	var origin: Vector2 = Vector2(rock_rect.get_center().x, rock_rect.position.y + rock_rect.size.y * 0.3)
 	var chips: CPUParticles2D = _chip_emitters[_next_chip]
 	_next_chip = (_next_chip + 1) % _chip_emitters.size()
 	var extents: Vector2 = Vector2(rock_rect.size.x * 0.25, rock_rect.size.y * 0.08)
 	_fire(chips, origin, extents, Vector2.UP)
-	if rng.randf() < GEM_CHANCE:
+	if rng.randf() < GEM_CHANCE or sure_gems:
 		var gems: CPUParticles2D = _gem_emitters[_next_gem]
 		_next_gem = (_next_gem + 1) % _gem_emitters.size()
 		_fire(gems, origin, extents, Vector2.UP)
@@ -637,7 +644,7 @@ func _apply_particle_amounts() -> void:
 		emitter.amount = maxi(GEM_AMOUNT / 2, 1) if reduce_effects else GEM_AMOUNT
 
 
-func _spawn_floater(text: String) -> void:
+func _spawn_floater(text: String, critical: bool = false) -> void:
 	var alive: Array[Node] = []
 	for child: Node in _fx.get_children():
 		if child is Label and not child.is_queued_for_deletion():
@@ -645,7 +652,7 @@ func _spawn_floater(text: String) -> void:
 	while alive.size() >= MAX_FLOATERS:
 		alive.pop_front().queue_free()
 	var label: Label = Label.new()
-	label.theme_type_variation = &"FloatLabel"
+	label.theme_type_variation = &"CritLabel" if critical else &"FloatLabel"
 	label.text = text
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_fx.add_child(label)

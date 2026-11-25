@@ -7,11 +7,16 @@ extends Node
 
 
 func _ready() -> void:
-	Economy.hit_landed.connect(_play.bind("hit").unbind(1))
+	Economy.hit_landed.connect(_on_hit_landed.unbind(1))
 	Economy.generator_bought.connect(_play.bind("buy").unbind(2))
 	Economy.pick_upgraded.connect(_play.bind("pick").unbind(1))
 	Economy.loot_dropped.connect(_on_loot_dropped)
 	Economy.prestiged.connect(_play.bind("prestige").unbind(1))
+
+
+## Un golpe crítico tiene su sonido, en lugar del de siempre.
+func _on_hit_landed() -> void:
+	_play("crit" if Economy.last_hit_critical else "hit")
 
 
 ## El cofre suena según su rareza: "chest_<id de la rareza en el balance>".
