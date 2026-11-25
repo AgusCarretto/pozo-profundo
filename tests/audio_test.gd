@@ -128,6 +128,12 @@ func _test_buses() -> void:
 	var before: int = AudioServer.bus_count
 	var second: AudioScript = _make_audio()
 	_check_eq(AudioServer.bus_count, before, "un segundo Audio no duplica los buses")
+	# Dos fallas de Godot 4.7 en la web que acá no se pueden reproducir (solo se oyen en el navegador):
+	# add_bus() desordena los buses y deja todo mudo, y el modo "sample" no respeta loop_offset.
+	_check(not FileAccess.get_file_as_string("res://core/audio.gd").contains("AudioServer.add_bus("), "no crea buses con AudioServer.add_bus()")
+	for node_name: String in ["Music0", "Music1"]:
+		_check_eq((audio.get_node(node_name) as AudioStreamPlayer).playback_type, AudioServer.PLAYBACK_TYPE_STREAM, "%s mezcla la música en modo stream (loops como en la PC)" % node_name)
+	_check_eq((audio.get_node("Sfx0") as AudioStreamPlayer).playback_type, AudioServer.PLAYBACK_TYPE_DEFAULT, "los efectos usan el modo de la plataforma (menos demora)")
 	_drop(second)
 	_drop(audio)
 

@@ -90,6 +90,9 @@ func _ready() -> void:
 		_voices.append(_make_player("Sfx%d" % index, SFX_BUS))
 	for index: int in range(2):
 		var player: AudioStreamPlayer = _make_player("Music%d" % index, MUSIC_BUS)
+		# La música se mezcla en modo stream también en la web: el modo "sample" (el de por defecto ahí) no respeta
+		# loop_offset y decodifica cada tema entero en memoria. Los efectos quedan en sample, con menos demora.
+		player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 		player.finished.connect(_on_music_finished.bind(player))
 		_music_players.append(player)
 	if settings == null:
@@ -394,8 +397,10 @@ func _set_bus_volume(bus: StringName, volume: float, gain_db: float = 0.0) -> vo
 func _ensure_bus(bus: StringName) -> void:
 	if AudioServer.get_bus_index(bus) >= 0:
 		return
-	var index: int = AudioServer.bus_count
-	AudioServer.add_bus(index)
+	# Agrandar bus_count suma el bus al final. Con add_bus(), en la web (Godot 4.7) el motor desordena los buses del
+	# navegador, Master queda desconectado de la salida y no se oye nada.
+	AudioServer.bus_count += 1
+	var index: int = AudioServer.bus_count - 1
 	AudioServer.set_bus_name(index, bus)
 	AudioServer.set_bus_send(index, MASTER_BUS)
 
