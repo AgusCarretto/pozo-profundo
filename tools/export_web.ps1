@@ -85,9 +85,10 @@ if (-not (Test-Path (Join-Path $out "index.pck"))) {
     throw "La exportación no dejó index.pck en $out."
 }
 
-# Lo que usa la pantalla de carga (web/shell.html). La licencia acompaña a la fuente.
-Copy-Item (Join-Path $project "assets\fonts\PixelifySans.ttf") $out
-Copy-Item (Join-Path $project "assets\fonts\OFL.txt") $out
+# Lo que usa la pantalla de carga (web/shell.html). Cada fuente va con su licencia.
+foreach ($file in "PixelifySans.ttf", "OFL.txt", "VT323Digits.ttf", "VT323-OFL.txt") {
+    Copy-Item (Join-Path $project "assets\fonts\$file") $out
+}
 Copy-Item (Join-Path $project "assets\sprites\generated\rock_earth.png") (Join-Path $out "loading_rock.png")
 
 Get-ChildItem $out | Select-Object Name, @{n = "KB"; e = { [math]::Round($_.Length / 1KB) } } | Format-Table -AutoSize

@@ -1,10 +1,11 @@
 extends Control
 ## Créditos y licencias, encima de Opciones. Se arma por código y empieza cerrado.
 ##
-## Las licencias de Godot (MIT) y de Pixelify Sans (OFL) piden acompañar lo que se distribuye. El detalle completo
-## de cada asset está en CREDITS.md; un asset nuevo que pida crédito se suma también acá.
+## Las licencias de Godot (MIT) y de las fuentes Pixelify Sans y VT323 (OFL) piden acompañar lo que se distribuye.
+## El detalle completo de cada asset está en CREDITS.md; un asset nuevo que pida crédito se suma también acá.
 
 const FONT_LICENSE_PATH: String = "res://assets/fonts/OFL.txt"
+const NUMBER_FONT_LICENSE_PATH: String = "res://assets/fonts/VT323-OFL.txt"
 ## Margen del cartel con el borde de la pantalla y alto del botón (px de diseño).
 const SCREEN_MARGIN: int = 40
 const TOUCH_HEIGHT: float = 96.0
@@ -69,6 +70,7 @@ func _init() -> void:
 	_scroll.add_child(text_box)
 	_add_text(text_box, ASSET_CREDITS)
 	_add_text(text_box, "Fuente: Pixelify Sans\n" + FileAccess.get_file_as_string(FONT_LICENSE_PATH).strip_edges())
+	_add_text(text_box, "Fuente de los números: VT323 (solo los dígitos)\n" + FileAccess.get_file_as_string(NUMBER_FONT_LICENSE_PATH).strip_edges())
 	_add_text(text_box, "Motor: Godot Engine (godotengine.org)\n" + Engine.get_license_text().strip_edges())
 	_add_text(text_box, ENGINE_PARTS)
 

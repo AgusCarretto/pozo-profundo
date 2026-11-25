@@ -12,6 +12,7 @@ const GENERATED_DIR: String = "res://assets/sprites/generated/"
 const TINY_DUNGEON_DIR: String = "res://assets/sprites/tiny_dungeon/"
 const UI_PACK_DIR: String = "res://assets/ui/ui_pack/"
 const FONT_PATH: String = "res://assets/fonts/PixelifySans.ttf"
+const NUMBER_FONT_PATH: String = "res://assets/fonts/VT323Digits.ttf"
 const CREDITS_PATH: String = "res://CREDITS.md"
 const BALANCE_PATH: String = "res://data/balance.json"
 
@@ -52,6 +53,7 @@ func _initialize() -> void:
 	_test_credits()
 	_test_font_covers_ui_text()
 	_test_font_has_no_ligatures()
+	_test_numbers_use_their_own_font()
 	_finish()
 
 
@@ -477,7 +479,7 @@ func _test_credits() -> void:
 		if not ok:
 			uncovered.append(relative)
 	_check(uncovered.is_empty(), "todo archivo de assets/ está bajo una ruta de CREDITS.md (sin crédito: %s)" % str(uncovered))
-	for needle: String in ["Kenney", "CC0", "Pixelify Sans", "OFL", "Open Font License", "kenney.nl/assets/tiny-dungeon", "kenney.nl/assets/ui-pack", "pixelsphere.org", "The Cynic Project", "soundcloud.com/mutkanto", "Ville Nousiainen", "Juhani Junkala"]:
+	for needle: String in ["Kenney", "CC0", "Pixelify Sans", "OFL", "Open Font License", "kenney.nl/assets/tiny-dungeon", "kenney.nl/assets/ui-pack", "VT323", "pixelsphere.org", "The Cynic Project", "soundcloud.com/mutkanto", "Ville Nousiainen", "Juhani Junkala"]:
 		_check(credits.contains(needle), "CREDITS.md menciona '%s'" % needle)
 
 
@@ -531,6 +533,17 @@ func _test_font_covers_ui_text() -> void:
 ## En Pixelify Sans la ligadura "fi" se dibuja como una "A": "superficie" se leía "superAcie". El tema las apaga.
 func _test_font_has_no_ligatures() -> void:
 	_section("Las fuentes del tema no juntan letras")
+	var fonts: Array[Font] = _theme_fonts()
+	var server: TextServer = TextServerManager.get_primary_interface()
+	for index: int in range(fonts.size()):
+		for word: String in ["superficie", "fl", "ff"]:
+			var line: TextLine = TextLine.new()
+			line.add_string(word, fonts[index], 40)
+			_check_eq(server.shaped_text_get_glyphs(line.get_rid()).size(), word.length(), "fuente %d: '%s' son %d letras sueltas" % [index, word, word.length()])
+
+
+## Todas las fuentes que usa el tema (la de por defecto y las de cada tipo).
+func _theme_fonts() -> Array[Font]:
 	var theme: Theme = load("res://ui/theme.tres") as Theme
 	var fonts: Array[Font] = [theme.default_font]
 	for type_name: String in theme.get_font_type_list():
@@ -538,9 +551,42 @@ func _test_font_has_no_ligatures() -> void:
 			var font: Font = theme.get_font(font_name, type_name)
 			if not fonts.has(font):
 				fonts.append(font)
+	return fonts
+
+
+## Los glifos con los que se dibuja `text`.
+func _shape(text: String, font: Font) -> Array[Dictionary]:
+	var line: TextLine = TextLine.new()
+	line.add_string(text, font, 40)
+	return TextServerManager.get_primary_interface().shaped_text_get_glyphs(line.get_rid())
+
+
+func _glyph_height(glyph: Dictionary) -> float:
+	return TextServerManager.get_primary_interface().font_get_glyph_size(glyph["font_rid"], Vector2i(40, 0), glyph["index"]).y
+
+
+## En Pixelify el 5 y la S son iguales: los números salen de VT323 (con el 0 tachado) y las letras de Pixelify.
+## Y Pixelify va en peso 500 o menos: en 700 la C se cierra y parece una O.
+func _test_numbers_use_their_own_font() -> void:
+	_section("Números en VT323, letras en Pixelify")
 	var server: TextServer = TextServerManager.get_primary_interface()
+	var fonts: Array[Font] = _theme_fonts()
 	for index: int in range(fonts.size()):
-		for word: String in ["superficie", "fl", "ff"]:
-			var line: TextLine = TextLine.new()
-			line.add_string(word, fonts[index], 40)
-			_check_eq(server.shaped_text_get_glyphs(line.get_rid()).size(), word.length(), "fuente %d: '%s' son %d letras sueltas" % [index, word, word.length()])
+		var font: FontVariation = fonts[index] as FontVariation
+		var label: String = "fuente %d" % index
+		_check(font != null and font.base_font != null and font.base_font.resource_path == NUMBER_FONT_PATH, "%s: primero la de los números" % label)
+		_check(font != null and font.fallbacks.size() == 1, "%s: con una de respaldo para las letras" % label)
+		if font == null or font.base_font == null or font.fallbacks.size() != 1:
+			continue
+		var letters: FontVariation = font.fallbacks[0] as FontVariation
+		_check(letters != null and letters.base_font.resource_path == FONT_PATH, "%s: las letras son de Pixelify Sans" % label)
+		if letters == null:
+			continue
+		_check(int(letters.variation_opentype.get(server.name_to_tag("wght"), 700)) <= 500, "%s: en peso 500 o menos" % label)
+		var primary: RID = font.get_rids()[0]
+		_check(_shape("0123456789", font).all(func(g: Dictionary) -> bool: return g["font_rid"] == primary), "%s: los diez dígitos salen de VT323" % label)
+		_check(_shape("SOCMKB×.%+", font).all(func(g: Dictionary) -> bool: return g["font_rid"] != primary), "%s: letras y signos no" % label)
+		_check(_shape("0", font)[0]["index"] != _shape("0", font.base_font)[0]["index"], "%s: el 0 va tachado" % label)
+		_check(absf(font.get_height(40) - letters.get_height(40)) <= 1.0, "%s: las líneas miden lo mismo que con Pixelify sola (%.1f y %.1f)" % [label, font.get_height(40), letters.get_height(40)])
+		var ratio: float = _glyph_height(_shape("5", font)[0]) / _glyph_height(_shape("5", letters)[0])
+		_check(absf(ratio - 1.0) <= 0.12, "%s: el 5 mide casi lo mismo que el de Pixelify (%.2f)" % [label, ratio])

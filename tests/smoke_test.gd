@@ -70,10 +70,11 @@ func _test_export_settings() -> void:
 		_check(excluded.has(pattern), "el export no lleva %s" % pattern)
 	var included: PackedStringArray = str(preset.get_value("preset.0", "include_filter", "")).split(",")
 	_check(included.has("assets/fonts/OFL.txt"), "el export lleva la licencia de la fuente")
+	_check(included.has("assets/fonts/VT323-OFL.txt"), "y la de la fuente de los números")
 	var shell: String = str(preset.get_value("preset.0.options", "html/custom_html_shell", ""))
 	_check(shell == "res://web/shell.html", "usa la pantalla de carga propia")
 	var html: String = FileAccess.get_file_as_string("res://web/shell.html") if FileAccess.file_exists("res://web/shell.html") else ""
-	for piece: String in ["$GODOT_URL", "$GODOT_CONFIG", "$GODOT_PROJECT_NAME", "$GODOT_HEAD_INCLUDE", "onProgress"]:
+	for piece: String in ["$GODOT_URL", "$GODOT_CONFIG", "$GODOT_PROJECT_NAME", "$GODOT_HEAD_INCLUDE", "onProgress", "VT323Digits.ttf", "unicode-range: U+0030-0039"]:
 		_check(html.contains(piece), "la pantalla de carga tiene %s" % piece)
 
 

@@ -7,13 +7,21 @@
 		<title>$GODOT_PROJECT_NAME</title>
 		<!--
 			Pantalla de carga de Pozo Profundo. La usa el export Web (export_presets.cfg).
-			La fuente y la roca las copia tools/export_web.ps1 junto al index.html; sin ellas se ve igual,
+			Las fuentes y la roca las copia tools/export_web.ps1 junto al index.html; sin ellas se ve igual,
 			con otra letra y sin el dibujo.
 		-->
 		<style>
 @font-face {
 	font-family: 'Pixelify';
 	src: url('PixelifySans.ttf');
+	font-display: swap;
+}
+
+/* Los números, con VT323 como en el juego (en Pixelify el 5 y la S son iguales). Va después: gana en su rango. */
+@font-face {
+	font-family: 'Pixelify';
+	src: url('VT323Digits.ttf');
+	unicode-range: U+0030-0039;
 	font-display: swap;
 }
 
@@ -55,6 +63,7 @@ body {
 	gap: 24px;
 	background: #1a120e;
 	font-family: 'Pixelify', monospace;
+	font-feature-settings: "zero";
 	text-align: center;
 }
 

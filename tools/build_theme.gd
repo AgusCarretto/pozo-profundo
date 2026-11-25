@@ -1,5 +1,6 @@
 extends SceneTree
-## Arma res://ui/theme.tres: botones del UI Pack (Kenney), fuente Pixelify Sans y colores de Tiny Dungeon.
+## Arma res://ui/theme.tres: botones del UI Pack (Kenney), fuentes (letras Pixelify Sans, números VT323) y colores
+## de Tiny Dungeon.
 ##
 ## Uso (desde la raíz del proyecto; antes, `godot --headless --path . --import` si hay assets nuevos):
 ##   godot --headless --path . --script res://tools/build_theme.gd
@@ -12,6 +13,12 @@ const Palette := preload("res://game/palette.gd")
 
 const OUT_PATH: String = "res://ui/theme.tres"
 const FONT_PATH: String = "res://assets/fonts/PixelifySans.ttf"
+## Los números: VT323 recortada a los dígitos (tools/build_number_font.mjs). En Pixelify el 5 y la S son iguales.
+const NUMBER_FONT_PATH: String = "res://assets/fonts/VT323Digits.ttf"
+## Cuánto se engrosan los números para igualar el trazo de las letras (con mucho más, el 0 tachado se empasta).
+const NUMBER_EMBOLDEN: float = 0.25
+## Peso de las letras. En 700 la C casi se cierra y parece una O.
+const LETTER_WEIGHT: int = 500
 const UI_PACK: String = "res://assets/ui/ui_pack/"
 
 ## Alto mínimo de todo lo que se toca (px de diseño; la mitad en un celular de 360 px de ancho = 48 px).
@@ -29,13 +36,10 @@ const NEUTRAL_BORDER: Color = Color(0.3216, 0.3765, 0.4863)
 
 var _theme: Theme = Theme.new()
 var _font: FontVariation
-var _font_bold: FontVariation
 
 
 func _initialize() -> void:
-	var base: FontFile = load(FONT_PATH) as FontFile
-	_font = _make_font(base, 500)
-	_font_bold = _make_font(base, 700)
+	_font = _make_font()
 	_theme.default_font = _font
 	_theme.default_font_size = DEFAULT_FONT_SIZE
 
@@ -57,14 +61,21 @@ func _initialize() -> void:
 	quit(0)
 
 
-func _make_font(base: FontFile, weight: int) -> FontVariation:
-	var font: FontVariation = FontVariation.new()
-	font.base_font = base
-	font.variation_opentype = { TextServerManager.get_primary_interface().name_to_tag("wght"): weight }
-	# Sin ligaduras: en esta fuente la "fi" se dibuja como una "A" ("superficie" se leía "superAcie").
-	# El diccionario se asigna entero: cambiar el que devuelve la propiedad no hace nada.
+## La fuente de todo el juego: primero la de los números (solo tiene los dígitos) y, de respaldo, la de las letras.
+## Así cada número sale de VT323 y cada letra de Pixelify sin elegir fuente etiqueta por etiqueta.
+func _make_font() -> FontVariation:
 	var server: TextServer = TextServerManager.get_primary_interface()
-	font.opentype_features = { server.name_to_tag("liga"): 0, server.name_to_tag("clig"): 0 }
+	var letters: FontVariation = FontVariation.new()
+	letters.base_font = load(FONT_PATH) as FontFile
+	letters.variation_opentype = { server.name_to_tag("wght"): LETTER_WEIGHT }
+	var font: FontVariation = FontVariation.new()
+	font.base_font = load(NUMBER_FONT_PATH) as FontFile
+	font.variation_embolden = NUMBER_EMBOLDEN
+	font.fallbacks = [letters]
+	# Las opciones OpenType de la primera fuente valen para toda la línea: "zero" tacha el cero, y sin ligaduras
+	# porque en Pixelify la "fi" se dibuja como una "A" ("superficie" se leía "superAcie").
+	# El diccionario se asigna entero: cambiar el que devuelve la propiedad no hace nada.
+	font.opentype_features = { server.name_to_tag("zero"): 1, server.name_to_tag("liga"): 0, server.name_to_tag("clig"): 0 }
 	return font
 
 
@@ -100,7 +111,7 @@ func _build_labels() -> void:
 
 func _label_variation(type_name: String, size: int, color: Color, outline: int) -> void:
 	_theme.set_type_variation(type_name, "Label")
-	_theme.set_font("font", type_name, _font_bold)
+	_theme.set_font("font", type_name, _font)
 	_theme.set_font_size("font_size", type_name, size)
 	_theme.set_color("font_color", type_name, color)
 	_theme.set_color("font_outline_color", type_name, Palette.OUTLINE)
@@ -114,7 +125,7 @@ func _label_variation(type_name: String, size: int, color: Color, outline: int) 
 ##   "deshabilitado" de los botones de acción); rojo (ButtonRed) = solo el prestigio.
 ## Lo demás es neutro (un estilo plano oscuro): tarjetas, botones del costado, cancelar y los avisos.
 func _build_buttons() -> void:
-	_theme.set_font("font", "Button", _font_bold)
+	_theme.set_font("font", "Button", _font)
 	_theme.set_font_size("font_size", "Button", 30)
 	# Botón base = neutro (los que no eligen variación, como los del panel de debug).
 	_neutral_style("Button")
@@ -125,7 +136,7 @@ func _build_buttons() -> void:
 	_side_style("SideButton")
 	for type_name: String in ["ButtonGreen", "ButtonRed", "ButtonNeutral", "CardButton", "SideButton"]:
 		_theme.set_type_variation(type_name, "Button")
-		_theme.set_font("font", type_name, _font_bold)
+		_theme.set_font("font", type_name, _font)
 
 
 ## Tarjeta de mejora (toda la tarjeta es el botón): oscura; apretada, más clara; si no alcanza, apagada. El
@@ -289,7 +300,7 @@ func _build_progress_bar() -> void:
 	fill.texture_margin_bottom = 12
 	fill.modulate_color = Palette.GOLD
 	_theme.set_stylebox("fill", "ProgressBar", fill)
-	_theme.set_font("font", "ProgressBar", _font_bold)
+	_theme.set_font("font", "ProgressBar", _font)
 	_theme.set_font_size("font_size", "ProgressBar", 22)
 
 

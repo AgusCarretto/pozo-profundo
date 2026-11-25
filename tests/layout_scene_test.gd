@@ -702,14 +702,23 @@ func _test_relics_page(packed: PackedScene) -> void:
 	await _free_host(scene)
 
 
+## Dígitos de VT323 con las letras de Pixelify de respaldo (el detalle está en assets_test).
+func _is_game_font(font: Font) -> bool:
+	var composite: FontVariation = font as FontVariation
+	if composite == null or composite.fallbacks.size() != 1:
+		return false
+	var letters: FontVariation = composite.fallbacks[0] as FontVariation
+	return composite.base_font.resource_path.ends_with("VT323Digits.ttf") and letters != null and letters.base_font.resource_path.ends_with("PixelifySans.ttf")
+
+
 func _test_theme(packed: PackedScene) -> void:
-	_section("Tema de UI: UI Pack y Pixelify Sans")
+	_section("Tema de UI: UI Pack y fuentes")
 	var scene: Control = await _mount_host(packed, PHONE_SIZES[0])
 	_check(scene.theme != null and scene.theme.resource_path == "res://ui/theme.tres", "la escena usa res://ui/theme.tres")
 	var font: Font = _label_in(scene, "GoldLabel").get_theme_font("font")
-	_check(font is FontVariation and (font as FontVariation).base_font.resource_path.ends_with("PixelifySans.ttf"), "las etiquetas usan Pixelify Sans")
+	_check(_is_game_font(font), "las etiquetas usan la fuente del juego (letras Pixelify, números VT323)")
 	var card_font: Font = (_pick_card(scene).find_children("*", "Label", true, false)[0] as Label).get_theme_font("font")
-	_check(card_font is FontVariation and (card_font as FontVariation).base_font.resource_path.ends_with("PixelifySans.ttf"), "las tarjetas también")
+	_check(_is_game_font(card_font), "las tarjetas también")
 	# los botones de acción usan el UI Pack: apretado = el botón plano (sin profundidad); deshabilitado = gris
 	var prestige: Button = _node(scene, "PrestigeButton") as Button
 	var pressed: StyleBox = prestige.get_theme_stylebox("pressed")
