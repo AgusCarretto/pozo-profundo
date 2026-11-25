@@ -29,6 +29,7 @@ func _initialize() -> void:
 	_test_secret_keys_are_refused()
 	_test_uuid()
 	_test_disabled()
+	_test_when_to_send()
 	_test_request()
 	_test_sessions()
 	_test_device_id()
@@ -109,6 +110,21 @@ func _test_disabled() -> void:
 	analytics.tick(1000.0)
 	analytics.tick(100000.0)
 	_check(_sent.is_empty(), "ni al empezar ni al volver")
+
+
+## Solo el juego publicado cuenta: ni un export de debug, ni el editor, ni los tests ensucian la retención.
+func _test_when_to_send() -> void:
+	_section("Cuándo se manda")
+	var full: Dictionary = { "supabase_url": BASE_URL, "supabase_key": KEY, "feedback_url": "" }
+	_check(AnalyticsScript.should_send(full, false, false, false), "un build publicado con URL y key, sí")
+	_check(not AnalyticsScript.should_send(full, true, false, false), "un build de debug, no")
+	_check(not AnalyticsScript.should_send(full, false, true, false), "desde el editor, no")
+	_check(not AnalyticsScript.should_send(full, false, false, true), "en headless, no")
+	for missing: String in ["supabase_url", "supabase_key"]:
+		var partial: Dictionary = full.duplicate()
+		partial[missing] = ""
+		_check(not AnalyticsScript.should_send(partial, false, false, false), "sin %s, no" % missing)
+	_check(not AnalyticsScript.should_send({}, false, false, false), "sin configuración, no")
 
 
 func _test_request() -> void:

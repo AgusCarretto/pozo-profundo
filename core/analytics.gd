@@ -7,7 +7,8 @@ extends Node
 ## la pone el servidor. Nada personal. Una sesión es abrir el juego, o volver después de SESSION_GAP segundos sin
 ## que corra ningún cuadro (en el celular, volver a una pestaña abierta no recarga el juego).
 ##
-## Solo manda si data/online.json trae URL y key (ver online_config.gd), y nunca desde el editor ni en headless.
+## Solo manda el juego publicado: con URL y key en data/online.json (ver online_config.gd), nunca desde un build de
+## debug, el editor ni en headless (ver should_send), así las pruebas no ensucian la retención.
 ## Todo falla en silencio: sin red o con Supabase caído el juego sigue igual y ese evento se pierde.
 
 const OnlineConfig := preload("res://core/online_config.gd")
@@ -35,8 +36,7 @@ var _last_tick: float = 0.0
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	config = OnlineConfig.load_file()
-	enabled = config["supabase_url"] != "" and config["supabase_key"] != "" \
-		and DisplayServer.get_name() != "headless" and not OS.has_feature("editor")
+	enabled = should_send(config, OS.is_debug_build(), OS.has_feature("editor"), DisplayServer.get_name() == "headless")
 	if economy == null:
 		economy = get_node_or_null("/root/Economy")
 	if not sender.is_valid():
@@ -54,6 +54,12 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	tick(Time.get_unix_time_from_system())
+
+
+## Si este juego manda métricas, según su configuración y desde dónde corre.
+static func should_send(settings: Dictionary, is_debug: bool, is_editor: bool, is_headless: bool) -> bool:
+	var configured: bool = settings.get("supabase_url", "") != "" and settings.get("supabase_key", "") != ""
+	return configured and not is_debug and not is_editor and not is_headless
 
 
 ## Manda el evento de una sesión que empieza (si está encendido).
