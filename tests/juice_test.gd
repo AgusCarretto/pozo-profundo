@@ -4,6 +4,16 @@ extends "res://tests/scene_fx_base.gd"
 ## y lo que apaga "reducir efectos". Miden estado, no cómo se ve: eso se mira en capturas (tools/screenshot.gd).
 ## Los helpers y el armado de la escena están en scene_fx_base.gd.
 
+const WebPlatform := preload("res://core/web_platform.gd")
+
+
+## Anota las vibraciones pedidas.
+class FakePlatform extends WebPlatform:
+	var calls: Array[int] = []
+
+	func vibrate(milliseconds: int) -> void:
+		calls.append(milliseconds)
+
 
 func _run_tests() -> void:
 	await _test_fx_layer()
@@ -12,6 +22,7 @@ func _run_tests() -> void:
 	await _test_rock_squash()
 	await _test_shake()
 	await _test_reduce_effects()
+	await _test_vibration_platform()
 	await _test_particles()
 	await _test_clear_effects()
 
@@ -98,6 +109,16 @@ func _test_shake() -> void:
 	await _wait(0.5)
 	_check((mine.get("shake_offset") as Vector2).is_zero_approx(), "después se queda quieta")
 	_check(_rock().position.is_equal_approx(rock_position), "y la roca vuelve a su lugar exacto")
+
+
+func _test_vibration_platform() -> void:
+	_section("La vibración pasa por la plataforma (en la web espera a que se complete el primer toque)")
+	var fake: FakePlatform = FakePlatform.new()
+	_mine().set("platform", fake)
+	_tap()
+	_check_eq(fake.calls, [25] as Array[int], "cada golpe la pide ahí")
+	_mine().set("platform", WebPlatform.new())
+	await _wait(1.0)
 
 
 func _test_reduce_effects() -> void:

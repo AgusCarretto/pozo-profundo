@@ -12,6 +12,7 @@ extends Control
 const Palette := preload("res://game/palette.gd")
 const BiomePalette := preload("res://game/biome_palette.gd")
 const Juice := preload("res://game/juice.gd")
+const WebPlatform := preload("res://core/web_platform.gd")
 const GLOW_TEXTURE: Texture2D = preload("res://assets/particles/particle_pack/circle_05.png")
 const STAR_TEXTURE: Texture2D = preload("res://assets/particles/particle_pack/star_06.png")
 
@@ -178,6 +179,8 @@ var shake_offset: Vector2 = Vector2.ZERO:
 	set(value):
 		shake_offset = value
 		_apply_shake()
+## Quién hace vibrar (en la web espera al primer toque completo). Los tests lo reemplazan.
+var platform: WebPlatform = WebPlatform.new()
 ## Cuántas veces vibró (para los tests: en la PC vibrar no hace nada visible).
 var vibrations: int = 0
 ## Cuántas tandas de gemas salieron (para los tests).
@@ -272,7 +275,7 @@ func play_hit(text: String) -> void:
 		return
 	_shake()
 	vibrations += 1
-	Input.vibrate_handheld(VIBRATION_MS)
+	platform.vibrate(VIBRATION_MS)
 
 
 func _squash_rock() -> void:
