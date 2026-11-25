@@ -254,7 +254,7 @@ func _test_balance_file() -> void:
 	var balance: Dictionary = parsed
 	_check(float(balance.get("cost_growth", 0.0)) > 1.0, "cost_growth > 1")
 	var generators: Array = balance.get("generators", [])
-	_check_eq(generators.size(), 5, "hay 5 generadores")
+	_check_eq(generators.size(), 6, "hay 6 generadores")
 	var coherent: bool = true
 	var previous_rate: float = 0.0
 	var previous_cost: float = 0.0

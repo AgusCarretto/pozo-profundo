@@ -40,6 +40,7 @@ func _initialize() -> void:
 	await _test_buying_a_generator()
 	await _test_buy_modes()
 	await _test_milestone_card()
+	await _test_dynamite()
 	await _test_pick_upgrade()
 	await _test_one_touch_buys_once()
 	await _test_large_numbers_use_suffixes()
@@ -119,7 +120,7 @@ func _label(node_name: String) -> Label:
 
 ## Las tarjetas de los generadores (sin la del pico).
 func _rows() -> Array[Node]:
-	return _scene.get_node("%Shop").get_children().slice(1)
+	return _scene.get_node("%Shop").get_children().slice(2) # 0 = pico, 1 = dinamita
 
 
 func _row_button(index: int) -> Button:
@@ -158,7 +159,7 @@ func _set_gold(gold: float) -> void:
 func _test_initial_screen() -> void:
 	_section("Pantalla inicial")
 	_check_eq(_label("GoldLabel").text, "0", "el oro arranca en 0")
-	_check_eq(_rows().size(), 5, "hay una tarjeta por generador (5)")
+	_check_eq(_rows().size(), 6, "hay una tarjeta por generador (6)")
 	_check_eq(_rows().size(), _economy.generator_count(), "una por generador del balance")
 	var any_enabled: bool = false
 	for i: int in range(_rows().size()):
@@ -173,7 +174,7 @@ func _test_hidden_generator_cards() -> void:
 	_section("Los generadores por descubrir son un '???'")
 	_economy.reset()
 	await _set_gold(0.0)
-	_check(_card_text(_row_button(0)).begins_with("Minero"), "el primero se ve (%s)" % _card_text(_row_button(0)))
+	_check(_card_text(_row_button(0)).begins_with("Minero | ×0/25 · 0/s"), "el primero se ve (%s)" % _card_text(_row_button(0)))
 	for i: int in range(1, _rows().size()):
 		_check_eq(_card_text(_row_button(i)), "??? | Comprá el anterior | ???", "la tarjeta %d está oculta" % (i + 1))
 	_economy.gold = 1.0e9
@@ -212,7 +213,7 @@ func _test_buying_a_generator() -> void:
 	_check_eq(_economy.gold, 0.0, "y gasta 25")
 	await process_frame
 	_check_eq(_label("GoldLabel").text, "0", "el oro en pantalla baja a 0")
-	_check(_card_text(_row_button(0)).contains("×1"), "la tarjeta muestra ×1 (%s)" % _card_text(_row_button(0)))
+	_check(_card_text(_row_button(0)).contains("×1/25"), "la tarjeta muestra ×1 (%s)" % _card_text(_row_button(0)))
 	_check(_label("RateLabel").text.contains("1"), "el cartel de producción muestra 1 oro/s (%s)" % _label("RateLabel").text)
 
 
@@ -240,17 +241,50 @@ func _test_milestone_card() -> void:
 	_economy.owned[0] = 24
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
-	_check(_card_text(_row_button(0)).contains("24/s · 24/25"), "con 24: lo que produce y 24/25 (%s)" % _card_text(_row_button(0)))
+	_check(_card_text(_row_button(0)).contains("Nv 24/25 · 24/s"), "con 24 ya es un nivel: Nv 24 de 25, y lo que producen (%s)" % _card_text(_row_button(0)))
 	_row_button(0).pressed.emit()
 	await process_frame
-	_check(_card_text(_row_button(0)).contains("50/s · 25/50"), "al llegar a 25 produce el doble y apunta a 50 (%s)" % _card_text(_row_button(0)))
+	_check(_card_text(_row_button(0)).contains("Nv 25/50 · 50/s"), "al llegar a 25 produce el doble y apunta a 50 (%s)" % _card_text(_row_button(0)))
 	var toast: Node = _scene.get_node("%MineView").find_child("ChestToast", true, false)
 	_check(toast != null and _card_text(toast).contains("¡Minero ×25!") and _card_text(toast).contains("producen el doble"), "y sale un aviso (%s)" % (_card_text(toast) if toast != null else "nada"))
 	_economy.owned[0] = 100
 	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
-	_check(_card_text(_row_button(0)).contains("800/s · ×8"), "pasado el último, cuánto multiplica (%s)" % _card_text(_row_button(0)))
+	_check(_card_text(_row_button(0)).contains("Nv 100 · 800/s ×8"), "pasado el último, cuánto multiplica (%s)" % _card_text(_row_button(0)))
 	_economy.reset()
+
+
+func _test_dynamite() -> void:
+	_section("La Dinamita: tarjeta arriba y botón con recarga")
+	_economy.reset()
+	await _set_gold(0.0)
+	var card: Button = _scene.get_node("%Shop").get_child(1) as Button
+	var button: Button = _button("AbilityButton")
+	_check(_card_text(card).begins_with("???"), "antes del Taladro está oculta (%s)" % _card_text(card))
+	_check(not button.visible, "y no hay botón")
+	_economy.owned[1] = 1
+	_economy.gold = 2000.0
+	_economy.gold_changed.emit(_economy.gold)
+	await process_frame
+	_check(_card_text(card).begins_with("Dinamita") and _card_text(card).contains("24 s") and not card.disabled, "con el primer Taladro aparece la Dinamita (%s)" % _card_text(card))
+	card.pressed.emit()
+	await process_frame
+	_check_eq(_economy.ability_level, 1, "tocarla compra el nivel 1")
+	_check(_card_text(card).contains("Nv 1 · 24 » 28 s"), "la tarjeta dice el nivel y qué gana el próximo (%s)" % _card_text(card))
+	_check(button.visible and not button.disabled and _card_text(button).contains("¡Ya!"), "aparece el botón, listo (%s)" % _card_text(button))
+	_economy.owned[0] = 10
+	var before: float = _economy.gold
+	var reward: float = _economy.ability_reward()
+	button.pressed.emit()
+	_check(_economy.gold >= before + reward, "tocarlo da el golpe enorme (%s)" % str(reward))
+	await process_frame
+	_check(button.disabled and _card_text(button).begins_with("1:00"), "y queda recargando con la cuenta (%s)" % _card_text(button))
+	_economy.advance_ability(60.0)
+	await process_frame
+	_check(not button.disabled, "a los 60 s vuelve")
+	_economy.reset()
+	await process_frame
+	_check(not button.visible, "al empezar de nuevo se va")
 
 
 func _test_pick_upgrade() -> void:

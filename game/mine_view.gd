@@ -83,16 +83,17 @@ const GEM_AMOUNT: int = 3
 const GEM_SCALE: float = 2.0
 const GEM_CHANCE: float = 0.3
 
-## Dinamita: cada tanto aparece un cartucho en el borde de la roca, la mecha dura DYNAMITE_FUSE y explota
-## (astillas hacia afuera y un destello). Más cuadrillas = más seguido: DYNAMITE_BASE_INTERVAL / raíz de la
-## cantidad, sin bajar de DYNAMITE_MIN_INTERVAL. Con reduce_effects no hay destello.
-const DYNAMITE_BASE_INTERVAL: float = 4.0
-const DYNAMITE_MIN_INTERVAL: float = 0.7
-const DYNAMITE_FUSE: float = 0.35
-const DYNAMITE_SCALE: int = 3
+## Dinamita (la habilidad): los dinamiteros tiran un cartucho cada uno, que vuela en arco hasta la roca y explota.
+const THROW_TIME: float = 0.45
+const THROW_STAGGER: float = 0.12
+const THROW_ARC: float = 150.0
+const STICK_SCALE: int = 4
+const THROW_SHAKE: float = 3.5
 const BLAST_SIZE: float = 220.0
 const BLAST_TIME: float = 0.35
 const BLAST_COLOR: Color = Color(1.0, 0.68, 0.2)
+const DYNAMITER_SCALE: int = 5
+const DYNAMITER_SLOTS: Array[Vector2] = [Vector2(-130.0, 168.0), Vector2(80.0, 172.0)]
 
 ## Excavadoras rúnicas: una runa por excavadora (hasta ORBIT_RUNES_MAX) orbita la roca, con un aura suave del
 ## color de runa del bioma. La órbita es una elipse chata (la mina se ve desde arriba en perspectiva): las runas de
@@ -165,7 +166,7 @@ const MINER_SLOTS: Array[Vector2] = [
 	Vector2(-240.0, 25.0), Vector2(240.0, 25.0), Vector2(-240.0, -95.0), Vector2(240.0, -95.0),
 	Vector2(-85.0, -222.0), Vector2(-225.0, -222.0), Vector2(225.0, -222.0),
 ]
-const DRILL_SLOT: Vector2 = Vector2(256.0, 135.0)
+const DRILL_SLOT: Vector2 = Vector2(208.0, 140.0) # corrido para que no lo tape la columna de botones
 const GOLEM_SLOT: Vector2 = Vector2(-256.0, 135.0)
 
 ## Bioma que se está mostrando ("earth", "rock"...) y color de fondo de su paleta.
@@ -199,6 +200,8 @@ var vibrations: int = 0
 var gem_bursts: int = 0
 ## Cuántas veces explotó la dinamita (para los tests).
 var explosions: int = 0
+## Los dos que tiran la dinamita; se ven cuando la habilidad está comprada.
+var dynamiter_sprites: Array[TextureRect] = []
 ## Cuántos cofres cayeron (para los tests).
 var chests_dropped: int = 0
 
@@ -226,10 +229,8 @@ var _anim_time: float = 0.0
 var _chip_emitters: Array[CPUParticles2D] = []
 var _gem_emitters: Array[CPUParticles2D] = []
 var _next_chip: int = 0
-## Cuadrillas de dinamita y excavadoras rúnicas compradas (set_machines) y el reloj de la próxima explosión.
-var _dynamite_count: int = 0
+## Excavadoras rúnicas compradas (set_machines).
 var _excavator_count: int = 0
-var _dynamite_clock: float = 0.0
 ## Las runas que orbitan (fijas: se muestran las que hagan falta) y sus auras.
 var _orbit_runes: Array[TextureRect] = []
 var _orbit_glows: Array[TextureRect] = []
@@ -259,6 +260,8 @@ func _ready() -> void:
 		_pick_sides.append(1.0)
 	drill_sprite = _make_sprite("drill.png", "Drill")
 	golem_sprite = _make_sprite("golem.png", "Golem")
+	for index: int in range(DYNAMITER_SLOTS.size()):
+		dynamiter_sprites.append(_make_sprite("dynamiter_idle.png", "Dynamiter%d" % (index + 1)))
 	_fx = Control.new()
 	_fx.name = "FxLayer"
 	_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -596,7 +599,8 @@ func clear_effects() -> void:
 	for child: Node in _fx.get_children():
 		if child.has_meta(RAIN_META) or (not (child is CPUParticles2D) and not child.has_meta(PERSISTENT_META)):
 			child.queue_free()
-	_dynamite_clock = 0.0
+	for dynamiter: TextureRect in dynamiter_sprites:
+		dynamiter.texture = load(SPRITE_DIR + "dynamiter_idle.png") as Texture2D
 	# Apagar un emisor no saca las partículas que ya están en el aire: se oculta, y el próximo disparo (_fire) lo
 	# reinicia y lo vuelve a mostrar.
 	for emitter: CPUParticles2D in _chip_emitters + _gem_emitters:
@@ -711,49 +715,70 @@ func _spawn_floater(text: String, critical: bool = false) -> void:
 	tween.chain().tween_callback(label.queue_free)
 
 
-## Las máquinas que no tienen sprite propio se ven por lo que hacen: la dinamita explota en el borde de la
-## roca y las excavadoras rúnicas hacen orbitar runas.
-func set_machines(dynamite: int, excavators: int) -> void:
-	_dynamite_count = maxi(dynamite, 0)
+## Las excavadoras rúnicas no tienen figura propia: hacen orbitar runas.
+func set_machines(excavators: int) -> void:
 	_excavator_count = maxi(excavators, 0)
 
 
-## Cada cuántos segundos explota un cartucho con `count` cuadrillas de dinamita (INF = nunca).
-func dynamite_interval(count: int) -> float:
-	if count <= 0:
-		return INF
-	return maxf(DYNAMITE_MIN_INTERVAL, DYNAMITE_BASE_INTERVAL / sqrt(float(count)))
+func set_dynamiters(shown: bool) -> void:
+	for dynamiter: TextureRect in dynamiter_sprites:
+		_show_member(dynamiter, shown)
+	queue_redraw()
 
 
-## Aparece un cartucho en el borde de la roca (arriba o a los costados, donde se ve) y se le prende la mecha.
-func _light_fuse() -> void:
+## Cada dinamitero tira un cartucho a la roca; al explotar el primero sale `text` grande, tiembla la mina y se avisa
+## con dynamite_exploded (el sonido). Con reduce_effects no hay destello ni sacudida.
+func throw_dynamite(text: String) -> void:
 	var rock_rect: Rect2 = Rect2(_base_positions.get(_rock, _rock.position), _rock.size)
-	var angle: float = rng.randf_range(-PI * 1.1, PI * 0.1)
-	var at: Vector2 = rock_rect.get_center() + Vector2(cos(angle) * rock_rect.size.x * 0.44, sin(angle) * rock_rect.size.y * 0.4)
-	var stick: TextureRect = TextureRect.new()
-	stick.texture = load(SPRITE_DIR + "dynamite.png") as Texture2D
-	stick.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	stick.stretch_mode = TextureRect.STRETCH_SCALE
-	stick.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var pixel: float = maxf(roundf(DYNAMITE_SCALE * _unit), 1.0)
-	stick.size = Vector2(16.0, 16.0) * pixel
-	stick.position = (at - stick.size * 0.5).round()
-	_fx.add_child(stick)
-	Juice.pop_in(stick, stick.size * 0.5)
-	var fuse: Tween = stick.create_tween()
-	fuse.tween_interval(DYNAMITE_FUSE)
-	fuse.tween_callback(_blast.bind(stick, at))
+	var stick_size: Vector2 = Vector2(16.0, 16.0) * maxf(roundf(STICK_SCALE * _unit), 1.0)
+	for index: int in range(dynamiter_sprites.size()):
+		var thrower: TextureRect = dynamiter_sprites[index]
+		thrower.texture = load(SPRITE_DIR + "dynamiter_throw.png") as Texture2D
+		var from: Vector2 = _base_positions.get(thrower, thrower.position) + thrower.size * Vector2(0.75, 0.15)
+		var to: Vector2 = rock_rect.get_center() + Vector2((index * 2 - 1) * rock_rect.size.x * 0.18, -rock_rect.size.y * 0.12)
+		var stick: TextureRect = TextureRect.new()
+		stick.set_meta(&"stick", true)
+		stick.texture = load(SPRITE_DIR + "stick.png") as Texture2D
+		stick.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		stick.stretch_mode = TextureRect.STRETCH_SCALE
+		stick.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		stick.size = stick_size
+		stick.pivot_offset = stick_size * 0.5
+		stick.position = from - stick_size * 0.5
+		_fx.add_child(stick)
+		var flight: Tween = stick.create_tween()
+		flight.tween_interval(index * THROW_STAGGER)
+		flight.tween_method(_fly_stick.bind(stick, from, to), 0.0, 1.0, THROW_TIME)
+		flight.tween_callback(_land_stick.bind(stick, to, thrower, text if index == 0 else ""))
 
 
-func _blast(stick: TextureRect, at: Vector2) -> void:
+## El cartucho en el arco (`progress` de 0 a 1), girando.
+func _fly_stick(progress: float, stick: TextureRect, from: Vector2, to: Vector2) -> void:
+	var at: Vector2 = from.lerp(to, progress) + Vector2(0.0, -sin(progress * PI) * THROW_ARC * _unit)
+	stick.position = at - stick.size * 0.5
+	stick.rotation = progress * TAU
+
+
+func _land_stick(stick: TextureRect, at: Vector2, thrower: TextureRect, text: String) -> void:
 	stick.queue_free()
-	explosions += 1
+	thrower.texture = load(SPRITE_DIR + "dynamiter_idle.png") as Texture2D
 	var rock_center: Vector2 = Rect2(_base_positions.get(_rock, _rock.position), _rock.size).get_center()
 	var chips: CPUParticles2D = _chip_emitters[_next_chip]
 	_next_chip = (_next_chip + 1) % _chip_emitters.size()
-	_fire(chips, at, Vector2(12.0, 12.0) * _unit, (at - rock_center).normalized())
+	_fire(chips, at, Vector2(24.0, 24.0) * _unit, (at - rock_center).normalized() + Vector2.UP)
 	if not reduce_effects:
 		_flash_glow(at)
+	if text == "":
+		return
+	explosions += 1
+	_squash_rock()
+	_burst_particles(true)
+	_spawn_floater(text, true)
+	if not reduce_effects:
+		_shake_force = THROW_SHAKE
+		_shake()
+		vibrations += 1
+		platform.vibrate(VIBRATION_MS * 3)
 	dynamite_exploded.emit(at)
 
 
@@ -781,13 +806,6 @@ func _flash_glow(at: Vector2) -> void:
 
 
 func _process(delta: float) -> void:
-	if _dynamite_count > 0 and is_visible_in_tree():
-		_dynamite_clock += delta
-		if _dynamite_clock >= dynamite_interval(_dynamite_count):
-			_dynamite_clock = 0.0
-			_light_fuse()
-	else:
-		_dynamite_clock = 0.0
 	# Tiempo de juego (respeta Engine.time_scale: la pausa del legendario los frena y los tests los aceleran).
 	_anim_time += delta
 	var now: float = _anim_time
@@ -927,6 +945,7 @@ func shadow_ellipses() -> Array[Dictionary]:
 		return shadows
 	var casters: Array[TextureRect] = [_rock, drill_sprite, golem_sprite]
 	casters.append_array(miner_sprites)
+	casters.append_array(dynamiter_sprites)
 	for sprite: TextureRect in casters:
 		if not sprite.visible:
 			continue
@@ -970,13 +989,15 @@ func _layout() -> void:
 		_look_at_rock(miner_sprites[index], index)
 	_place(drill_sprite, center, DRILL_SLOT, DRILL_SCALE, unit)
 	_place(golem_sprite, center, GOLEM_SLOT, GOLEM_SCALE, unit)
+	for index: int in range(dynamiter_sprites.size()):
+		_place(dynamiter_sprites[index], center, DYNAMITER_SLOTS[index], DYNAMITER_SCALE, unit)
 	# La roca se aplasta contra el piso: el pivote va abajo al centro.
 	_rock.pivot_offset = _rock.size * Vector2(0.5, 1.0)
 	var margin: Vector2 = Vector2.ONE * TAP_MARGIN * unit
 	_tap_button.position = _rock.position - margin
 	_tap_button.size = _rock.size + margin * 2.0
 	_base_positions.clear()
-	for sprite: TextureRect in [_rock, drill_sprite, golem_sprite] + miner_sprites:
+	for sprite: TextureRect in [_rock, drill_sprite, golem_sprite] + miner_sprites + dynamiter_sprites:
 		_base_positions[sprite] = sprite.position
 	_apply_shake()
 	_sort_by_depth()
@@ -1020,6 +1041,7 @@ func _hold_pick(index: int, side: float) -> void:
 func _sort_by_depth() -> void:
 	var sprites: Array[TextureRect] = [_rock, drill_sprite, golem_sprite]
 	sprites.append_array(miner_sprites)
+	sprites.append_array(dynamiter_sprites)
 	sprites.sort_custom(func(a: TextureRect, b: TextureRect) -> bool: return a.position.y + a.size.y < b.position.y + b.size.y)
 	for index: int in range(sprites.size()):
 		move_child(sprites[index], index)

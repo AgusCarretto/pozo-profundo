@@ -5,13 +5,14 @@ extends Button
 const Juice := preload("res://game/juice.gd")
 
 ## Tamaño (px de diseño): 100 px de ancho = 50 px en un celular de 360 de ancho.
-const SIDE_SIZE: Vector2 = Vector2(100.0, 104.0)
-const ICON_SIZE: float = 52.0
+const SIDE_SIZE: Vector2 = Vector2(100.0, 96.0)
+const ICON_SIZE: float = 48.0
 
 ## El aviso de la esquina (oculto si no hay nada que avisar).
 var badge: PanelContainer
 
 var _badge_label: Label
+var _caption: Label
 var _big_label: Label
 
 
@@ -47,6 +48,7 @@ func build(icon_texture: Texture2D, caption: String) -> void:
 	var caption_label: Label = _make_label(&"SideCaption")
 	caption_label.text = caption
 	box.add_child(caption_label)
+	_caption = caption_label
 
 	badge = PanelContainer.new()
 	badge.visible = false
@@ -65,6 +67,11 @@ func build(icon_texture: Texture2D, caption: String) -> void:
 func set_big_text(text: String) -> void:
 	if _big_label != null:
 		_big_label.text = text
+
+
+## Cambia el nombre de abajo.
+func set_caption(text: String) -> void:
+	_caption.text = text
 
 
 ## Muestra `text` en la esquina ("" la oculta). `alert` lo pinta de rojo: algo para hacer ya.

@@ -8,9 +8,9 @@ extends Button
 
 const Juice := preload("res://game/juice.gd")
 
-## Alto de la tarjeta (px de diseño): con tres filas entran las seis mejoras sin deslizar.
-const CARD_MIN_HEIGHT: float = 150.0
-const ICON_SIZE: float = 64.0
+## Alto de la tarjeta (px de diseño): con cuatro filas entran las ocho mejoras sin deslizar.
+const CARD_MIN_HEIGHT: float = 124.0
+const ICON_SIZE: float = 56.0
 const PRICE_HEIGHT: float = 40.0
 const PADDING: int = 8
 

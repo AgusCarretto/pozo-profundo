@@ -18,6 +18,10 @@ signal pick_upgraded(level: int)
 signal loot_dropped(rarity: int, amount: float)
 ## Volviste a la superficie y ganaste `relics_gained` reliquias.
 signal prestiged(relics_gained: int)
+## La habilidad subió de nivel.
+signal ability_upgraded(level: int)
+## Se usó la habilidad y pagó `amount` de oro.
+signal ability_used(amount: float)
 ## Se acreditó progreso offline y hay un aviso para el jugador: `report` = {seconds, gold, capped}
 ## (segundos acreditados, oro ganado y si se cortó por el tope). Es el mismo dato que
 ## queda en `pending_offline_report` hasta que la UI llame a dismiss_offline_report().
@@ -45,6 +49,10 @@ var pick_level: int = 0
 ## Oro ganado en la partida actual (producción, golpes y botín). No baja al gastar:
 ## de él sale la profundidad, y por eso un gasto nunca te hace retroceder de bioma.
 var run_gold: float = 0.0
+## Habilidad activa (en este juego, la dinamita): nivel comprado en la bajada (0 = sin comprar) y segundos de
+## recarga que faltan. El nivel se reinicia al volver a la superficie.
+var ability_level: int = 0
+var ability_cooldown_left: float = 0.0
 ## Reliquias acumuladas: sobreviven al prestigio y dan oro permanente.
 var relics: int = 0
 ## Aviso del progreso offline que el jugador todavía no vio ({} = ninguno). No se guarda.
@@ -96,6 +104,8 @@ var _rarity_weights: Array[float] = []
 var _prestige: Dictionary = {}
 ## Reglas del progreso offline (max_hours, away_seconds, efficiency). Vacío = sin progreso offline.
 var _offline: Dictionary = {}
+## Reglas de la habilidad (cooldown, seconds, step, hits, cost, growth, max_level, reveal_with). Vacío = no hay.
+var _ability: Dictionary = {}
 ## Profundidad y reliquias de las reglas anteriores, para convertir partidas. Vacío = no se convierte nada.
 var _legacy: Dictionary = {}
 ## Umbrales del frenesí (hits_per_second, enter_seconds, exit_seconds, window_seconds). Vacío = sin frenesí.
@@ -179,6 +189,9 @@ func load_balance(balance: Dictionary) -> bool:
 	var parsed_milestones: Variant = _read_milestones(balance)
 	if parsed_milestones == null:
 		return false
+	var parsed_ability: Variant = _read_ability(balance, parsed_generators)
+	if parsed_ability == null:
+		return false
 	var parsed_depth: Variant = _read_numbers(balance, "depth", ["meters_scale", "gold_scale"])
 	if parsed_depth == null:
 		return false
@@ -217,6 +230,7 @@ func load_balance(balance: Dictionary) -> bool:
 	_prestige = parsed_prestige
 	_offline = parsed_offline
 	_legacy = parsed_legacy
+	_ability = parsed_ability
 	_frenzy = parsed_frenzy
 	_biomes = []
 	_biome_meters_each = 0.0
@@ -268,6 +282,78 @@ func _revealed_count() -> int:
 		if owned[index] > 0:
 			count = maxi(count, index + 2)
 	return clampi(count, 1, maxi(_generators.size(), 1))
+
+
+# --- Habilidad -----------------------------------------------------------------
+
+func has_ability() -> bool:
+	return not _ability.is_empty()
+
+
+## Se descubre junto con el generador "reveal_with" del balance (y desde ahí se ve siempre).
+func ability_revealed() -> bool:
+	return has_ability() and (ability_level > 0 or is_generator_revealed(_ability["reveal_index"]))
+
+
+func ability_max_level() -> int:
+	return int(_ability.get("max_level", 0))
+
+
+## Costo de subir al nivel siguiente.
+func ability_cost() -> float:
+	if not has_ability():
+		return 0.0
+	return float(_ability["cost"]) * pow(float(_ability["growth"]), ability_level)
+
+
+## Segundos de producción de la cuadrilla que vale un uso en el nivel `level`.
+func ability_seconds(level: int) -> float:
+	if not has_ability() or level <= 0:
+		return 0.0
+	return float(_ability["seconds"]) + float(_ability["step"]) * (level - 1)
+
+
+func ability_cooldown() -> float:
+	return float(_ability.get("cooldown", 0.0))
+
+
+## Lo que pagaría usarla ahora: lo que más sea entre sus segundos de producción y sus golpes. 0 sin comprarla.
+func ability_reward() -> float:
+	if not has_ability() or ability_level <= 0:
+		return 0.0
+	return EconomyMath.chest_reward(gold_per_second(), hit_value(), ability_seconds(ability_level), _ability["hits"])
+
+
+func ability_ready() -> bool:
+	return has_ability() and ability_level > 0 and ability_cooldown_left <= 0.0
+
+
+func upgrade_ability() -> bool:
+	if not ability_revealed() or ability_level >= ability_max_level() or ability_cost() > gold:
+		return false
+	gold -= ability_cost()
+	ability_level += 1
+	ability_upgraded.emit(ability_level)
+	gold_changed.emit(gold)
+	return true
+
+
+## Usa la habilidad si está lista y devuelve el oro que dio (0 si no estaba). No es un golpe: sin crítico ni cofre.
+func use_ability() -> float:
+	if not ability_ready():
+		return 0.0
+	var amount: float = ability_reward()
+	_earn(amount)
+	ability_cooldown_left = ability_cooldown()
+	ability_used.emit(amount)
+	gold_changed.emit(gold)
+	return amount
+
+
+## Pasa tiempo de recarga (el reloj real, también con el juego cerrado; el simulador lo llama a mano).
+func advance_ability(seconds: float) -> void:
+	if seconds > 0.0:
+		ability_cooldown_left = maxf(ability_cooldown_left - seconds, 0.0)
 
 
 # --- Profundidad y biomas ------------------------------------------------------
@@ -465,6 +551,8 @@ func _reset_run() -> void:
 	gold = 0.0
 	run_gold = 0.0
 	pick_level = 0
+	ability_level = 0
+	ability_cooldown_left = 0.0
 	owned.resize(_generators.size())
 	owned.fill(0)
 	gold_changed.emit(gold)
@@ -492,13 +580,18 @@ func gold_per_second() -> float:
 
 ## Cuánto multiplican los hitos que ya alcanzó el generador `index` (1 = ninguno).
 func milestone_multiplier(index: int) -> float:
+	return pow(_milestone_multiplier, milestone_tier(index))
+
+
+## Cuántos hitos alcanzó el generador `index` (0 = ninguno): la interfaz lo usa para su aspecto.
+func milestone_tier(index: int) -> int:
 	if not _is_valid_index(index):
-		return 1.0
+		return 0
 	var reached: int = 0
 	for threshold: int in _milestones:
 		if owned[index] >= threshold:
 			reached += 1
-	return pow(_milestone_multiplier, reached)
+	return reached
 
 
 ## Por cuánto multiplica cada hito (2 = el doble). 1 si no hay hitos.
@@ -530,6 +623,7 @@ func tick_realtime(now_usec: int, now_unix: float = 0.0) -> void:
 		var gap: float = (now_usec - _last_tick_usec) / 1000000.0
 		if now_unix > 0.0 and _last_tick_unix > 0.0:
 			gap = maxf(gap, now_unix - _last_tick_unix)
+		advance_ability(gap)
 		if not _offline.is_empty() and gap >= _offline["away_seconds"]:
 			apply_offline(gap)
 		else:
@@ -608,6 +702,7 @@ func apply_offline(elapsed: float) -> Dictionary:
 func apply_offline_since(saved_at: int, now: float) -> Dictionary:
 	if saved_at <= 0:
 		return {}
+	advance_ability(now - saved_at)
 	return apply_offline(now - saved_at)
 
 
@@ -710,6 +805,8 @@ func to_dict() -> Dictionary:
 		"relics": relics,
 		"max_biome": max_biome(),
 		"revealed": _revealed_count(),
+		"ability_level": ability_level,
+		"ability_wait": ability_cooldown_left,
 	}
 
 
@@ -729,6 +826,8 @@ func from_dict(data: Dictionary) -> void:
 		for index: int in range(mini((saved_owned as Array).size(), owned.size())):
 			owned[index] = int(clampf(_number(saved_owned[index], 0.0), 0.0, MAX_LOADED_OWNED))
 	_revealed = int(clampf(_number(data.get("revealed"), 1.0), 1.0, maxi(_generators.size(), 1)))
+	ability_level = int(clampf(_number(data.get("ability_level"), 0.0), 0.0, ability_max_level()))
+	ability_cooldown_left = clampf(_number(data.get("ability_wait"), 0.0), 0.0, ability_cooldown())
 	var deepest: int = maxi(biome_count() - 1, 0)
 	_max_biome = int(clampf(_number(data.get("max_biome"), 0.0), 0.0, deepest))
 	# Quien tiene reliquias llegó al menos hasta donde se puede volver a la superficie (partidas sin el dato).
@@ -798,6 +897,24 @@ func _read_numbers(balance: Dictionary, section: String, positive_keys: Array[St
 			return null
 		numbers[key] = value
 	return numbers
+
+
+## Lee la sección opcional "ability": números y "reveal_with" (id del generador junto al que se descubre).
+## Mismo contrato que _read_numbers.
+func _read_ability(balance: Dictionary, generators: Array[Dictionary]) -> Variant:
+	var numbers: Variant = _read_numbers(balance, "ability", ["cooldown", "seconds", "hits", "cost", "growth", "max_level"], ["step"])
+	if numbers == null or (numbers as Dictionary).is_empty():
+		return numbers
+	if numbers["growth"] < 1.0 or numbers["max_level"] < 1.0:
+		_fail("ability.growth y ability.max_level tienen que ser 1 o más")
+		return null
+	var reveal: String = str((balance["ability"] as Dictionary).get("reveal_with", ""))
+	for index: int in range(generators.size()):
+		if generators[index]["id"] == reveal:
+			numbers["reveal_index"] = index
+			return numbers
+	_fail("ability.reveal_with tiene que ser el id de un generador")
+	return null
 
 
 ## Lee la sección opcional "milestones": {at: [25, 50, 100], multiplier}. Mismo contrato que _read_numbers.

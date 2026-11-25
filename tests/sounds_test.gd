@@ -251,7 +251,7 @@ func _test_economy_cues() -> void:
 	_economy.gold = 1.0e6
 	await process_frame
 	_take()
-	var buy: Button = _scene.get_node("%Shop").get_child(1) as Button
+	var buy: Button = _scene.get_node("%Shop").get_child(2) as Button
 	buy.pressed.emit()
 	_check(_take().has("buy"), "comprar un generador")
 	_economy.owned[0] = 24
@@ -341,9 +341,13 @@ func _test_prestige_cues() -> void:
 func _test_dynamite_cue() -> void:
 	_section("La dinamita explota con sonido")
 	_economy.reset()
-	_economy.owned[2] = 400
-	_economy.gold_changed.emit(_economy.gold)
+	_economy.owned[1] = 1
+	_economy.gold = 1.0e6
+	await process_frame
 	_take()
+	_economy.upgrade_ability()
+	_check(_take().has("buy"), "subir la dinamita suena como una compra")
+	_economy.use_ability()
 	var heard: bool = false
 	# En headless los frames corren sin límite: se espera por tiempo real.
 	var deadline: int = Time.get_ticks_msec() + 3000
@@ -352,9 +356,8 @@ func _test_dynamite_cue() -> void:
 		if _played.has("dynamite"):
 			heard = true
 			break
-	_check(heard, "una explosión suena")
+	_check(heard, "usarla suena a explosión")
 	_economy.reset()
-	_economy.gold_changed.emit(_economy.gold)
 	await process_frame
 
 

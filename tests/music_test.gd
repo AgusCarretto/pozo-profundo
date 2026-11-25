@@ -95,7 +95,7 @@ func _test_frenzy() -> void:
 	await process_frame
 	_section("Ir a comprar no corta el frenesí")
 	_economy.gold = 1.0e9
-	var buy: Button = _scene.get_node("%Shop").get_child(1) as Button
+	var buy: Button = _scene.get_node("%Shop").get_child(2) as Button # 0 = pico, 1 = dinamita
 	buy.pressed.emit()
 	_play(1.0, 0.0)
 	_check_eq(_playing(), "earth", "comprar sin frenesí no lo trae")

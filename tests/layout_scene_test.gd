@@ -118,7 +118,7 @@ func _pick_card(scene: Control) -> Button:
 
 ## La tarjeta del generador `index` (van después de la del pico). La tarjeta entera es el botón de compra.
 func _card(scene: Control, index: int) -> Button:
-	return _node(scene, "Shop").get_child(index + 1) as Button
+	return _node(scene, "Shop").get_child(index + 2) as Button # 0 = pico, 1 = dinamita
 
 
 ## El nombre, el dato y el precio de una tarjeta, en ese orden.
@@ -749,7 +749,7 @@ func _test_shop_grid(packed: PackedScene) -> void:
 		var label: String = "%dx%d" % [int(phone.x), int(phone.y)]
 		var shop: GridContainer = _node(scene, "Shop") as GridContainer
 		_check_eq(shop.columns, 2, "[%s] dos columnas" % label)
-		_check_eq(shop.get_child_count(), 6, "[%s] seis tarjetas: el pico y los cinco generadores" % label)
+		_check_eq(shop.get_child_count(), 8, "[%s] ocho tarjetas: pico, dinamita y los seis generadores" % label)
 		var cards: Array[Node] = shop.get_children()
 		var first: Control = cards[0] as Control
 		var second: Control = cards[1] as Control
@@ -767,7 +767,7 @@ func _test_shop_grid(packed: PackedScene) -> void:
 			if not rect.size.is_equal_approx(first.size):
 				uneven = true
 			_check(card is Button, "[%s] %s: la tarjeta entera es el botón" % [label, card.name])
-		_check(hidden.is_empty(), "[%s] las seis se ven enteras sin deslizar (%s)" % [label, str(hidden)])
+		_check(hidden.is_empty(), "[%s] las ocho se ven enteras sin deslizar (%s)" % [label, str(hidden)])
 		_check(not uneven, "[%s] todas del mismo tamaño (%s)" % [label, str(first.size)])
 		await _free_host(scene)
 

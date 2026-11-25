@@ -10,6 +10,7 @@ func _ready() -> void:
 	Economy.hit_landed.connect(_on_hit_landed.unbind(1))
 	Economy.generator_bought.connect(_play.bind("buy").unbind(2))
 	Economy.milestone_reached.connect(_play.bind("milestone").unbind(2))
+	Economy.ability_upgraded.connect(_play.bind("buy").unbind(1))
 	Economy.pick_upgraded.connect(_play.bind("pick").unbind(1))
 	Economy.loot_dropped.connect(_on_loot_dropped)
 	Economy.prestiged.connect(_play.bind("prestige").unbind(1))

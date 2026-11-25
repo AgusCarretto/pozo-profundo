@@ -3,9 +3,10 @@
 	"generators": [
 		{ "id": "miner", "name": "Minero", "base_rate": 1, "base_cost": 25 },
 		{ "id": "steam_drill", "name": "Taladro a vapor", "base_rate": 5, "base_cost": 600 },
-		{ "id": "dynamite_crew", "name": "Cuadrilla de dinamita", "base_rate": 25, "base_cost": 10000 },
+		{ "id": "mole", "name": "Topo excavador", "base_rate": 25, "base_cost": 10000 },
 		{ "id": "stone_golem", "name": "Gólem de piedra", "base_rate": 120, "base_cost": 180000 },
-		{ "id": "rune_excavator", "name": "Excavadora rúnica", "base_rate": 600, "base_cost": 3000000 }
+		{ "id": "rune_excavator", "name": "Excavadora rúnica", "base_rate": 600, "base_cost": 3000000 },
+		{ "id": "abyss_worm", "name": "Gusano del Abismo", "base_rate": 3000, "base_cost": 50000000 }
 	],
 	"milestones": {
 		"at": [25, 50, 100],
@@ -20,6 +21,16 @@
 	"crit": {
 		"chance": 0.08,
 		"multiplier": 2
+	},
+	"ability": {
+		"cooldown": 60,
+		"seconds": 24,
+		"step": 4,
+		"hits": 50,
+		"cost": 2000,
+		"growth": 5,
+		"max_level": 10,
+		"reveal_with": "mole"
 	},
 	"depth": {
 		"meters_scale": 15,

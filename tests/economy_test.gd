@@ -28,6 +28,8 @@ func _initialize() -> void:
 	_test_critical_hits()
 	_test_milestones()
 	_test_hidden_generators()
+	_test_ability()
+	_test_old_dynamite_crews_become_moles()
 	_test_buy_one()
 	_test_buy_ten()
 	_test_buy_max()
@@ -193,6 +195,100 @@ func _test_hidden_generators() -> void:
 		broken.from_dict({ "revealed": garbage })
 		_check(broken.is_generator_revealed(0) and not broken.is_generator_revealed(3), "dato basura (%s): sin explotar" % str(garbage))
 	_check(not e.is_generator_revealed(-1) and not e.is_generator_revealed(9), "un índice inexistente no está revelado")
+
+
+const ABILITY: Dictionary = { "cooldown": 60, "seconds": 24, "step": 4, "hits": 50, "cost": 2000, "growth": 5, "max_level": 3, "reveal_with": "b" }
+
+
+func _ability_economy() -> EconomyScript:
+	var balance: Dictionary = TEST_BALANCE.duplicate(true)
+	balance["ability"] = ABILITY
+	balance["milestones"] = { "at": [25, 50, 100], "multiplier": 2 }
+	var e: EconomyScript = _make()
+	_check(e.load_balance(balance), "carga con la sección ability (%s)" % e.last_error)
+	return e
+
+
+func _test_ability() -> void:
+	_section("Dinamita: una habilidad con recarga que da un golpe enorme")
+	var e: EconomyScript = _ability_economy()
+	_check(e.has_ability() and not e.ability_revealed(), "al empezar está oculta")
+	e.gold = 1.0e6
+	_check(not e.upgrade_ability(), "oculta no se compra")
+	e.owned[0] = 1
+	_check(e.ability_revealed(), "se revela junto con el segundo generador")
+	_check_eq(e.ability_cost(), 2000.0, "el nivel 1 cuesta 2.000")
+	_check(not e.ability_ready() and e.use_ability() == 0.0, "sin comprarla no se usa")
+	var levels: Array[int] = []
+	var used: Array[float] = []
+	e.ability_upgraded.connect(func(level: int) -> void: levels.append(level))
+	e.ability_used.connect(func(amount: float) -> void: used.append(amount))
+	e.gold = 2000.0
+	_check(e.upgrade_ability(), "se compra")
+	_check(e.gold == 0.0 and e.ability_level == 1 and levels == [1], "gasta 2.000 y queda en nivel 1")
+	_check_eq(e.ability_cost(), 10000.0, "el nivel 2 cuesta x5")
+	_check_eq(e.ability_seconds(1), 24.0, "nivel 1: 24 s")
+	_check_eq(e.ability_seconds(3), 32.0, "cada nivel suma 4 s")
+	e.owned[0] = 0
+	_check_eq(e.ability_reward(), 50.0, "sin cuadrilla paga por golpes (50 de 1)")
+	e.owned[0] = 10
+	e.owned[1] = 5 # 50 oro/s
+	_check_near(e.ability_reward(), maxf(24.0 * 50.0, 50.0 * e.hit_value()), "con cuadrilla, 24 s de producción")
+	_check(e.ability_ready(), "recién comprada está lista")
+	var before: float = e.gold
+	var reward: float = e.ability_reward()
+	_check_eq(e.use_ability(), reward, "usarla devuelve lo que pagó")
+	_check(e.gold == before + reward and e.run_gold >= reward and used == [reward], "entra en el acto y cuenta como ganado")
+	_check(not e.ability_ready() and e.ability_cooldown_left == 60.0, "y queda recargando 60 s")
+	_check_eq(e.use_ability(), 0.0, "recargando no hace nada")
+	e.advance_ability(59.0)
+	_check(not e.ability_ready(), "a los 59 s todavía no")
+	e.advance_ability(5.0)
+	_check(e.ability_ready() and e.ability_cooldown_left == 0.0, "después de 60 s vuelve")
+	e.use_ability()
+	e.tick_realtime(1000000)
+	e.tick_realtime(31000000)
+	_check_near(e.ability_cooldown_left, 30.0, "la recarga corre con el reloj real")
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(e.to_dict()))
+	var loaded: EconomyScript = _ability_economy()
+	loaded.from_dict(saved)
+	_check(loaded.ability_level == 1 and absf(loaded.ability_cooldown_left - 30.0) < 0.01, "el nivel y lo que falta de recarga se guardan (recargar la página no la saltea)")
+	loaded.apply_offline_since(1000000, 1000100.0)
+	_check_eq(loaded.ability_cooldown_left, 0.0, "el tiempo con el juego cerrado también recarga")
+	e.gold = 1.0e12
+	e.upgrade_ability()
+	e.upgrade_ability()
+	_check(e.ability_level == 3 and not e.upgrade_ability(), "no pasa del nivel máximo")
+	e.run_gold = 1.0e12
+	e.load_balance(TEST_BALANCE)
+	_check(not e.has_ability() and not e.ability_revealed() and e.use_ability() == 0.0 and not e.upgrade_ability(), "sin la sección no hay habilidad")
+	var real: EconomyScript = _ability_economy()
+	real.from_dict({ "ability_level": 99, "ability_wait": 1.0e9, "owned": [1, 0] })
+	_check(real.ability_level == 3 and real.ability_cooldown_left <= 60.0, "datos fuera de rango se topan")
+	real.reset()
+	_check(real.ability_level == 0 and real.ability_cooldown_left == 0.0, "al reiniciar la bajada vuelve a cero")
+	var tiers: EconomyScript = _ability_economy()
+	for pair: Array in [[0, 0], [24, 0], [25, 1], [50, 2], [100, 3], [400, 3]]:
+		tiers.owned[0] = pair[0]
+		_check_eq(tiers.milestone_tier(0), pair[1], "%d unidades -> aspecto %d" % pair)
+	for bad: Dictionary in [{ "cooldown": 0 }, { "max_level": 0 }, { "growth": 0.5 }, { "hits": 0 }, { "reveal_with": "nadie" }]:
+		var balance: Dictionary = TEST_BALANCE.duplicate(true)
+		balance["ability"] = ABILITY.duplicate()
+		balance["ability"].merge(bad, true)
+		_check_eq(tiers.load_balance(balance), false, "ability %s -> inválido" % str(bad))
+
+
+## Los testers tenían "Cuadrillas de dinamita": el Topo ocupa su lugar, así que se convierten en topos solos.
+func _test_old_dynamite_crews_become_moles() -> void:
+	_section("Las cuadrillas de dinamita de antes ahora son topos")
+	var e: EconomyScript = EconomyScript.new()
+	_nodes.append(e)
+	e.load_balance_file("res://data/balance.json")
+	e.from_dict({ "balance_version": 2, "gold": 10.0, "run_gold": 500000.0, "owned": [30, 12, 26, 4, 1], "revealed": 5 })
+	_check_eq(e.generator_id(2), "mole", "el tercer puesto es el Topo")
+	_check_eq(e.owned_count(2), 26, "26 cuadrillas de dinamita -> 26 topos")
+	_check_eq([e.owned_count(3), e.owned_count(4), e.owned_count(5)], [4, 1, 0], "el resto no se corre y el Gusano arranca en 0")
+	_check(e.is_generator_revealed(5) and e.ability_revealed() and e.ability_level == 0, "con la Excavadora ya ven el Gusano, y la Dinamita por comprar")
 
 
 func _test_buy_one() -> void:
@@ -473,12 +569,12 @@ func _test_real_balance_file() -> void:
 	var e: EconomyScript = EconomyScript.new()
 	_nodes.append(e)
 	_check_eq(e.load_balance_file("res://data/balance.json"), true, "carga el balance real")
-	_check_eq(e.generator_count(), 5, "5 generadores")
+	_check_eq(e.generator_count(), 6, "6 generadores")
 	_check_eq(e.generator_name(0), "Minero", "el primero es el Minero")
 	var ids: Array[String] = []
 	for index: int in range(e.generator_count()):
 		ids.append(e.generator_id(index))
-	_check_eq(ids, ["miner", "steam_drill", "dynamite_crew", "stone_golem", "rune_excavator"] as Array[String], "los ids del balance real, en orden")
+	_check_eq(ids, ["miner", "steam_drill", "mole", "stone_golem", "rune_excavator", "abyss_worm"] as Array[String], "los ids del balance real, en orden")
 	# El ritmo del juego (partidas largas): precios altos y cuadrilla que rinde poco; el pico no se recorta.
 	var rates: Array[float] = []
 	var costs: Array[float] = []
@@ -488,8 +584,8 @@ func _test_real_balance_file() -> void:
 		e.owned[index] = 1
 		rates.append(e.gold_per_second())
 	e.owned.fill(0)
-	_check_eq(rates, [1.0, 5.0, 25.0, 120.0, 600.0] as Array[float], "los generadores caros rinden menos")
-	_check_eq(costs, [25.0, 600.0, 10000.0, 180000.0, 3000000.0] as Array[float], "y cuesta bastante más")
+	_check_eq(rates, [1.0, 5.0, 25.0, 120.0, 600.0, 3000.0] as Array[float], "los generadores caros rinden menos")
+	_check_eq(costs, [25.0, 600.0, 10000.0, 180000.0, 3000000.0, 50000000.0] as Array[float], "y cuesta bastante más")
 	e.owned[0] = 1
 	_check_near(e.quote(0, EconomyScript.BuyMode.X1)["cost"], 25.0 * 1.15, "cada unidad cuesta 15% más que la anterior")
 	e.owned[0] = 0

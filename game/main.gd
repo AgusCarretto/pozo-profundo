@@ -18,6 +18,7 @@ const OptionsPanel := preload("res://game/options_panel.gd")
 const ScreenFx := preload("res://game/screen_fx.gd")
 const Juice := preload("res://game/juice.gd")
 const PickCard := preload("res://game/pick_card.gd")
+const AbilityCard := preload("res://game/ability_card.gd")
 const SideButton := preload("res://game/side_button.gd")
 const SidePanel := preload("res://game/side_panel.gd")
 const SoundCues := preload("res://game/sound_cues.gd")
@@ -81,6 +82,10 @@ var _options: OptionsPanel
 var _screen_fx: ScreenFx
 var _music: MusicDirector
 var _pick_card: PickCard
+var _ability_card: AbilityCard
+## El relleno del botón de la Dinamita: sube a medida que recarga.
+var _ability_fill: ColorRect
+var _ability_was_ready: bool = false
 var _shown_runes: int = -1
 ## El último cofre que salió en esta partida ({rarity, amount}); vacío si todavía no salió ninguno.
 var _last_chest: Dictionary = {}
@@ -113,6 +118,7 @@ var _gold_font_size: int = 0
 @onready var _loot_button: SideButton = %LootButton
 @onready var _relics_button: SideButton = %RelicsButton
 @onready var _mode_button: SideButton = %ModeButton
+@onready var _ability_button: SideButton = %AbilityButton
 @onready var _loot_panel: SidePanel = %LootPanel
 @onready var _relics_panel: SidePanel = %RelicsPanel
 @onready var _loot_box: VBoxContainer = %LootBox
@@ -135,6 +141,9 @@ func _ready() -> void:
 	_pick_card = PickCard.new()
 	_shop.add_child(_pick_card)
 	_pick_card.setup()
+	_ability_card = AbilityCard.new()
+	_shop.add_child(_ability_card)
+	_ability_card.setup()
 	for index: int in range(Economy.generator_count()):
 		var card: GeneratorCard = GeneratorCard.new()
 		_shop.add_child(card)
@@ -149,6 +158,7 @@ func _ready() -> void:
 	_loot_button.pressed.connect(_loot_panel.open)
 	_relics_button.pressed.connect(_relics_panel.open)
 	_mode_button.pressed.connect(_on_mode_pressed)
+	_build_ability_button()
 
 	# Reaccionan al apretar (no al soltar): un clicker tiene que responder al toque.
 	_tap_button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
@@ -190,6 +200,8 @@ func _ready() -> void:
 	Economy.loot_dropped.connect(_on_loot_dropped)
 	Economy.hit_landed.connect(_on_hit_landed)
 	Economy.milestone_reached.connect(_on_milestone_reached)
+	Economy.ability_upgraded.connect(_mark_dirty.unbind(1))
+	Economy.ability_used.connect(_on_ability_used)
 	_mine_view.dynamite_exploded.connect(func(_at: Vector2) -> void: Audio.play_sfx("dynamite"))
 	Economy.offline_progress.connect(_show_offline_notice)
 	# Guardado del navegador: la copia de la partida y sus avisos.
@@ -210,6 +222,7 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if _dirty:
 		_refresh()
+	_refresh_ability_button() # la recarga corre sola
 
 
 func _mark_dirty() -> void:
@@ -234,6 +247,43 @@ func _on_milestone_reached(index: int, threshold: int) -> void:
 	_mine_view.show_toast(GeneratorArt.icon(Economy.generator_id(index)), title, detail, Palette.YELLOW)
 	if index < _cards.size():
 		Juice.bounce(_cards[index])
+
+
+# --- Dinamita ------------------------------------------------------------------
+
+func _build_ability_button() -> void:
+	_ability_button.build(GeneratorArt.ability_icon(), "Dinamita")
+	_ability_button.pressed.connect(func() -> void: Economy.use_ability())
+	_ability_fill = ColorRect.new()
+	_ability_fill.name = "Fill"
+	_ability_fill.color = Color(Palette.GOLD, 0.35)
+	_ability_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ability_button.add_child(_ability_fill)
+
+
+## El botón aparece al comprar el nivel 1: lleno y con "¡Ya!" cuando está lista; si no, los segundos que faltan.
+func _refresh_ability_button() -> void:
+	_ability_button.visible = Economy.ability_level > 0
+	if not _ability_button.visible:
+		_ability_was_ready = false
+		return
+	var ready: bool = Economy.ability_ready()
+	var left: float = Economy.ability_cooldown_left
+	var done: float = 1.0 if ready else clampf(1.0 - left / Economy.ability_cooldown(), 0.0, 1.0)
+	_ability_fill.size = Vector2(_ability_button.size.x, _ability_button.size.y * done)
+	_ability_fill.position = Vector2(0.0, _ability_button.size.y - _ability_fill.size.y)
+	_ability_button.disabled = not ready
+	var seconds: int = ceili(left)
+	_ability_button.set_caption("¡Ya!" if ready else "%d:%02d" % [seconds / 60, seconds % 60])
+	if ready and not _ability_was_ready and _built:
+		Juice.bounce(_ability_button)
+	_ability_was_ready = ready
+
+
+## Los dinamiteros tiran los cartuchos; el sonido llega con la explosión (dynamite_exploded).
+func _on_ability_used(amount: float) -> void:
+	_mine_view.throw_dynamite("¡+%s!" % NumberFormat.format_number(amount))
+	_mark_dirty()
 
 
 ## Silencia todo o devuelve el sonido. El click suena solo al devolverlo (silenciado no suena nada).
@@ -269,6 +319,8 @@ func _refresh() -> void:
 	_refresh_mine()
 	_refresh_odds()
 	_pick_card.refresh()
+	_ability_card.refresh()
+	_refresh_ability_button()
 	_refresh_last_loot()
 	_refresh_prestige()
 	_refresh_badges()
@@ -351,7 +403,6 @@ func _refresh_mine() -> void:
 	var miners: int = 0
 	var has_drill: bool = false
 	var has_golem: bool = false
-	var dynamite: int = 0
 	var excavators: int = 0
 	for index: int in range(Economy.generator_count()):
 		match Economy.generator_id(index):
@@ -361,12 +412,11 @@ func _refresh_mine() -> void:
 				has_drill = Economy.owned_count(index) > 0
 			"stone_golem":
 				has_golem = Economy.owned_count(index) > 0
-			"dynamite_crew":
-				dynamite = Economy.owned_count(index)
 			"rune_excavator":
 				excavators = Economy.owned_count(index)
 	_mine_view.set_crew(miners, has_drill, has_golem)
-	_mine_view.set_machines(dynamite, excavators)
+	_mine_view.set_machines(excavators)
+	_mine_view.set_dynamiters(Economy.ability_level > 0)
 	_hint_label.visible = Economy.run_gold <= 0.0
 
 
@@ -522,7 +572,7 @@ func _on_prestige_pressed() -> void:
 	if not Economy.can_prestige():
 		return
 	var gain: int = Economy.prestige_relics()
-	var body: String = "Estás a %d m (%s).\n\nGanás %s: +%s de oro permanente (en total ×%.2f).\n\nVolvés a la superficie sin oro, sin cuadrilla y con el pico en nivel 0. Las reliquias te quedan para siempre." % [
+	var body: String = "Estás a %d m (%s).\n\nGanás %s: +%s de oro permanente (en total ×%.2f).\n\nVolvés a la superficie sin oro, sin cuadrilla y con el pico y la dinamita en nivel 0. Las reliquias te quedan para siempre." % [
 		int(floorf(Economy.depth())),
 		Economy.biome_name(Economy.biome_index()),
 		_relics_phrase(gain),
