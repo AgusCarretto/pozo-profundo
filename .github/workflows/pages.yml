@@ -1,0 +1,77 @@
+# Publica el juego en GitHub Pages (https://aguscarretto.github.io/pozo-profundo/) como app instalable.
+# Corre solo cuando llega a main un cambio de project.godot (ahí vive la versión) y a mano desde la pestaña
+# Actions. Con el repo privado no hace nada. Necesita Pages con origen "GitHub Actions" y los secretos
+# SUPABASE_URL, SUPABASE_KEY y (opcional) FEEDBACK_URL.
+name: Publicar en GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths: [project.godot]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  # La misma versión con la que se desarrolla el juego.
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  publicar:
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # Antes de bajar nada: si faltan los secretos, que falle enseguida.
+      - name: Configuración (métricas y Opinar)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          FEEDBACK_URL: ${{ secrets.FEEDBACK_URL }}
+        run: node tools/write_online_config.mjs
+
+      - name: Godot y plantillas web (descarga oficial, con la suma verificada)
+        run: |
+          set -euo pipefail
+          base="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable"
+          engine="Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          templates="Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          mkdir -p "$RUNNER_TEMP/godot" && cd "$RUNNER_TEMP/godot"
+          for file in "$engine" "$templates" SHA512-SUMS.txt; do curl -fsSL --retry 3 -O "$base/$file"; done
+          grep -E "  ($engine|$templates)\$" SHA512-SUMS.txt | sha512sum --check --strict
+          unzip -q "$engine"
+          dest="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$dest"
+          unzip -q -j "$templates" 'templates/web_*' 'templates/version.txt' -d "$dest"
+          echo "GODOT=$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
+
+      - name: Exportar
+        run: |
+          set -euo pipefail
+          mkdir -p build/pages
+          touch build/.gdignore
+          "$GODOT" --headless --path . --import
+          "$GODOT" --headless --path . --export-release "Pages" build/pages/index.html
+          test -f build/pages/index.pck
+          test -f build/pages/index.service.worker.js
+          # Lo que usa la pantalla de carga (igual que tools/export_web.ps1), cada fuente con su licencia.
+          cp assets/fonts/PixelifySans.ttf assets/fonts/OFL.txt assets/fonts/VT323Digits.ttf assets/fonts/VT323-OFL.txt build/pages/
+          cp assets/sprites/generated/rock_earth.png build/pages/loading_rock.png
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: build/pages
+
+      - id: deploy
+        uses: actions/deploy-pages@v5

@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <rect width="128" height="128" rx="16" fill="#2b1f1a"/>
-  <rect y="20" width="128" height="14" fill="#5a3f2e"/>
-  <rect y="34" width="128" height="94" fill="#3d2b20"/>
-  <ellipse cx="64" cy="34" rx="34" ry="9" fill="#0d0907"/>
-  <rect x="30" y="34" width="68" height="94" fill="#0d0907"/>
-  <polygon points="64,76 80,92 64,112 48,92" fill="#f4c542"/>
-  <polygon points="64,76 80,92 64,92" fill="#ffe27a"/>
-</svg>

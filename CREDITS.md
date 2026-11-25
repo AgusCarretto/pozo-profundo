@@ -27,5 +27,5 @@ Cada fila dice dónde vive el asset con una ruta entre comillas invertidas; `tes
 
 ## Assets propios
 
-- `icon.svg` — ícono del proyecto, creado para Pozo Profundo.
+- `web/icons/` — ícono del juego (roca y pico propios), armado por `tools/build_icons.gd`.
 - `assets/sprites/generated/` — sprites de 16×16 dibujados por código con la paleta de Tiny Dungeon (`game/palette.gd`) por `tools/generate_sprites.gd`: roca, fondo, astillas y runas que orbitan de cada bioma, taladro, gólem, dinamita, runas, moneda, pico y gema. Los mineros de ese mismo directorio son personajes de Tiny Dungeon recoloreados por el mismo script.

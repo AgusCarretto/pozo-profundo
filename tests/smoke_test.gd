@@ -61,7 +61,8 @@ func _test_autoloads() -> void:
 ## Lo que hace falta para publicar en la web (F4): versión, preset de export y pantalla de carga propia.
 func _test_export_settings() -> void:
 	print("Export web")
-	_check(ProjectSettings.get_setting("application/config/version", "") == "0.6.0", "versión = 0.6.0")
+	_check(ProjectSettings.get_setting("application/config/version", "") == "0.6.1", "versión = 0.6.1")
+	_test_pwa()
 	_check(ProjectSettings.get_setting("application/boot_splash/show_image", true) == false, "sin el logo de Godot al arrancar")
 	var preset: ConfigFile = ConfigFile.new()
 	_check(preset.load("res://export_presets.cfg") == OK, "se lee export_presets.cfg")
@@ -76,6 +77,30 @@ func _test_export_settings() -> void:
 	var html: String = FileAccess.get_file_as_string("res://web/shell.html") if FileAccess.file_exists("res://web/shell.html") else ""
 	for piece: String in ["$GODOT_URL", "$GODOT_CONFIG", "$GODOT_PROJECT_NAME", "$GODOT_HEAD_INCLUDE", "onProgress", "VT323Digits.ttf", "unicode-range: U+0030-0039"]:
 		_check(html.contains(piece), "la pantalla de carga tiene %s" % piece)
+
+
+## El build de GitHub Pages es una app instalable (PWA); el de itch.io no: un service worker adentro de su iframe
+## solo dejaría versiones viejas cacheadas.
+func _test_pwa() -> void:
+	var preset: ConfigFile = ConfigFile.new()
+	preset.load("res://export_presets.cfg")
+	_check(preset.get_value("preset.0.options", "progressive_web_app/enabled", true) == false, "itch.io sin PWA")
+	_check(preset.get_value("preset.1", "name", "") == "Pages", "hay un preset 'Pages'")
+	_check(preset.get_value("preset.1.options", "progressive_web_app/enabled", false) == true, "como PWA")
+	_check(preset.get_value("preset.1.options", "progressive_web_app/orientation", -1) == 2, "vertical")
+	_check(preset.get_value("preset.1.options", "progressive_web_app/display", -1) == 1, "sin la barra del navegador (standalone)")
+	_check(preset.get_value("preset.1.options", "progressive_web_app/ensure_cross_origin_isolation_headers", true) == false, "sin cabeceras de aislamiento (no usa hilos)")
+	_check(str(preset.get_value("preset.1.options", "html/head_include", "")).contains("apple-mobile-web-app-title"), "con el nombre para la pantalla de inicio del iPhone")
+	for side: int in [144, 180, 512]:
+		var path: String = str(preset.get_value("preset.1.options", "progressive_web_app/icon_%dx%d" % [side, side], ""))
+		var icon: Image = Image.load_from_file(ProjectSettings.globalize_path(path)) if FileAccess.file_exists(path) else null
+		_check(icon != null and icon.get_size() == Vector2i(side, side), "ícono de %d (%s)" % [side, path])
+	_check(ProjectSettings.get_setting("application/config/name", "") == "Pozo Profundo", "la app se llama Pozo Profundo")
+	_check(str(ProjectSettings.get_setting("application/config/icon", "")).begins_with("res://web/icons/"), "el ícono del proyecto es el del juego")
+	for pattern: String in ["tests/*", "tools/*", "data/online.example.json"]:
+		_check(str(preset.get_value("preset.1", "exclude_filter", "")).split(",").has(pattern), "el build de Pages no lleva %s" % pattern)
+	var html: String = FileAccess.get_file_as_string("res://web/shell.html")
+	_check(not html.contains("viewport-fit=cover"), "instalada, la pantalla no se mete bajo la muesca del iPhone")
 
 
 ## Regla del CLAUDE.md: lo de core/ no puede depender de nada de game/.
