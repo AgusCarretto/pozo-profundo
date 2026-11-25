@@ -51,6 +51,7 @@ func _initialize() -> void:
 	_test_ui_pack_and_font()
 	_test_credits()
 	_test_font_covers_ui_text()
+	_test_font_has_no_ligatures()
 	_finish()
 
 
@@ -525,3 +526,21 @@ func _test_font_covers_ui_text() -> void:
 				missing["%s (U+%04X) en %s" % [text[index], code, texts[text]]] = true
 	_check(not texts.is_empty(), "revisa %d textos" % texts.size())
 	_check(missing.is_empty(), "ninguno usa un carácter que la fuente no tenga %s" % str(missing.keys()))
+
+
+## En Pixelify Sans la ligadura "fi" se dibuja como una "A": "superficie" se leía "superAcie". El tema las apaga.
+func _test_font_has_no_ligatures() -> void:
+	_section("Las fuentes del tema no juntan letras")
+	var theme: Theme = load("res://ui/theme.tres") as Theme
+	var fonts: Array[Font] = [theme.default_font]
+	for type_name: String in theme.get_font_type_list():
+		for font_name: String in theme.get_font_list(type_name):
+			var font: Font = theme.get_font(font_name, type_name)
+			if not fonts.has(font):
+				fonts.append(font)
+	var server: TextServer = TextServerManager.get_primary_interface()
+	for index: int in range(fonts.size()):
+		for word: String in ["superficie", "fl", "ff"]:
+			var line: TextLine = TextLine.new()
+			line.add_string(word, fonts[index], 40)
+			_check_eq(server.shaped_text_get_glyphs(line.get_rid()).size(), word.length(), "fuente %d: '%s' son %d letras sueltas" % [index, word, word.length()])

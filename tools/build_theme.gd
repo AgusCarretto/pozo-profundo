@@ -61,6 +61,10 @@ func _make_font(base: FontFile, weight: int) -> FontVariation:
 	var font: FontVariation = FontVariation.new()
 	font.base_font = base
 	font.variation_opentype = { TextServerManager.get_primary_interface().name_to_tag("wght"): weight }
+	# Sin ligaduras: en esta fuente la "fi" se dibuja como una "A" ("superficie" se leía "superAcie").
+	# El diccionario se asigna entero: cambiar el que devuelve la propiedad no hace nada.
+	var server: TextServer = TextServerManager.get_primary_interface()
+	font.opentype_features = { server.name_to_tag("liga"): 0, server.name_to_tag("clig"): 0 }
 	return font
 
 
