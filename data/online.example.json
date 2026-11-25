@@ -1,0 +1,6 @@
+{
+	"_ayuda": "Copiá este archivo como data/online.json (no se sube a git), completalo y volvé a exportar. Vacío = apagado. La key es la publishable (sb_publishable_...) o la anon, nunca la secreta.",
+	"supabase_url": "",
+	"supabase_key": "",
+	"feedback_url": ""
+}

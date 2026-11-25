@@ -5,6 +5,9 @@
 # Exports generados (se regeneran con tools/export_web.ps1)
 build/
 
+# Configuración de esta publicación (Supabase y link de Opinar). El ejemplo es data/online.example.json.
+data/online.json
+
 # Credenciales y firmas (Android / Play Store, fases F5+)
 export_credentials.cfg
 *.keystore
