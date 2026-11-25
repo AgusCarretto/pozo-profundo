@@ -107,8 +107,25 @@ Corridas con bonus +5% y Corazón +25% (anteriores a los últimos ajustes). Hora
 | 0,35 | 6,7 h | 13,0 h | 42,1 h |
 | 0,60 | 8,8 h | 33,0 h | más de 60 h |
 
-### Corrida de la propuesta final (0,28 m, +6%, Corazón +50%, tus cambios)
-Completa.
+### Resultado de la propuesta final (0,28 m, +6%, Corazón +50%, con tus cambios)
+Una partida simulada a 3 golpes/s, 1 h por día. **Cumple el objetivo de 3 a 5 semanas.**
+
+| Hito | Día | Horas jugadas |
+|---|---|---|
+| Anillo 2 abierto | 3 | 2,0 |
+| Anillo 3 abierto | 4 | 3,3 |
+| Anillo 1 completo | 6 | 5,2 |
+| Anillo 2 completo | 10 | 9,2 |
+| Primera piedra angular | 13 | 12,4 |
+| Anillo 3 completo | 19 | 18,2 |
+| Primer puente | 21 | 20,2 |
+| **Árbol completo** | **28** | **27,1** |
+
+No cumple "primer reset: Corazón y 1–2 estrellas": con los fragmentos de los logros son 7 reliquias y se encienden el Corazón y 6 estrellas.
+
+Fragmentos acumulados: día 1: 60 · día 3: 116 · día 7: 275 · día 14: 405 · día 28: 520 (de 630). Los de frenesí y secretos usan un día estimado, no simulado.
+
+Detalle día por día:
 
 ```
 3.0 golpes/s, semilla 1. El árbol entero cuesta 1089 reliquias.
@@ -160,9 +177,12 @@ Fragmentos acumulados: día 1: 21 logros, 60 frag. · día 2: 30 logros, 107 fra
 Bajada nueva (mediana de 5): momento | reliquias | 300 m sin árbol → con árbol | 400 m sin árbol → con árbol
 ```
 
-### Cómo se acortan las bajadas con el árbol (bajada nueva a 300 m)
-De la corrida de 0,20 m: sin nada 28:46 · tras el primer reset 14:37 · anillo 1 completo 0:41 · anillo 2 completo 0:13 · completo 0:10.
-**Problema abierto:** desde la mitad del árbol, llegar a 300 m tarda segundos. La profundidad por reliquia hace que las bajadas reales sigan durando minutos, pero conviene revisar las estrellas multiplicativas antes de programar.
+### Cómo se acortan las bajadas con el árbol (bajada nueva, mediana de 5)
+| Momento | Reliquias ganadas | 300 m: sin árbol → con árbol | 400 m: sin árbol → con árbol |
+|---|---|---|---|
+
+
+**Problema abierto:** desde el anillo 1 completo, llegar a 300 m tarda menos de un minuto. En la partida las bajadas duran 3–16 min porque la profundidad para volver se va corriendo, pero conviene revisar las estrellas multiplicativas antes de programar. (Los momentos "sin árbol" usan solo el bonus histórico.)
 
 ### Estrella por estrella (propuesta final)
 Cuánto acorta una bajada nueva pasar la estrella de 0 al máximo, con las demás de su anillo y anteriores al máximo. 3 semillas.
@@ -214,10 +234,10 @@ Lectura:
 - Las de anillo 1 se miden sobre bajadas de ~50 s, así que sus porcentajes tienen mucho ruido.
 
 ### Falta
-1. Terminar la corrida final y mirar en qué horas se abre cada anillo.
+1. Repetir la corrida final con otras semillas y a 1,5 y 5 golpes/s (hay una sola partida).
 2. Ajustar c_mina, c_capataz y las de Fortuna, y volver a medir.
 3. Medir las estrellas que esta prueba no cubre.
-4. Cuándo aporta fragmentos cada logro: en las corridas anteriores, ~55–70 el día 1, ~110 el día 3, ~150–200 la primera semana y ~430–570 de 630 al final. Los de frenesí y secretos usan un día estimado, no simulado.
+4. Decidir si el primer reset puede encender 7 estrellas o si los fragmentos tempranos bajan.
 
 
 ## Logros propuestos
