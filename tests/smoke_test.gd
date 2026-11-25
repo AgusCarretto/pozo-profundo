@@ -61,7 +61,7 @@ func _test_autoloads() -> void:
 ## Lo que hace falta para publicar en la web (F4): versión, preset de export y pantalla de carga propia.
 func _test_export_settings() -> void:
 	print("Export web")
-	_check(ProjectSettings.get_setting("application/config/version", "") == "0.4.2", "versión = 0.4.2")
+	_check(ProjectSettings.get_setting("application/config/version", "") == "0.5.0", "versión = 0.5.0")
 	_check(ProjectSettings.get_setting("application/boot_splash/show_image", true) == false, "sin el logo de Godot al arrancar")
 	var preset: ConfigFile = ConfigFile.new()
 	_check(preset.load("res://export_presets.cfg") == OK, "se lee export_presets.cfg")
