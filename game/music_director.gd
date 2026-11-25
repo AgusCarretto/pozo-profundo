@@ -8,7 +8,8 @@ extends Node
 ## presentación y viven acá.
 ##
 ## main.gd lo crea y le cuenta el bioma (set_biome), las Opciones (set_options_open) y la vuelta a la superficie
-## (begin_prestige / end_prestige). Los golpes los escucha de Economy.hit_landed.
+## (begin_prestige / end_prestige). Los golpes los escucha de Economy.hit_landed, y las compras (generadores y pico)
+## sostienen un frenesí prendido: ir a la tienda no lo corta.
 
 const FrenzyMeter := preload("res://core/frenzy_meter.gd")
 
@@ -44,6 +45,9 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	frenzy.configure(Economy.frenzy_settings())
 	Economy.hit_landed.connect(_on_hit_landed)
+	# Ir a comprar no corta el frenesí (sí lo cortan las Opciones y la vuelta a la superficie).
+	Economy.generator_bought.connect(_on_bought.unbind(2))
+	Economy.pick_upgraded.connect(_on_bought.unbind(1))
 
 
 func _process(_delta: float) -> void:
@@ -127,3 +131,7 @@ func update() -> void:
 
 func _on_hit_landed(_amount: float) -> void:
 	frenzy.hit(clock.call())
+
+
+func _on_bought() -> void:
+	frenzy.hold(clock.call())

@@ -22,6 +22,7 @@ func _initialize() -> void:
 	_test_short_burst_does_not_enter()
 	_test_exits_after_quiet()
 	_test_brief_pause_keeps_frenzy()
+	_test_hold_keeps_frenzy()
 	_test_disabled_without_settings()
 	_test_balance_section()
 	_test_real_balance()
@@ -121,6 +122,27 @@ func _test_brief_pause_keeps_frenzy() -> void:
 	_check(not meter.active, "pero 4 s de ritmo bajo sí")
 	meter.reset()
 	_check(not meter.active and meter.rate(clock[0]) == 0.0, "reset() lo apaga y olvida los golpes")
+
+
+## hold() (comprar en la tienda) mantiene un frenesí prendido sin golpear: la cuenta para apagarse vuelve a empezar.
+func _test_hold_keeps_frenzy() -> void:
+	_section("Comprar mantiene el frenesí")
+	var meter: FrenzyMeter = _meter()
+	var clock: Array[float] = [0.0]
+	meter.hold(0.0)
+	_play(meter, 0.0, 1.0, 0.0, clock)
+	_check(not meter.active, "hold() con el frenesí apagado no lo prende")
+	_play(meter, clock[0], 4.0, 6.0, clock)
+	_check(meter.active, "prendido")
+	for second: int in range(8):
+		meter.hold(clock[0])
+		_play(meter, clock[0], 1.0, 0.0, clock)
+	_check(meter.active, "8 s sin golpear pero comprando cada segundo: sigue prendido")
+	# La última compra fue al principio del último segundo.
+	_play(meter, clock[0], 1.5, 0.0, clock)
+	_check(meter.active, "2,5 s después de la última compra, todavía")
+	_play(meter, clock[0], 1.0, 0.0, clock)
+	_check(not meter.active, "3 s después de la última compra (sin golpear), se apaga")
 
 
 func _test_disabled_without_settings() -> void:

@@ -84,12 +84,32 @@ func _test_frenzy() -> void:
 	_check_eq(_playing(), "frenzy", "6 golpes por segundo sostenidos más de 2 s pasan a la música de frenesí")
 	var fight: AudioStreamPlayer = _audio.current_music_player()
 	_check(fight != null and fight.volume_linear < 1.0, "con un fundido cruzado (entra bajo)")
+	_check(fight != null and fight.get_playback_position() < 0.5, "desde el principio, con su subida (%.2f s)" % (fight.get_playback_position() if fight != null else -1.0))
 	_play(2.0, 6.0)
 	_check_eq(_playing(), "frenzy", "mientras sigas a ritmo alto, sigue")
 	_play(2.5, 0.0)
 	_check_eq(_playing(), "frenzy", "una pausa de 2 s no la corta")
 	_play(2.0, 0.0)
 	_check_eq(_playing(), "earth", "3 s sin ritmo alto, vuelve al tema del bioma")
+	await process_frame
+	_section("Ir a comprar no corta el frenesí")
+	_economy.gold = 1.0e9
+	var buy: Button = _scene.get_node("%GeneratorList").get_child(0).find_children("*", "Button", true, false)[0] as Button
+	buy.pressed.emit()
+	_play(1.0, 0.0)
+	_check_eq(_playing(), "earth", "comprar sin frenesí no lo trae")
+	_play(4.0, 6.0)
+	_check_eq(_playing(), "frenzy", "en frenesí")
+	for second: int in range(6):
+		buy.pressed.emit()
+		_play(1.0, 0.0)
+	_check_eq(_playing(), "frenzy", "6 s comprando un minero por segundo, sin golpear: sigue el frenesí")
+	(_scene.get_node("%PickRow").find_children("*", "Button", true, false)[0] as Button).pressed.emit()
+	_play(2.5, 0.0)
+	_check_eq(_playing(), "frenzy", "mejorar el pico también lo sostiene")
+	_play(1.0, 0.0)
+	_check_eq(_playing(), "earth", "3 s después de la última compra, vuelve al bioma")
+	_economy.gold = 0.0
 	await process_frame
 
 

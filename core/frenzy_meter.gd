@@ -53,6 +53,13 @@ func hit(now: float) -> void:
 		_hits.append(now)
 
 
+## Mantiene prendido un frenesí ya prendido aunque no haya golpes (por ejemplo, mientras el jugador compra): la
+## cuenta para apagarse vuelve a empezar en `now`. Con el frenesí apagado no hace nada.
+func hold(now: float) -> void:
+	if _active:
+		_low_since = now
+
+
 ## Golpes por segundo en la ventana que termina en `now`.
 func rate(now: float) -> float:
 	if not enabled():
