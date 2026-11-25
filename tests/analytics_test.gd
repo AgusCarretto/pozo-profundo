@@ -74,6 +74,8 @@ func _test_config_file() -> void:
 		_check_eq(_load_config(broken), EMPTY, "con '%s': todo vacío" % broken)
 	var good: Dictionary = _load_config(JSON.stringify({ "supabase_url": " " + BASE_URL + "/ ", "supabase_key": KEY, "feedback_url": "https://ejemplo.com/opinar?x=1" }))
 	_check_eq(good, { "supabase_url": BASE_URL, "supabase_key": KEY, "feedback_url": "https://ejemplo.com/opinar?x=1" }, "lee los tres, sin espacios ni barra final")
+	# El Bloc de notas y PowerShell suelen guardar con BOM.
+	_check_eq(_load_config(char(0xFEFF) + JSON.stringify({ "supabase_key": KEY }))["supabase_key"], KEY, "un archivo con BOM se lee igual")
 	var odd: Dictionary = _load_config(JSON.stringify({ "supabase_url": "abc.supabase.co", "feedback_url": "javascript:alert(1)" }))
 	_check_eq(odd, EMPTY, "solo acepta direcciones http o https")
 	var example: Dictionary = OnlineConfig.load_file("res://data/online.example.json")

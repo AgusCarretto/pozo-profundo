@@ -30,6 +30,42 @@ if (-not (Test-Path $Godot)) {
     throw "No encuentro Godot en '$Godot'. Pasalo con -Godot o definí la variable GODOT."
 }
 
+# Key secreta nueva (sb_secret_...) o JWT cuyo rol es service_role: se saltan las reglas de la base (RLS).
+function Test-SecretKey([string]$Key) {
+    if ($Key.StartsWith("sb_secret_")) { return $true }
+    $parts = $Key.Split(".")
+    if ($parts.Count -ne 3) { return $false }
+    $payload = $parts[1].Replace("-", "+").Replace("_", "/")
+    while ($payload.Length % 4 -ne 0) { $payload += "=" }
+    try {
+        $claims = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($payload)) | ConvertFrom-Json
+    }
+    catch {
+        return $false
+    }
+    return $claims.role -eq "service_role"
+}
+
+# data/online.json va empaquetado en el juego: lo que tenga lo puede leer cualquiera que lo baje. Se revisa antes
+# de exportar, y un JSON roto corta acá en vez de dar un build que en silencio no manda nada.
+$config = Join-Path $project "data\online.json"
+if (Test-Path $config) {
+    $text = Get-Content -Raw -Encoding UTF8 $config
+    try {
+        $online = $text | ConvertFrom-Json
+    }
+    catch {
+        throw "data/online.json no es un JSON válido: $($_.Exception.Message)"
+    }
+    $key = ([string]$online.supabase_key).Trim()
+    if ($text.Contains("sb_secret_") -or (Test-SecretKey $key)) {
+        throw "data/online.json tiene una key SECRETA: quedaría publicada dentro del juego. Poné la publishable (sb_publishable_...) y, si la secreta ya se compartió, rotala en Supabase."
+    }
+    if (-not $online.supabase_url -or -not $key) {
+        Write-Host "AVISO: data/online.json sin supabase_url o supabase_key: este build no manda métricas." -ForegroundColor Yellow
+    }
+}
+
 $build = Join-Path $project "build"
 $out = Join-Path $build "web"
 # build/ es solo salida: se vacía el export anterior para que nada viejo llegue al zip, y Godot la ignora.

@@ -10,7 +10,8 @@ import { randomUUID } from "node:crypto";
 const configUrl = new URL("../data/online.json", import.meta.url);
 let config;
 try {
-  config = JSON.parse(await readFile(configUrl, "utf8"));
+  // El Bloc de notas y PowerShell suelen guardar con BOM, que JSON.parse no acepta.
+  config = JSON.parse((await readFile(configUrl, "utf8")).replace(/^﻿/, ""));
 } catch (error) {
   console.error(`No pude leer data/online.json (${error.message}). Copiá data/online.example.json y completalo.`);
   process.exit(1);
@@ -21,7 +22,13 @@ if (!base || !key) {
   console.error("Falta supabase_url o supabase_key en data/online.json.");
   process.exit(1);
 }
-if (key.startsWith("sb_secret_")) {
+let role = "";
+try {
+  role = JSON.parse(Buffer.from(key.split(".")[1] ?? "", "base64url").toString()).role ?? "";
+} catch {
+  // No es un JWT: es una key nueva.
+}
+if (key.startsWith("sb_secret_") || role === "service_role") {
   console.error("Esa es la key SECRETA. Poné la publishable (sb_publishable_...) y rotá la secreta si la compartiste.");
   process.exit(1);
 }
