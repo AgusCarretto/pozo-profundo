@@ -28,6 +28,7 @@ func _initialize() -> void:
 	_test_apply_offline_since()
 	_test_report_is_not_saved()
 	_test_in_session_gaps_go_through_offline()
+	_test_frozen_monotonic_clock()
 	_test_in_session_gap_without_offline_section()
 	_test_balance_validation()
 	_test_real_balance_file()
@@ -130,7 +131,7 @@ func _test_clock_going_backwards() -> void:
 	_check(e.pending_offline_report.is_empty(), "y no hay aviso")
 
 
-## Menos de 60 s fuera se acredita igual (es tiempo real), pero no vale un cartel.
+## Menos de 2 minutos fuera cuenta como juego activo: se acredita igual y sin cartel.
 func _test_short_absences_are_credited_without_notice() -> void:
 	_section("Ausencias cortas: se acreditan, sin aviso")
 	var e: EconomyScript = _crew()
@@ -141,30 +142,31 @@ func _test_short_absences_are_credited_without_notice() -> void:
 	_check_eq(report.get("gold"), 300.0, "el reporte devuelto sí existe")
 	_check(e.pending_offline_report.is_empty(), "pero no queda aviso pendiente")
 	_check_eq(reports.size(), 0, "ni se emite offline_progress")
-	e.apply_offline(59.9)
-	_check_eq(reports.size(), 0, "59.9 s sigue sin aviso")
-	e.apply_offline(60.0)
-	_check_eq(reports.size(), 1, "60 s ya avisa")
+	e.apply_offline(119.9)
+	_check_eq(reports.size(), 0, "119.9 s sigue sin aviso")
+	e.apply_offline(120.0)
+	_check_eq(reports.size(), 1, "120 s ya avisa")
 	_check(not e.pending_offline_report.is_empty(), "y queda pendiente")
 
 
 ## Si volvés dos veces antes de cerrar el cartel, el aviso suma ambas (no esconde la primera).
 func _test_reports_accumulate_until_dismissed() -> void:
 	_section("Avisos sin cerrar se acumulan")
-	var e: EconomyScript = _crew()
-	e.apply_offline(60.0) # 600 de oro: todavía en Tierra (148 m)
-	e.apply_offline(60.0)
-	_check_eq(e.pending_offline_report.get("gold"), 1200.0, "600 + 600 = 1.200 de oro en el aviso")
-	_check_eq(e.pending_offline_report.get("seconds"), 120.0, "120 s en total")
+	var e: EconomyScript = _make()
+	e.owned[0] = 2 # 2 oro/s
+	e.apply_offline(120.0) # 240 de oro
+	e.apply_offline(120.0) # 480 en total: todavía en Tierra (140 m)
+	_check_eq(e.pending_offline_report.get("gold"), 480.0, "240 + 240 = 480 de oro en el aviso")
+	_check_eq(e.pending_offline_report.get("seconds"), 240.0, "240 s en total")
 	_check_eq(e.pending_offline_report.get("capped"), false, "sin tope")
-	_check_eq(e.gold, 1200.0, "y el oro acreditado coincide")
+	_check_eq(e.gold, 480.0, "y el oro acreditado coincide")
 	e.apply_offline(20.0 * HOUR)
 	_check_eq(e.pending_offline_report.get("capped"), true, "si una de las dos se cortó, el aviso lo dice")
 	e.dismiss_offline_report()
 	var rate: float = e.gold_per_second() # con tanto oro ya está en otro bioma: rinde más
-	e.apply_offline(100.0)
-	_check_near(e.pending_offline_report.get("gold"), rate * 100.0, "después de cerrarlo, el aviso nuevo arranca de cero (solo 100 s)")
-	_check_eq(e.pending_offline_report.get("seconds"), 100.0, "100 s")
+	e.apply_offline(150.0)
+	_check_near(e.pending_offline_report.get("gold"), rate * 150.0, "después de cerrarlo, el aviso nuevo arranca de cero (solo 150 s)")
+	_check_eq(e.pending_offline_report.get("seconds"), 150.0, "150 s")
 
 
 func _test_offline_does_not_roll_loot() -> void:
@@ -217,25 +219,49 @@ func _test_report_is_not_saved() -> void:
 	_check_eq(restored.gold, 36000.0, "pero el oro acreditado sí se conserva")
 
 
-## Un navegador o un celular que congela la app deja un hueco enorme entre dos frames:
-## eso es progreso offline (con tope y aviso), no 20 horas de producción normal.
+## Una pestaña oculta (o la app en segundo plano) no dibuja cuadros: al volver hay un hueco. Menos de 2 minutos
+## cuenta como juego activo; de ahí en más es una ausencia (progreso offline, con tope y aviso).
 func _test_in_session_gaps_go_through_offline() -> void:
-	_section("Huecos largos dentro de la sesión")
-	var e: EconomyScript = _crew()
+	_section("Huecos dentro de la sesión: menos de 2 min es juego activo")
+	var always: Dictionary = TestBalance.make()
+	always["loot"]["chance_per_second"] = 1.0
+	var e: EconomyScript = _make(always)
+	e.owned[0] = 2 # 2 oro/s
+	var drops: Array[int] = []
+	e.loot_dropped.connect(func(rarity: int, _amount: float) -> void: drops.append(rarity))
 	e.tick_realtime(1000000) # referencia
-	e.tick_realtime(1000000 + 59000000) # 59 s después: un frame lento, no una ausencia
-	_check_near(e.gold, 590.0, "59 s se acreditan como producción normal (590)")
+	e.tick_realtime(1000000 + 119000000) # 119 s oculta
+	_check_near(e.gold, 238.0, "119 s se acreditan como juego activo (238)")
 	_check(e.pending_offline_report.is_empty(), "sin aviso")
-	e.tick_realtime(1000000 + 59000000 + 90000000) # 90 s después
-	_check_near(e.gold, 590.0 + 900.0, "90 s también se acreditan (900 más)")
-	_check_eq(e.pending_offline_report.get("seconds"), 90.0, "pero esta vez con aviso de 90 s")
-	_check_eq(e.pending_offline_report.get("gold"), 900.0, "y 900 de oro")
-	e.dismiss_offline_report()
+	_check_eq(drops.size(), 1, "y la cuadrilla puede encontrar cofres, como jugando")
+	var away: EconomyScript = _make(always)
+	away.owned[0] = 2
+	drops.clear()
+	away.loot_dropped.connect(func(rarity: int, _amount: float) -> void: drops.append(rarity))
+	away.tick_realtime(1000000)
+	away.tick_realtime(1000000 + 120000000) # 120 s oculta
+	_check_near(away.gold, 240.0, "120 s también se acreditan")
+	_check_eq(away.pending_offline_report.get("seconds"), 120.0, "pero como ausencia, con su aviso")
+	_check_eq(drops.size(), 0, "y sin cofres")
 	var long_gap: EconomyScript = _crew()
 	long_gap.tick_realtime(1000000)
 	long_gap.tick_realtime(1000000 + int(10.0 * HOUR * 1000000.0)) # 10 h
 	_check_eq(long_gap.gold, 288000.0, "un hueco de 10 h acredita solo 8 h")
 	_check_eq(long_gap.pending_offline_report.get("capped"), true, "y avisa que se cortó")
+
+
+## En iPhone el reloj monotónico puede quedar frenado mientras el teléfono duerme: vale el que más avanzó.
+func _test_frozen_monotonic_clock() -> void:
+	_section("El reloj de pared respalda al monotónico")
+	var e: EconomyScript = _crew()
+	e.tick_realtime(1000000, 5000.0)
+	e.tick_realtime(2000000, 5600.0) # 1 s para el monotónico, 10 min de verdad
+	_check_near(e.gold, 6000.0, "se acreditan los 10 minutos (6.000)")
+	_check_eq(e.pending_offline_report.get("seconds"), 600.0, "como ausencia, con aviso")
+	e.dismiss_offline_report()
+	e.tick_realtime(3000000, 100.0) # alguien atrasó el reloj del aparato
+	_check_near(e.gold, 6000.0 + 10.0 * 1.5, "con el de pared atrasado manda el monotónico", 1e-6)
+	_check(e.pending_offline_report.is_empty(), "sin aviso")
 
 
 func _test_in_session_gap_without_offline_section() -> void:
@@ -254,7 +280,7 @@ func _test_balance_validation() -> void:
 	_section("Validación de offline")
 	var e: EconomyScript = _crew()
 	e.apply_offline(100.0)
-	for key: String in ["max_hours", "min_notice_seconds"]:
+	for key: String in ["max_hours", "away_seconds"]:
 		var zero: Dictionary = TestBalance.make(["loot"])
 		zero["offline"][key] = 0
 		_check_eq(e.load_balance(zero), false, "offline.%s = 0 -> inválido" % key)
@@ -263,8 +289,8 @@ func _test_balance_validation() -> void:
 	negative["offline"]["max_hours"] = -8
 	_check_eq(e.load_balance(negative), false, "offline.max_hours negativo -> inválido")
 	var missing: Dictionary = TestBalance.make(["loot"])
-	missing["offline"].erase("min_notice_seconds")
-	_check_eq(e.load_balance(missing), false, "falta offline.min_notice_seconds -> inválido")
+	missing["offline"].erase("away_seconds")
+	_check_eq(e.load_balance(missing), false, "falta offline.away_seconds -> inválido")
 	_check_eq(e.gold, 1000.0, "un balance inválido no toca el estado")
 	_check_eq(e.offline_max_seconds(), MAX_SECONDS, "ni pisa el balance anterior")
 	var other_cap: Dictionary = TestBalance.make(["loot"])

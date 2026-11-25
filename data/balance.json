@@ -48,7 +48,7 @@
 	},
 	"offline": {
 		"max_hours": 8,
-		"min_notice_seconds": 60
+		"away_seconds": 120
 	},
 	"frenzy": {
 		"hits_per_second": 4,

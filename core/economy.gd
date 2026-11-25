@@ -64,6 +64,8 @@ var last_error: String = ""
 
 ## Instante (µs) del último tick de _process; 0 = todavía sin referencia.
 var _last_tick_usec: int = 0
+## Hora de pared (unix) de ese tick; 0 = sin referencia.
+var _last_tick_unix: float = 0.0
 ## Bioma más profundo de las bajadas anteriores (ver max_biome()).
 var _max_biome: int = 0
 var _generators: Array[Dictionary] = []
@@ -83,7 +85,7 @@ var _rarities: Array[Dictionary] = []
 var _rarity_weights: Array[float] = []
 ## Reglas del prestigio (min_depth, depth_offset, depth_step, exponent, bonus_per_relic). Vacío = sin prestigio.
 var _prestige: Dictionary = {}
-## Reglas del progreso offline (max_hours, min_notice_seconds). Vacío = sin progreso offline.
+## Reglas del progreso offline (max_hours, away_seconds). Vacío = sin progreso offline.
 var _offline: Dictionary = {}
 ## Umbrales del frenesí (hits_per_second, enter_seconds, exit_seconds, window_seconds). Vacío = sin frenesí.
 var _frenzy: Dictionary = {}
@@ -109,7 +111,7 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	# No se usa `delta`: Godot lo recorta a ~0.13 s por frame, y a pocos fps (celulares
 	# lentos, pestañas web en segundo plano) la cuadrilla produciría una fracción de lo debido.
-	tick_realtime(Time.get_ticks_usec())
+	tick_realtime(Time.get_ticks_usec(), Time.get_unix_time_from_system())
 
 
 # --- Balance -----------------------------------------------------------------
@@ -170,7 +172,7 @@ func load_balance(balance: Dictionary) -> bool:
 	var parsed_prestige: Variant = _read_numbers(balance, "prestige", ["min_depth", "depth_step", "exponent", "bonus_per_relic"], ["depth_offset"])
 	if parsed_prestige == null:
 		return false
-	var parsed_offline: Variant = _read_numbers(balance, "offline", ["max_hours", "min_notice_seconds"])
+	var parsed_offline: Variant = _read_numbers(balance, "offline", ["max_hours", "away_seconds"])
 	if parsed_offline == null:
 		return false
 	var parsed_frenzy: Variant = _read_numbers(balance, "frenzy", ["hits_per_second", "enter_seconds", "exit_seconds", "window_seconds"])
@@ -443,18 +445,22 @@ func gold_per_second() -> float:
 	return base_total * multiplier
 
 
-## Producción pasiva según un reloj monotónico (µs, p. ej. Time.get_ticks_usec()).
-## La primera llamada solo fija la referencia; un reloj que retrocede no suma ni resta.
-## Un hueco largo (el navegador o el celular congeló la app) es una ausencia: se acredita
-## como progreso offline, con tope y aviso, y no como horas de producción normal.
-func tick_realtime(now_usec: int) -> void:
+## Producción pasiva según un reloj monotónico (µs, p. ej. Time.get_ticks_usec()) y, de respaldo, la hora de
+## pared (unix; 0 = no usarla): en iPhone el monotónico puede quedar frenado mientras el teléfono duerme, así que
+## vale el que más avanzó. La primera llamada solo fija la referencia; un reloj que retrocede no suma ni resta.
+## Un hueco (pestaña oculta o app en segundo plano) de menos de `away_seconds` es juego activo; de ahí en más es
+## una ausencia: se acredita como progreso offline, con tope y aviso.
+func tick_realtime(now_usec: int, now_unix: float = 0.0) -> void:
 	if _last_tick_usec > 0 and now_usec > _last_tick_usec:
 		var gap: float = (now_usec - _last_tick_usec) / 1000000.0
-		if not _offline.is_empty() and gap >= _offline["min_notice_seconds"]:
+		if now_unix > 0.0 and _last_tick_unix > 0.0:
+			gap = maxf(gap, now_unix - _last_tick_unix)
+		if not _offline.is_empty() and gap >= _offline["away_seconds"]:
 			apply_offline(gap)
 		else:
 			tick(gap)
 	_last_tick_usec = now_usec
+	_last_tick_unix = now_unix
 
 
 ## Oro que entra de afuera (un anuncio con recompensa, herramientas de debug): suma al oro y
@@ -500,7 +506,7 @@ func offline_max_seconds() -> float:
 ## Usa la producción de hoy (bioma y reliquias actuales), no la que iría subiendo por el camino:
 ## es una cuenta conservadora. No sortea cofres. Devuelve el reporte {seconds, gold, capped},
 ## o {} si no acreditó nada (ausencia nula o inválida, sin cuadrilla, o sin sección offline).
-## Si la ausencia llega a `min_notice_seconds`, deja el aviso en pending_offline_report y emite
+## Si la ausencia llega a `away_seconds`, deja el aviso en pending_offline_report y emite
 ## offline_progress; una ausencia más corta se acredita igual, pero sin cartel.
 func apply_offline(elapsed: float) -> Dictionary:
 	if _offline.is_empty():
@@ -512,7 +518,7 @@ func apply_offline(elapsed: float) -> Dictionary:
 	_earn(gained)
 	var report: Dictionary = { "seconds": seconds, "gold": gained, "capped": elapsed > offline_max_seconds() }
 	gold_changed.emit(gold)
-	if elapsed >= _offline["min_notice_seconds"]:
+	if elapsed >= _offline["away_seconds"]:
 		_queue_offline_notice(report)
 	return report
 
