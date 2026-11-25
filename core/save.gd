@@ -10,8 +10,10 @@ extends Node
 ## Formato (JSON): { "version": 1, "saved_at": <unix>, "sections": { "<nombre>": {...} } }
 ##
 ## En headless (tests, CI) no persiste por defecto, para no pisar la partida del jugador.
-## Limitación en Web: al cerrar la pestaña el navegador no siempre llega a vaciar IndexedDB,
-## así que pueden perderse los últimos segundos.
+## En la web, además del archivo (IndexedDB, que se vacía de forma asíncrona) se guarda una copia sincrónica en
+## localStorage (`mirror`), también cuando la página se oculta o se cierra; al cargar gana la más nueva.
+
+const WebStorageMirror := preload("res://core/web_storage_mirror.gd")
 
 const SAVE_VERSION: int = 1
 const AUTOSAVE_INTERVAL: float = 5.0
@@ -22,6 +24,8 @@ var persistence_enabled: bool = DisplayServer.get_name() != "headless"
 var autosave_interval: float = AUTOSAVE_INTERVAL
 ## Hora (unix) del save que se leyó del disco; 0 si no había. La usa el progreso offline.
 var loaded_saved_at: int = 0
+## Copia sincrónica del guardado, con read() -> String y write(text) -> bool; null = sin copia.
+var mirror: RefCounted = null
 
 ## nombre -> { "to_dict": Callable, "from_dict": Callable }
 var _sections: Dictionary = {}
@@ -32,6 +36,10 @@ var _loaded_sections: Dictionary = {}
 func _ready() -> void:
 	if not persistence_enabled:
 		return
+	if mirror == null and OS.has_feature("web"):
+		var web: WebStorageMirror = WebStorageMirror.new("%s.save" % ProjectSettings.get_setting("application/config/name"))
+		web.on_page_hide(save_now)
+		mirror = web
 	load_from_disk()
 	var timer: Timer = Timer.new()
 	timer.wait_time = autosave_interval
@@ -57,20 +65,27 @@ func has_section(section: String) -> bool:
 	return _sections.has(section)
 
 
-## Lee el archivo y entrega los datos a las secciones registradas. Devuelve true si había
-## un save usable. Un archivo ilegible se aparta como `<path>.corrupt` (no se borra).
+## Lee el archivo (y la copia, si hay) y entrega los datos del más nuevo a las secciones registradas. Devuelve
+## true si había un save usable. Un archivo ilegible se aparta como `<path>.corrupt` (no se borra).
 func load_from_disk() -> bool:
-	if not persistence_enabled or not FileAccess.file_exists(path):
+	if not persistence_enabled:
 		return false
-	var json: JSON = JSON.new()
-	if json.parse(FileAccess.get_file_as_string(path)) != OK or not (json.data is Dictionary):
-		_set_aside_corrupt_file()
+	var chosen: Dictionary = {}
+	if FileAccess.file_exists(path):
+		var from_file: Variant = _parse(FileAccess.get_file_as_string(path))
+		if from_file == null:
+			_set_aside_corrupt_file()
+		elif _is_usable(from_file):
+			chosen = from_file
+	if mirror != null:
+		var from_mirror: Variant = _parse(str(mirror.call("read")))
+		# Con la misma hora gana la copia: se escribe en el acto, el archivo puede haber quedado atrás.
+		if from_mirror != null and _is_usable(from_mirror) and (chosen.is_empty() or _saved_at(from_mirror) >= _saved_at(chosen)):
+			chosen = from_mirror
+	if chosen.is_empty():
 		return false
-	var sections: Variant = (json.data as Dictionary).get("sections")
-	if not (sections is Dictionary):
-		return false
-	_loaded_sections = sections
-	loaded_saved_at = int(_number((json.data as Dictionary).get("saved_at"), 0.0))
+	_loaded_sections = chosen["sections"]
+	loaded_saved_at = _saved_at(chosen)
 	for section: String in _sections:
 		_deliver(section)
 	return true
@@ -92,7 +107,27 @@ func save_now() -> bool:
 		"sections": sections,
 	}
 	# full_precision: sin esto JSON recorta a ~14 dígitos y el oro grande se degrada.
-	return _write_atomically(JSON.stringify(payload, "\t", true, true))
+	var text: String = JSON.stringify(payload, "\t", true, true)
+	# La copia primero: es la que sobrevive si la página se está cerrando.
+	var mirrored: bool = mirror != null and bool(mirror.call("write", text))
+	var written: bool = _write_atomically(text)
+	return written or mirrored
+
+
+## El save como diccionario, o null si el texto no es un JSON con forma de objeto.
+func _parse(text: String) -> Variant:
+	var json: JSON = JSON.new()
+	if json.parse(text) != OK or not (json.data is Dictionary):
+		return null
+	return json.data
+
+
+func _is_usable(data: Dictionary) -> bool:
+	return data.get("sections") is Dictionary
+
+
+func _saved_at(data: Dictionary) -> int:
+	return int(_number(data.get("saved_at"), 0.0))
 
 
 func _deliver(section: String) -> void:

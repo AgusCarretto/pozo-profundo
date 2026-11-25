@@ -26,6 +26,22 @@ class Provider extends RefCounted:
 		received.append(data)
 
 
+## Copia de mentira (en la web es localStorage).
+class FakeMirror extends RefCounted:
+	var text: String = ""
+	var writes: int = 0
+	var works: bool = true
+
+	func read() -> String:
+		return text
+
+	func write(value: String) -> bool:
+		writes += 1
+		if works:
+			text = value
+		return works
+
+
 var _nodes: Array[Node] = []
 ## Un Callable no mantiene vivo a un RefCounted: los proveedores se guardan acá.
 var _providers: Array[Provider] = []
@@ -44,6 +60,7 @@ func _initialize() -> void:
 	_test_unknown_sections_survive()
 	_test_never_writes_without_sections()
 	_test_persistence_disabled()
+	_test_mirror()
 	_test_save_triggers()
 	await _test_autosave_timer()
 	_test_real_autoloads()
@@ -277,6 +294,75 @@ func _test_persistence_disabled() -> void:
 
 ## Android pausa la app sin avisar de cierre; Web casi nunca manda CLOSE_REQUEST:
 ## guardar al cerrar, al pausar y al perder el foco cubre las tres plataformas.
+func _payload(saved_at: int, gold: float) -> String:
+	return JSON.stringify({ "version": 1, "saved_at": saved_at, "sections": { "game": { "gold": gold } } })
+
+
+## Instancia con copia: escribe `file_text` en el archivo ("" = sin archivo), carga y devuelve lo que recibió la sección.
+func _load_with(file_name: String, file_text: String, mirror: FakeMirror) -> Array:
+	var save: SaveScript = _make(file_name)
+	save.set("mirror", mirror)
+	if file_text != "":
+		_write_raw(save.path, file_text)
+	var provider: Provider = _register(save, {})
+	var loaded: bool = save.load_from_disk()
+	var gold: Variant = provider.received[0].get("gold") if not provider.received.is_empty() else null
+	return [loaded, gold, save.loaded_saved_at, save.path]
+
+
+func _test_mirror() -> void:
+	_section("Copia sincrónica del guardado (en la web, localStorage)")
+	var mirror: FakeMirror = FakeMirror.new()
+	var save: SaveScript = _make("mirror_write")
+	save.set("mirror", mirror)
+	_register(save, { "gold": 5.0 })
+	_check(save.save_now(), "guarda")
+	_check_eq(mirror.text, _read_raw(save.path), "la copia es el mismo texto que el archivo")
+
+	mirror = FakeMirror.new()
+	mirror.text = _payload(100, 7.0)
+	var result: Array = _load_with("mirror_only", "", mirror)
+	_check_eq(result.slice(0, 3), [true, 7.0, 100], "sin archivo carga la copia")
+
+	mirror.text = _payload(200, 20.0)
+	result = _load_with("mirror_newer", _payload(100, 10.0), mirror)
+	_check_eq(result.slice(0, 3), [true, 20.0, 200], "si la copia es más nueva, gana la copia")
+	mirror.text = _payload(100, 20.0)
+	result = _load_with("file_newer", _payload(200, 10.0), mirror)
+	_check_eq(result.slice(0, 3), [true, 10.0, 200], "si el archivo es más nuevo, gana el archivo")
+	mirror.text = _payload(100, 20.0)
+	result = _load_with("tie", _payload(100, 10.0), mirror)
+	_check_eq(result.slice(0, 3), [true, 20.0, 100], "empate: la copia (se escribe en el acto)")
+
+	mirror.text = _payload(100, 30.0)
+	result = _load_with("corrupt_file", "{basura", mirror)
+	_check_eq(result.slice(0, 2), [true, 30.0], "con el archivo dañado carga la copia")
+	_check(FileAccess.file_exists(str(result[3]) + ".corrupt"), "y aparta el archivo dañado")
+	for broken: String in ["{basura", "[1]", "{\"saved_at\": 999}"]:
+		mirror.text = broken
+		result = _load_with("corrupt_mirror", _payload(100, 11.0), mirror)
+		_check_eq(result.slice(0, 2), [true, 11.0], "con la copia inservible (%s) carga el archivo" % broken)
+	mirror.text = ""
+	result = _load_with("nothing", "", mirror)
+	_check_eq(result.slice(0, 2), [false, null], "sin archivo ni copia no carga nada")
+
+	var blocked: FakeMirror = FakeMirror.new()
+	blocked.works = false
+	save = _make("mirror_blocked")
+	save.set("mirror", blocked)
+	_register(save, { "gold": 9.0 })
+	_check(save.save_now(), "con la copia bloqueada igual guarda")
+	_check(FileAccess.file_exists(save.path), "en el archivo")
+
+	var untouched: FakeMirror = FakeMirror.new()
+	untouched.text = _payload(100, 1.0)
+	save = _make("mirror_disabled")
+	save.set("mirror", untouched)
+	save.persistence_enabled = false
+	_register(save, { "gold": 2.0 })
+	_check(not save.load_from_disk() and not save.save_now() and untouched.writes == 0, "con la persistencia apagada no toca la copia")
+
+
 func _test_save_triggers() -> void:
 	_section("Guardar al cerrar, pausar o perder el foco")
 	var triggers: Array = [
