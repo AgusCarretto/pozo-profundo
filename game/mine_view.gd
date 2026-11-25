@@ -31,7 +31,7 @@ const DESIGN_SIZE: Vector2 = Vector2(720.0, 480.0)
 const MIN_UNIT: float = 0.6
 const MAX_UNIT: float = 1.4
 ## A qué altura de la mina queda el centro de la roca (0,5 sería justo en el medio): un poco más abajo.
-const ROCK_HEIGHT_SHARE: float = 0.55
+const ROCK_HEIGHT_SHARE: float = 0.565
 ## Cuánto se corre a la izquierda todo el conjunto (roca y cuadrilla), a tamaño de diseño: deja libre la
 ## columna de la derecha para los botones de Botín, Reliquias y modo (ver main.tscn, SideBar).
 const COMPOSITION_SHIFT: float = -32.0
@@ -93,7 +93,7 @@ const BLAST_SIZE: float = 220.0
 const BLAST_TIME: float = 0.35
 const BLAST_COLOR: Color = Color(1.0, 0.68, 0.2)
 const DYNAMITER_SCALE: int = 5
-const DYNAMITER_SLOTS: Array[Vector2] = [Vector2(-130.0, 168.0), Vector2(80.0, 172.0)]
+const DYNAMITER_SLOTS: Array[Vector2] = [Vector2(-130.0, 158.0), Vector2(80.0, 162.0)]
 
 ## Excavadoras rúnicas: una runa por excavadora (hasta ORBIT_RUNES_MAX) orbita la roca, con un aura suave del
 ## color de runa del bioma. La órbita es una elipse chata (la mina se ve desde arriba en perspectiva): las runas de
@@ -162,14 +162,14 @@ const HAND: Vector2 = Vector2(0.8, 0.62)
 ## Puestos de trabajo, en px de diseño desde el centro de la roca. Los mineros ocupan los costados y una fila arriba
 ## sin tocarla; arriba a la derecha queda el gusano y abajo el gólem, el taladro, los dinamiteros y el topo.
 const MINER_SLOTS: Array[Vector2] = [
-	Vector2(-240.0, 25.0), Vector2(240.0, 25.0), Vector2(-240.0, -95.0), Vector2(-225.0, -222.0),
-	Vector2(-115.0, -222.0), Vector2(-5.0, -222.0), Vector2(105.0, -222.0),
+	Vector2(-240.0, 25.0), Vector2(240.0, 25.0), Vector2(-240.0, -95.0), Vector2(-225.0, -220.0),
+	Vector2(-115.0, -220.0), Vector2(-5.0, -220.0), Vector2(105.0, -220.0),
 ]
-const DRILL_SLOT: Vector2 = Vector2(240.0, 150.0) # por debajo de la columna de botones
+const DRILL_SLOT: Vector2 = Vector2(240.0, 140.0) # por debajo de la columna de botones
 const GOLEM_SLOT: Vector2 = Vector2(-256.0, 135.0)
 const WORM_SLOT: Vector2 = Vector2(200.0, -150.0)
 ## El topo cambia de lugar cada vez que se mete bajo tierra.
-const MOLE_SPOTS: Array[Vector2] = [Vector2(-20.0, 165.0), Vector2(-165.0, 55.0), Vector2(150.0, 25.0)]
+const MOLE_SPOTS: Array[Vector2] = [Vector2(-20.0, 155.0), Vector2(-155.0, 70.0), Vector2(150.0, 35.0)]
 const MOLE_SCALE: int = 6
 const WORM_SCALE: int = 7
 ## Ciclos de animación: [segundos, cuadro]. Topo: 0 bajo tierra, 1 asoma, 2 afuera.

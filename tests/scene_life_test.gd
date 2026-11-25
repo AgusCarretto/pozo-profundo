@@ -19,7 +19,7 @@ func _test_buttons_bounce() -> void:
 	_economy.reset()
 	_economy.gold = 1.0e6
 	await _wait(0.1)
-	var buy: Button = _scene.get_node("%Shop").get_child(1) as Button
+	var buy: Button = _scene.get_node("%Shop").get_child(2) as Button
 	buy.pressed.emit()
 	await _check_bounce(buy, "comprar")
 	var pick: Button = _scene.get_node("%Shop").get_child(0) as Button
@@ -54,7 +54,7 @@ func _test_crew_pops_in() -> void:
 	_economy.reset()
 	_economy.gold = 1000.0
 	await _wait(0.1)
-	var buy: Button = _scene.get_node("%Shop").get_child(1) as Button
+	var buy: Button = _scene.get_node("%Shop").get_child(2) as Button
 	buy.pressed.emit()
 	# main.gd refresca la mina en su _process, que corre después de process_frame: dos frames.
 	await process_frame
@@ -66,7 +66,7 @@ func _test_crew_pops_in() -> void:
 	_check(first.scale.is_equal_approx(Vector2.ONE), "hasta su tamaño")
 	var drill: Control = mine.get("drill_sprite")
 	_economy.gold = 1000.0
-	var buy_drill: Button = _scene.get_node("%Shop").get_child(2) as Button
+	var buy_drill: Button = _scene.get_node("%Shop").get_child(3) as Button
 	buy_drill.pressed.emit()
 	await process_frame
 	await process_frame
@@ -121,7 +121,7 @@ func _test_miners_swing() -> void:
 		var to_rock: Vector2 = rock_center - miner_center
 		if absf(to_rock.x) > absf(to_rock.y) and signf(pick_center.x - miner_center.x) != signf(to_rock.x):
 			facing_ok = false
-	_check_eq(picks.size(), 8, "cada minero tiene su pico")
+	_check_eq(picks.size(), 7, "cada minero tiene su pico")
 	_check(facing_ok, "y lo tiene del lado de la roca")
 	if picks.is_empty():
 		return
