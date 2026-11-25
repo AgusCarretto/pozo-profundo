@@ -6,10 +6,31 @@ extends "res://tests/test_base.gd"
 ## reales; al final deja Settings como estaba.
 
 const MAIN_SCENE: String = "res://game/main.tscn"
+const WebPlatform := preload("res://core/web_platform.gd")
 const ICON_DIR: String = "res://assets/ui/game_icons/"
+const LINK: String = "https://ejemplo.com/opinar"
 const TOUCH_MIN: float = 96.0
 const DESIGN_WIDTH: float = 720.0
 const PHONE_SIZES: Array[Vector2] = [Vector2(720, 1280), Vector2(720, 1599)]
+
+## Navegador de mentira: dice si hay pantalla completa y anota lo que se le pide.
+class FakePlatform extends WebPlatform:
+	var supported: bool = true
+	var full: bool = false
+	var opened: Array[String] = []
+
+	func can_fullscreen() -> bool:
+		return supported
+
+	func is_fullscreen() -> bool:
+		return full
+
+	func set_fullscreen(on: bool) -> void:
+		full = on
+
+	func open_url(url: String) -> void:
+		opened.append(url)
+
 
 var _settings: Node
 var _saved_settings: Dictionary = {}
@@ -29,6 +50,8 @@ func _initialize() -> void:
 	await _test_hud_buttons(packed)
 	await _test_mute_button(packed)
 	await _test_options_panel(packed)
+	await _test_web_options(packed)
+	await _test_credits(packed)
 	await _test_options_layout(packed)
 	_settings.from_dict(_saved_settings)
 	_finish()
@@ -167,15 +190,110 @@ func _test_options_panel(packed: PackedScene) -> void:
 	await _free(scene)
 
 
+func _open_options(packed: PackedScene, platform: FakePlatform, url: String) -> Control:
+	var scene: Control = await _mount(packed, PHONE_SIZES[0])
+	var panel: Control = scene.get_node("OptionsPanel") as Control
+	panel.set("platform", platform)
+	panel.set("feedback_url", url)
+	(_node(scene, "OptionsButton") as Button).pressed.emit()
+	await process_frame
+	return scene
+
+
+func _test_web_options(packed: PackedScene) -> void:
+	_section("Versión, pantalla completa y Opinar")
+	var platform: FakePlatform = FakePlatform.new()
+	platform.supported = false
+	var scene: Control = await _open_options(packed, platform, "")
+	var panel: Control = scene.get_node("OptionsPanel") as Control
+	var version: Label = panel.get("version_label") as Label
+	var full: Button = panel.get("fullscreen_button") as Button
+	var feedback: Button = panel.get("feedback_button") as Button
+	_check(version != null and full != null and feedback != null, "tiene versión, pantalla completa y Opinar")
+	if version == null or full == null or feedback == null:
+		await _free(scene)
+		return
+	_check_eq(version.text, "Versión 0.4.0", "muestra la versión")
+	_check(version.is_visible_in_tree(), "a la vista")
+	_check(not full.visible, "si el navegador no permite pantalla completa, no hay botón")
+	_check(not feedback.visible, "sin link no hay Opinar")
+	await _free(scene)
+	platform = FakePlatform.new()
+	scene = await _open_options(packed, platform, LINK)
+	panel = scene.get_node("OptionsPanel") as Control
+	full = panel.get("fullscreen_button") as Button
+	feedback = panel.get("feedback_button") as Button
+	_check(full.visible and full.text == "Pantalla completa", "con soporte: 'Pantalla completa'")
+	full.pressed.emit()
+	await process_frame
+	_check(platform.full, "tocarlo la activa")
+	_check_eq(full.text, "Salir de pantalla completa", "y el botón pasa a salir")
+	full.pressed.emit()
+	await process_frame
+	_check(not platform.full and full.text == "Pantalla completa", "y vuelve")
+	platform.full = true
+	await process_frame
+	_check_eq(full.text, "Salir de pantalla completa", "si cambia por fuera (gesto de atrás, tecla) el texto lo sigue")
+	_check(feedback.visible and feedback.text == "Opinar", "con link aparece Opinar")
+	_check(platform.opened.is_empty(), "no abre nada solo")
+	feedback.pressed.emit()
+	_check_eq(platform.opened, [LINK] as Array[String], "tocarlo abre ese link")
+	await _free(scene)
+
+
+func _test_credits(packed: PackedScene) -> void:
+	_section("Créditos y licencias")
+	var scene: Control = await _open_options(packed, FakePlatform.new(), "")
+	var panel: Control = scene.get_node("OptionsPanel") as Control
+	var button: Button = panel.get("credits_button") as Button
+	var credits: Control = panel.get("credits_panel") as Control
+	_check(button != null and credits != null, "hay un botón de Créditos y su cartel")
+	if button == null or credits == null:
+		await _free(scene)
+		return
+	_check(not credits.visible, "empieza cerrado")
+	button.pressed.emit()
+	await process_frame
+	await process_frame
+	_check(credits.visible, "el botón lo abre")
+	var text: String = ""
+	for node: Node in credits.find_children("*", "Label", true, false):
+		text += (node as Label).text + "
+"
+	for piece: String in ["Godot Engine", "Permission is hereby granted", "SIL OPEN FONT LICENSE", "pixelsphere.org", "mutkanto", "Juhani Junkala", "Kenney", "FreeType"]:
+		_check(text.contains(piece), "menciona %s" % piece)
+	var close: Button = credits.get("close_button") as Button
+	var rect: Rect2 = close.get_global_rect()
+	_check(rect.size.y >= TOUCH_MIN - 0.5 and rect.end.y <= PHONE_SIZES[0].y and rect.position.x >= 0.0 and rect.end.x <= DESIGN_WIDTH + 0.5, "su Cerrar entra en la pantalla (%s)" % str(rect))
+	var scroll: ScrollContainer = credits.find_children("*", "ScrollContainer", true, false)[0] as ScrollContainer
+	_check(scroll.get_v_scroll_bar().max_value > scroll.size.y, "el texto largo se desliza")
+	_check(scroll.get_h_scroll_bar().visible == false, "sin deslizar de costado")
+	close.pressed.emit()
+	await process_frame
+	_check(not credits.visible and panel.visible, "cerrar vuelve a Opciones")
+	button.pressed.emit()
+	(panel.get("close_button") as Button).pressed.emit()
+	(_node(scene, "OptionsButton") as Button).pressed.emit()
+	await process_frame
+	_check(not credits.visible, "al reabrir Opciones no quedan abiertos")
+	await _free(scene)
+
+
 func _test_options_layout(packed: PackedScene) -> void:
 	_section("Opciones en un celular")
 	for phone: Vector2 in PHONE_SIZES:
 		var scene: Control = await _mount(packed, phone)
 		var label: String = "%dx%d" % [int(phone.x), int(phone.y)]
 		var panel: Control = scene.get_node("OptionsPanel") as Control
+		# Con todo lo opcional a la vista: es el caso más alto.
+		panel.set("platform", FakePlatform.new())
+		panel.set("feedback_url", LINK)
 		(_node(scene, "OptionsButton") as Button).pressed.emit()
 		await process_frame
 		await process_frame
+		for shown: String in ["fullscreen_button", "feedback_button", "credits_button"]:
+			var button: Button = panel.get(shown) as Button
+			_check(button != null and button.is_visible_in_tree() and button.get_global_rect().end.y <= phone.y, "[%s] %s se ve entero" % [label, shown])
 		var small: Array[String] = []
 		for node: Node in panel.find_children("*", "Control", true, false):
 			if (node is BaseButton or node is Slider) and (node as Control).is_visible_in_tree():
