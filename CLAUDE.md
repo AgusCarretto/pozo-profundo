@@ -98,6 +98,8 @@ Solo existe en builds de debug (`OS.is_debug_build()`): el export release (el de
 - Escribí código pensado para reutilizar: lo de `core/` no debe depender de nada de `game/`.
 
 ## Hoja de ruta
+**Próximo paso: F4 (validación web en itch.io con familia y la comunidad del bot).**
+
 - [x] F0 Setup: proyecto, git, estructura, export web funcionando.
 - [x] F1 Loop principal: golpe, cuadrilla, pico, biomas, botín, prestigio, guardado local y offline.
 - [ ] F2 Jugo y assets
