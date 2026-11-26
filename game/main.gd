@@ -25,6 +25,8 @@ const SidePanel := preload("res://game/side_panel.gd")
 const SoundCues := preload("res://game/sound_cues.gd")
 const MusicDirector := preload("res://game/music_director.gd")
 const TreeView := preload("res://game/tree_view.gd")
+const AchievementBook := preload("res://game/achievement_book.gd")
+const AchievementToast := preload("res://game/achievement_toast.gd")
 
 ## Color de cada rareza de cofre, por id del balance. Es presentación, no balance.
 const RARITY_COLORS: Dictionary = {
@@ -86,6 +88,10 @@ var _music: MusicDirector
 ## El árbol de reliquias y el botón que lo abre desde el cartel de Reliquias (solo si el balance tiene árbol).
 var _tree_view: TreeView
 var _tree_button: Button
+## El librito de logros, el botón que lo abre desde el cartel de Reliquias y el aviso (solo si hay logros).
+var _book: AchievementBook
+var _book_button: Button
+var _toast: AchievementToast
 var _pick_card: PickCard
 var _ability_card: AbilityCard
 ## El relleno del botón de la Dinamita: sube a medida que recarga.
@@ -160,7 +166,9 @@ func _ready() -> void:
 	_relics_button.build(load(RUNE_ICONS[0]) as Texture2D, "Reliquias")
 	_mode_button.build(null, "Comprar")
 	_mode_button.set_big_text(MODE_NAMES[0])
-	_loot_button.pressed.connect(_loot_panel.open)
+	_loot_button.pressed.connect(func() -> void:
+		Economy.count("loot_views")
+		_loot_panel.open())
 	_relics_button.pressed.connect(_relics_panel.open)
 	_mode_button.pressed.connect(_on_mode_pressed)
 	_build_ability_button()
@@ -181,6 +189,7 @@ func _ready() -> void:
 	move_child(_loot_panel, -1)
 	move_child(_relics_panel, -1)
 	_build_tree(debug)
+	_build_achievements()
 	# Opciones: encima del juego y del panel de debug, debajo del cartel.
 	_options = OptionsPanel.new()
 	add_child(_options)
@@ -191,13 +200,17 @@ func _ready() -> void:
 	add_child(_screen_fx)
 	_options_button.pressed.connect(func() -> void:
 		Juice.bounce(_options_button)
+		Economy.count("gear_opens")
 		_options.open())
+	_options.credits_panel.end_reached.connect(func() -> void: Economy.count("credits_end"))
 	_sound_button.pressed.connect(_on_sound_pressed)
 	Settings.changed.connect(_apply_settings)
 	_apply_settings()
 	# El cartel va último entre los hijos: se dibuja encima de todo (también del panel de debug).
 	_modal = Modal.new()
 	add_child(_modal)
+	_toast.setup(%HudPanel, func() -> bool: return _modal.visible)
+	Economy.achievements_unlocked.connect(_on_achievements_unlocked)
 
 	Economy.gold_changed.connect(_mark_dirty.unbind(1))
 	Economy.generator_bought.connect(_mark_dirty.unbind(2))
@@ -218,6 +231,7 @@ func _ready() -> void:
 
 	# Lo que Economy dejó pendiente antes de que existiera esta escena (progreso offline, partida convertida).
 	_show_pending_notice()
+	_on_achievements_unlocked(Economy.pending_achievements)
 	check_storage()
 	check_ios_card()
 	_options.platform.request_persistent_storage()
@@ -296,6 +310,8 @@ func _on_ability_used(amount: float) -> void:
 func _on_sound_pressed() -> void:
 	Juice.bounce(_sound_button)
 	Settings.muted = not Settings.muted
+	if not Settings.muted:
+		Economy.count("mute_cycles")
 	Audio.play_sfx("toggle")
 
 
@@ -330,6 +346,7 @@ func _refresh() -> void:
 	_refresh_last_loot()
 	_refresh_prestige()
 	_refresh_badges()
+	_refresh_book_button()
 	for card: GeneratorCard in _cards:
 		card.refresh(_mode)
 
@@ -583,10 +600,60 @@ func _build_tree(debug: Control) -> void:
 	var box: Node = _prestige_button.get_parent()
 	box.add_child(_tree_button)
 	box.move_child(_tree_button, _prestige_button.get_index())
-	if debug != null:
-		var home: int = debug.get_index()
-		_tree_view.opened.connect(func() -> void: move_child(debug, _tree_view.get_index()))
-		_tree_view.closed.connect(func() -> void: move_child(debug, home))
+	_keep_debug_above(debug, _tree_view)
+
+
+## El panel de debug (solo en la build de prueba) pasa encima de la pantalla completa mientras está abierta.
+func _keep_debug_above(debug: Control, screen: Control) -> void:
+	if debug == null:
+		return
+	var home: int = debug.get_index()
+	screen.connect("opened", func() -> void: move_child(debug, screen.get_index()))
+	screen.connect("closed", func() -> void: move_child(debug, home))
+
+
+# --- Logros ------------------------------------------------------------------
+
+## El librito (se abre desde el cartel de Reliquias, debajo del árbol) y el aviso, encima de las pantallas.
+func _build_achievements() -> void:
+	_book = AchievementBook.new()
+	add_child(_book)
+	_toast = AchievementToast.new()
+	add_child(_toast)
+	_toast.pressed.connect(func() -> void:
+		_toast.dismiss()
+		_loot_panel.close()
+		_relics_panel.close()
+		_tree_view.close()
+		_book.open())
+	_book_button = Button.new()
+	_book_button.name = "AchievementsButton"
+	_book_button.theme_type_variation = &"ButtonNeutral"
+	_book_button.custom_minimum_size = Vector2(0, AchievementBook.BUTTON_HEIGHT)
+	_book_button.focus_mode = Control.FOCUS_NONE
+	_book_button.visible = Economy.has_achievements()
+	_book_button.pressed.connect(func() -> void:
+		_relics_panel.close()
+		_book.open())
+	var box: Node = _prestige_button.get_parent()
+	box.add_child(_book_button)
+	box.move_child(_book_button, _prestige_button.get_index())
+
+
+func _refresh_book_button() -> void:
+	if Economy.has_achievements():
+		_book_button.text = "Logros (%d de %d)" % [Economy.achievements.unlocked_count(), Economy.achievements.ids().size()]
+
+
+## Todos los que llegan juntos van en un solo aviso.
+func _on_achievements_unlocked(ids: Array) -> void:
+	if ids.is_empty():
+		return
+	_toast.push(ids.duplicate())
+	Economy.dismiss_achievements()
+	_mark_dirty()
+	if _book.visible:
+		_book.refresh()
 
 
 ## Una runa por reliquia (hasta MAX_RUNES_SHOWN), alternando entre los tres símbolos.
@@ -737,6 +804,8 @@ func _on_save_imported() -> void:
 	_shown_biome = -1
 	_last_chest = {}
 	_tree_view.close()
+	_book.close()
+	_toast.dismiss()
 	_refresh()
 	_show_pending_notice()
 

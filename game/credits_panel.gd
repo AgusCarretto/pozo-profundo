@@ -4,6 +4,9 @@ extends Control
 ## Las licencias de Godot (MIT) y de las fuentes Pixelify Sans y VT323 (OFL) piden acompañar lo que se distribuye.
 ## El detalle completo de cada asset está en CREDITS.md; un asset nuevo que pida crédito se suma también acá.
 
+## Se deslizó hasta el final del texto.
+signal end_reached
+
 const FONT_LICENSE_PATH: String = "res://assets/fonts/OFL.txt"
 const NUMBER_FONT_LICENSE_PATH: String = "res://assets/fonts/VT323-OFL.txt"
 ## Margen del cartel con el borde de la pantalla y alto del botón (px de diseño).
@@ -63,6 +66,7 @@ func _init() -> void:
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	box.add_child(_scroll)
+	_scroll.get_v_scroll_bar().value_changed.connect(_on_scrolled)
 
 	var text_box: VBoxContainer = VBoxContainer.new()
 	text_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -96,6 +100,12 @@ func close() -> void:
 		return
 	Audio.play_sfx("close")
 	visible = false
+
+
+func _on_scrolled(value: float) -> void:
+	var bar: VScrollBar = _scroll.get_v_scroll_bar()
+	if visible and value > 0.0 and value + bar.page >= bar.max_value - 4.0:
+		end_reached.emit()
 
 
 func _add_text(box: VBoxContainer, text: String) -> void:

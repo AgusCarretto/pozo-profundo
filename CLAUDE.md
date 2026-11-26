@@ -86,12 +86,14 @@ CREDITS.md     # licencia y autor de CADA asset de terceros (obligatorio)
   - Un bloque de JavaScript o CSS en un string de GDScript no se rellena con `%` (el CSS tiene `100%` y falla recién en el navegador): concatenar.
   - La música arranca recién con el primer toque (`Audio.waiting_for_gesture`). Chrome igual avisa (warning) que el AudioContext arranca suspendido: es del motor.
 
-## Árbol de reliquias (v0.7, fase A: en la rama v07-arbol)
+## Árbol de reliquias y logros (v0.7, fases A y B: en la rama v07-arbol)
 - Especificación en `docs/arbol-reliquias.md`; simulación en `docs/v07-simulacion.md`; plan en `docs/superpowers/plans/`.
 - Datos: `data/arbol.json` (estrellas, meta, bonus) y `data/logros.json`. `balance.json` lo nombra con `tree_file` y define el tope de golpes (`tap`). Sin sección `tree` el juego se comporta como v0.6 (así funcionan los tests con `TestBalance`).
 - Reglas: `core/relic_tree.gd` (el árbol, sin dependencias) y `core/economy.gd` (efectos). El jugador toca con `Economy.tap()` (con tope); `hit()` no lo mira. `tests/tree_parity_test.gd` exige que el juego calcule igual que lo simulado.
 - El simulador usa una copia congelada del Economy anterior (`tools/tree_sim/economy_v06.gd`) y su propio `arbol_v3.json`: un cambio de números va en los dos, y pide recalibrar la meta (`tools/tree_sim/calibrate.mjs`).
-- Interfaz mínima: `game/tree_view.gd` y `game/tree_star.gd` (cada rama tiene forma y brillo propios, no solo color). Falta: logros y avisos, reasignar estrellas, arte y zoom.
+- Interfaz mínima: `game/tree_view.gd` y `game/tree_star.gd` (cada rama tiene forma y brillo propios, no solo color). Falta: reasignar estrellas, arte y zoom.
+- **Logros** (70, `data/logros.json`): el `id` (`stat_target`) lo guarda la partida, no cambiarlo. `core/achievements.gd` (sin dependencias) y `Economy`: contadores históricos (`count`, `stat`), `check_achievements` cada 0,5 s, fragmentos (20 = 1 reliquia) y una sola señal `achievements_unlocked` con todos los de la tanda. Sin sección de logros en el balance no hay nada de esto. La interfaz cuenta lo que solo ella ve (engranaje, silencio, Botín, final de Créditos).
+- **Interfaz de logros**: `game/achievement_toast.gd` (un aviso agrupado sobre la barra de arriba; espera si hay un cartel) y `game/achievement_book.gd` (librito, desde el cartel de Reliquias; los secretos son "???"). En DBG hay una pestaña "Logros". Los íconos esperan la aprobación de `docs/lamina-v07-iconos.png`.
 
 ## Balance (ajustable en data/balance.json)
 Ritmo (v0.6, aprobado): primera bajada a 300 m en **~29 min** jugando a 3 golpes/s y usando la dinamita (32 / 29 / 25 min a 1,5 / 3 / 5 golpes/s; sin usarla nunca 39 / 35 / 30); las siguientes, 17 y bajando hasta ~7 min; Abismo a ~2 h sin reliquias y ~37 min con 10. Alargar está bien: las ganas de llegar a la próxima mejora son lo que engancha. Antes de publicar un cambio de balance, simularlo con `godot --headless --path . --script res://tools/simulate_economy.gd` (usa el Economy real y la dinamita entre 0 y 20 s después de lista): cofres ~13% del oro, dinamita ~26%. El simulado no para de golpear y compra casi perfecto: una persona tarda algo más.
