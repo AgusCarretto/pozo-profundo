@@ -1,6 +1,7 @@
 {
 	"cost_growth": 1.15,
 	"tree_file": "res://data/arbol.json",
+	"achievements_file": "res://data/logros.json",
 	"tap": { "max_hits": 6, "window_seconds": 1 },
 	"generators": [
 		{ "id": "miner", "name": "Minero", "base_rate": 1, "base_cost": 25 },

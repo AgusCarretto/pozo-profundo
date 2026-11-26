@@ -8,6 +8,9 @@ extends Node
 ## Con la sección "tree" (árbol de reliquias, ver relic_tree.gd; en el balance se nombra con "tree_file") las
 ## reliquias son una moneda: `relics` son las ganadas en toda la historia (dan un bonus pasivo), lo gastado lo
 ## lleva el árbol y la profundidad para volver se corre. Sin esa sección todo funciona como antes del árbol.
+##
+## Con la sección "achievements" (logros, ver achievements.gd; en el balance "achievements_file") se llevan los
+## contadores históricos de la partida y se consiguen logros, que pagan fragmentos de reliquia.
 
 ## El oro cambió (golpe, compra, producción pasiva, carga de partida).
 signal gold_changed(gold: float)
@@ -32,12 +35,23 @@ signal ability_used(amount: float)
 signal offline_progress(report: Dictionary)
 ## Cambió el árbol de reliquias o lo que se le puede dar (una compra, una piedra angular, reliquias de afuera).
 signal tree_changed
+## Se consiguieron logros (todos los de esta tanda juntos). Quedan además en pending_achievements.
+signal achievements_unlocked(ids: Array)
 
 enum BuyMode { X1, X10, MAX }
 
 const EconomyMath := preload("res://core/economy_math.gd")
 const RelicTree := preload("res://core/relic_tree.gd")
 const TapLimiter := preload("res://core/tap_limiter.gd")
+const Achievements := preload("res://core/achievements.gd")
+## Cada cuánto se miran los logros mientras se juega (s).
+const ACHIEVEMENT_CHECK_SECONDS: float = 0.5
+## Ventana en la que se mide el ritmo de golpes sostenido (s).
+const TAP_RATE_SECONDS: float = 10.0
+## Horas (locales) que cuentan como jugar de madrugada: desde la primera hasta antes de la segunda.
+const NIGHT_HOURS: Vector2i = Vector2i(3, 5)
+## Segundos sin golpear con los que se sigue jugando activo, si no hay árbol que lo diga.
+const DEFAULT_WORKING_SECONDS: float = 5.0
 
 const DEFAULT_BALANCE_PATH: String = "res://data/balance.json"
 const SAVE_SECTION: String = "economy"
@@ -102,6 +116,21 @@ var _last_descent: Dictionary = {}
 ## Lo que esas estrellas ya dieron en la bajada en curso, para sumar solo la diferencia al comprar otra.
 var _applied_start: Dictionary = {}
 var _tap_limiter: TapLimiter = TapLimiter.new()
+## Logros y contadores; null si el balance no tiene "achievements".
+var achievements: Achievements = null
+## Logros conseguidos que la pantalla todavía no mostró. No se guarda.
+var pending_achievements: Array[String] = []
+## Hora local (0 a 23), para los logros que la miran. Los tests la reemplazan.
+var hour_of_day: Callable = func() -> int: return int(Time.get_datetime_dict_from_system()["hour"])
+## Golpes de la bajada en curso.
+var _descent_hits: int = 0
+## Se está tirando el cofre de un golpe crítico.
+var _crit_roll: bool = false
+## Segundos del frenesí en curso.
+var _frenzy_run: float = 0.0
+## Segundos de los toques de la ventana de ritmo (todos, también los que pasan el tope).
+var _tap_times: Array[float] = []
+var _check_wait: float = 0.0
 var _frenzied: bool = false
 ## Mientras se acredita una ausencia (la racha y el bonus por jugar activo no cuentan).
 var _away: bool = false
@@ -176,6 +205,11 @@ func _process(_delta: float) -> void:
 	# No se usa `delta`: Godot lo recorta a ~0.13 s por frame, y a pocos fps (celulares
 	# lentos, pestañas web en segundo plano) la cuadrilla produciría una fracción de lo debido.
 	tick_realtime(Time.get_ticks_usec(), Time.get_unix_time_from_system())
+	if achievements != null:
+		_check_wait += _delta
+		if _check_wait >= ACHIEVEMENT_CHECK_SECONDS:
+			_check_wait = 0.0
+			check_achievements()
 
 
 # --- Balance -----------------------------------------------------------------
@@ -192,6 +226,12 @@ func load_balance_file(path: String) -> bool:
 		if not (tree_data is Dictionary):
 			return _fail("no se pudo leer el árbol %s" % tree_file)
 		(parsed as Dictionary)["tree"] = tree_data
+	var achievements_file: String = str((parsed as Dictionary).get("achievements_file", ""))
+	if achievements_file != "":
+		var list: Variant = JSON.parse_string(FileAccess.get_file_as_string(achievements_file)) if FileAccess.file_exists(achievements_file) else null
+		if not (list is Dictionary):
+			return _fail("no se pudieron leer los logros de %s" % achievements_file)
+		(parsed as Dictionary)["achievements"] = list
 	return load_balance(parsed)
 
 
@@ -273,9 +313,15 @@ func load_balance(balance: Dictionary) -> bool:
 	var parsed_tap: Variant = _read_numbers(balance, "tap", ["max_hits", "window_seconds"])
 	if parsed_tap == null:
 		return false
+	var parsed_achievements: Achievements = null
+	if balance.has("achievements"):
+		parsed_achievements = Achievements.new()
+		if not (balance["achievements"] is Dictionary) or not parsed_achievements.load_data(balance["achievements"]):
+			return _fail("achievements: %s" % parsed_achievements.last_error)
 
 	last_error = ""
 	relic_tree = parsed_tree
+	achievements = parsed_achievements
 	_tap_limiter.configure(parsed_tap)
 	_cost_growth = growth
 	_generators = parsed_generators
@@ -410,6 +456,7 @@ func use_ability() -> float:
 	if _tree_add("ability_crit") > 0.0 and rng.randf() < crit_chance():
 		amount *= crit_multiplier()
 	amount = _earn(amount)
+	count("dynamite")
 	ability_cooldown_left = ability_cooldown()
 	ability_used.emit(amount)
 	gold_changed.emit(gold)
@@ -578,6 +625,10 @@ func _open_chest(rarity: int) -> void:
 				given += int(extra) + (1 if rng.randf() < extra - int(extra) else 0)
 		last_chest_relics = given
 		relics = mini(relics + given, int(MAX_LOADED_RELICS))
+		count("chests")
+		count("chest_" + str(_rarities[rarity]["id"]))
+		if _crit_roll and rarity == _rarities.size() - 1:
+			_record_max("crit_rarest", 1.0)
 		loot_dropped.emit(rarity, amount)
 
 
@@ -643,6 +694,9 @@ func prestige() -> int:
 		resets += 1
 		claimed_relics = mini(claimed_relics + gained, int(MAX_LOADED_RELICS))
 	relics = mini(relics + gained, int(MAX_LOADED_RELICS))
+	_record_max("best_reset", gained)
+	# Antes de reiniciar: hay logros que solo se ven con la bajada todavía puesta.
+	check_achievements()
 	_max_biome = max_biome()
 	_revealed = _revealed_count()
 	_reset_run()
@@ -759,6 +813,10 @@ func _crew_stance() -> float:
 
 ## El medidor de frenesí vive en quien mide el ritmo; acá solo importa si está prendido (algunas estrellas lo usan).
 func set_frenzy(active: bool) -> void:
+	if active and not _frenzied:
+		count("frenzy_starts")
+	elif not active:
+		_frenzy_run = 0.0
 	_frenzied = active
 
 
@@ -795,6 +853,124 @@ func _apply_start_bonuses() -> void:
 	_applied_start = now
 
 
+# --- Logros ----------------------------------------------------------------------
+
+func has_achievements() -> bool:
+	return achievements != null
+
+
+## Suma a un contador histórico (también los que solo conoce la interfaz).
+func count(stat_name: String, amount: float = 1.0) -> void:
+	if achievements != null:
+		achievements.add(stat_name, amount)
+
+
+## El valor actual de un contador o de un dato que miran los logros.
+func stat(stat_name: String) -> float:
+	return 0.0 if achievements == null else achievements.value(stat_name, _stat_values())
+
+
+## Mira qué logros se cumplen ahora, paga sus fragmentos y avisa una sola vez con todos. Devuelve los nuevos.
+func check_achievements() -> Array[String]:
+	if achievements == null:
+		return []
+	for index: int in range(_generators.size()):
+		_record_max("max_" + str(_generators[index]["id"]), owned[index])
+	if _descent_hits == 0 and run_gold > 0.0 and biome_index() >= 1:
+		_record_max("no_hit_rock", 1.0)
+	var new_ones: Array[String] = achievements.check(_stat_values())
+	if not new_ones.is_empty():
+		_reward(new_ones)
+	return new_ones
+
+
+## Da un logro a mano (herramientas de prueba).
+func unlock_achievement(id: String) -> bool:
+	if achievements == null or not achievements.unlock(id):
+		return false
+	var one: Array[String] = [id]
+	_reward(one)
+	return true
+
+
+func dismiss_achievements() -> void:
+	pending_achievements.clear()
+
+
+func _reward(ids: Array[String]) -> void:
+	var total: int = 0
+	for id: String in ids:
+		total += achievements.fragments_for(id)
+	pending_achievements.append_array(ids)
+	add_fragments(total)
+	achievements_unlocked.emit(ids)
+
+
+## Lo que los logros miran y no es un contador: se calcula del estado.
+func _stat_values() -> Dictionary:
+	var values: Dictionary = {
+		"record_depth": record_depth_now(),
+		"resets": resets,
+		"return_depth": return_depth(),
+		"overshoot": depth() - return_depth(),
+		"relics_earned": relics,
+	}
+	if relic_tree == null:
+		return values
+	var lit: int = 0
+	var keystones: int = 0
+	var bridges: int = 0
+	var complete: bool = true
+	var ring_done: Dictionary = { 1: true, 2: true }
+	for id: String in relic_tree.ids():
+		var level: int = relic_tree.level(id)
+		var ring: int = int(relic_tree.star(id).get("ring", 0))
+		values["star_" + id] = 1 if level > 0 else 0
+		if level < relic_tree.max_level(id):
+			complete = false
+			ring_done[ring] = false
+		if level > 0:
+			lit += 1
+			keystones += int(relic_tree.is_keystone(id))
+			bridges += int(relic_tree.star(id).has("bridge"))
+	values["stars"] = lit
+	values["keystones"] = keystones
+	values["bridges"] = bridges
+	values["ring1_done"] = int(ring_done[1])
+	values["ring2_done"] = int(ring_done[2])
+	values["complete"] = int(complete)
+	return values
+
+
+func _record_max(stat_name: String, amount: float) -> void:
+	if achievements != null:
+		achievements.set_max(stat_name, amount)
+
+
+## Tiempo de juego de verdad (no las ausencias): jugado, activo y en frenesí.
+func _count_play_time(seconds: float) -> void:
+	if achievements == null:
+		return
+	achievements.add("play_seconds", seconds)
+	var working: float = DEFAULT_WORKING_SECONDS if relic_tree == null else relic_tree.working_seconds()
+	if _since_hit() < working:
+		achievements.add("active_seconds", seconds)
+	if _frenzied:
+		_frenzy_run += seconds
+		achievements.add("frenzy_seconds", seconds)
+		achievements.set_max("frenzy_best", _frenzy_run)
+
+
+## El mejor ritmo sostenido: toques de los últimos TAP_RATE_SECONDS, contando también los que pasan el tope.
+func _measure_tap_rate(now: float) -> void:
+	if achievements == null:
+		return
+	_tap_times.append(now)
+	while not _tap_times.is_empty() and _tap_times[0] <= now - TAP_RATE_SECONDS:
+		_tap_times.pop_front()
+	achievements.set_max("max_hps", _tap_times.size() / TAP_RATE_SECONDS)
+
+
 # --- Botín (tirada) -----------------------------------------------------------
 
 ## Tira por un cofre con probabilidad `chance`. Si sale, sortea la rareza y lo abre.
@@ -820,6 +996,10 @@ func reset() -> void:
 	record_depth = 0.0
 	_last_descent = {}
 	_tap_limiter.reset()
+	_tap_times.clear()
+	pending_achievements.clear()
+	if achievements != null:
+		achievements.clear()
 	if relic_tree != null:
 		relic_tree.clear()
 	_reset_run()
@@ -840,6 +1020,8 @@ func _reset_run() -> void:
 	_applied_start = {}
 	_last_hit_time = -1.0e12
 	_frenzied = false
+	_frenzy_run = 0.0
+	_descent_hits = 0
 	_apply_start_bonuses()
 	gold_changed.emit(gold)
 
@@ -926,8 +1108,10 @@ func tick_realtime(now_usec: int, now_unix: float = 0.0) -> void:
 			gap = maxf(gap, now_unix - _last_tick_unix)
 		advance_ability(gap)
 		if not _offline.is_empty() and gap >= _offline["away_seconds"]:
+			_record_max("max_away", gap)
 			apply_offline(gap)
 		else:
+			_count_play_time(gap)
 			tick(gap)
 	_last_tick_usec = now_usec
 	_last_tick_unix = now_unix
@@ -1005,6 +1189,7 @@ func apply_offline(elapsed: float) -> Dictionary:
 	_earn(gained)
 	_away = false
 	var report: Dictionary = { "seconds": seconds, "gold": gained, "capped": elapsed > offline_max_seconds() }
+	count("afk_seconds", seconds)
 	gold_changed.emit(gold)
 	if elapsed >= _offline["away_seconds"]:
 		_queue_offline_notice(report)
@@ -1015,6 +1200,7 @@ func apply_offline(elapsed: float) -> Dictionary:
 func apply_offline_since(saved_at: int, now: float) -> Dictionary:
 	if saved_at <= 0:
 		return {}
+	_record_max("max_away", now - saved_at)
 	advance_ability(now - saved_at)
 	return apply_offline(now - saved_at)
 
@@ -1060,7 +1246,9 @@ func crit_multiplier() -> float:
 ## Un toque del jugador: un golpe, salvo que ya haya demasiados en el último segundo (balance "tap"). Devuelve el
 ## oro ganado, o 0 si el toque no contó.
 func tap() -> float:
-	if not _tap_limiter.allow(float(clock.call())):
+	var now: float = float(clock.call())
+	_measure_tap_rate(now)
+	if not _tap_limiter.allow(now):
 		return 0.0
 	return hit()
 
@@ -1068,11 +1256,11 @@ func tap() -> float:
 ## Un golpe a la roca, que puede salir crítico. Devuelve el oro ganado. No mira el tope de golpes: eso es tap().
 func hit() -> float:
 	var now: float = clock.call()
-	if relic_tree != null:
-		if now - _last_hit_time >= relic_tree.streak_break_seconds():
-			_streak_since = now
-		_last_hit_time = now
+	if relic_tree != null and now - _last_hit_time >= relic_tree.streak_break_seconds():
+		_streak_since = now
+	_last_hit_time = now
 	at_surface = false
+	_descent_hits += 1
 	var amount: float = hit_value()
 	if _frenzied:
 		amount *= 1.0 + _tree_add("frenzy_hit")
@@ -1084,10 +1272,18 @@ func hit() -> float:
 	if double_chance > 0.0 and rng.randf() < double_chance:
 		amount *= 2.0
 	amount = _earn(amount)
+	count("hits")
+	if last_hit_critical:
+		count("crits")
+	var hour: int = int(hour_of_day.call()) if achievements != null else -1
+	if hour >= NIGHT_HOURS.x and hour < NIGHT_HOURS.y:
+		_record_max("night_play", 1.0)
 	hit_landed.emit(amount)
+	_crit_roll = last_hit_critical
 	_roll_loot(loot_chance_per_hit())
 	if last_hit_critical and _tree_add("crit_chest") > 0.0:
 		_roll_loot(_tree_add("crit_chest"))
+	_crit_roll = false
 	gold_changed.emit(gold)
 	return amount
 
@@ -1169,6 +1365,9 @@ func to_dict() -> Dictionary:
 		data["at_surface"] = at_surface
 		data["last_descent"] = _last_descent.duplicate(true)
 		data["applied_start"] = _applied_start.duplicate(true)
+	if achievements != null:
+		data["achievements"] = achievements.to_dict()
+		data["descent_hits"] = _descent_hits
 	return data
 
 
@@ -1182,7 +1381,13 @@ func from_dict(data: Dictionary) -> void:
 		relic_tree.from_dict(saved_tree if saved_tree is Dictionary else {})
 	_last_hit_time = -1.0e12
 	_frenzied = false
+	_frenzy_run = 0.0
 	pending_tree_report = {}
+	pending_achievements.clear()
+	_tap_times.clear()
+	if achievements != null:
+		var saved_achievements: Variant = data.get("achievements")
+		achievements.from_dict(saved_achievements if saved_achievements is Dictionary else {})
 	gold = maxf(_number(data.get("gold"), 0.0), 0.0)
 	# Lo ganado nunca puede ser menos que lo que tenés: cubre saves anteriores a la
 	# profundidad (sin run_gold) y datos editados a mano. Con árbol sí puede: el oro con el que arranca una bajada
@@ -1220,6 +1425,7 @@ func from_dict(data: Dictionary) -> void:
 		_migrate_old_run()
 	if relic_tree != null and version < TREE_VERSION:
 		_migrate_to_tree()
+	_descent_hits = int(clampf(_number(data.get("descent_hits"), 0.0 if run_gold <= 0.0 else 1.0), 0.0, MAX_LOADED_COUNTER))
 	gold_changed.emit(gold)
 	tree_changed.emit()
 
@@ -1291,6 +1497,7 @@ func _earn(amount: float) -> float:
 		amount *= relic_tree.mul("shallow_mul")
 	gold += amount
 	run_gold += amount
+	count("gold_earned", amount)
 	return amount
 
 
