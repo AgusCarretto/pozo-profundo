@@ -294,7 +294,7 @@ func tick(delta: float) -> void:
 
 
 func _earn(amount: float) -> void:
-	# Descenso rápido: hasta una fracción de la meta de la bajada.
+	# Veta rica: hasta una fracción de la meta de la bajada.
 	if add("shallow_fraction") > 0.0 and depth() < add("shallow_fraction") * return_depth():
 		amount *= mul("shallow_mul")
 	super(amount)
@@ -399,10 +399,9 @@ func _reset_run() -> void:
 		pick_level = int(last_descent["pick"])
 	if add("keep_ability") > 0.0:
 		ability_level = int(last_descent["ability"])
-	# Bolsa inicial: minutos de la producción con la que terminaste. Es oro para gastar; no suma profundidad.
-	gold += float(_fx_set.get("carry_gold_minutes", 0.0)) * 60.0 * float(last_descent["gps"])
-	# Reclutas (mineros) y Ventaja inicial (el resto de la cuadrilla): una parte de lo que tenías al volver.
+	# Bolsa inicial: segundos de la producción con la que terminaste. Es oro para gastar; no suma profundidad.
+	gold += float(_fx_set.get("carry_gold_seconds", 0.0)) * float(last_descent["gps"])
+	# Ventaja inicial: una parte de la cuadrilla que tenías al volver, mineros incluidos.
 	var before: Array = last_descent["owned"]
-	owned[0] += int(float(before[0]) * add("carry_miners"))
-	for index: int in range(1, owned.size()):
+	for index: int in range(owned.size()):
 		owned[index] += int(float(before[index]) * add("carry_crew"))

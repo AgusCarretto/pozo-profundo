@@ -6,12 +6,13 @@ extends SceneTree
 ##   godot --headless --path . --script res://tools/simulate_tree.gd -- stars <arbol.json> [semillas] [parte] [partes] [opciones]
 ##
 ## perfil: golpes/s (más de MAX_TAPS no cuentan); con "p" al final ("3p") el jugador pasa un 25% del tiempo sin golpear.
-## opciones: el nombre de una variante de "variants" en el arbol.json, y "sin=<estrella>" (se compra pero no hace nada).
+## opciones: el nombre de una variante de "variants" en el arbol.json, "sin=<estrella>" (se compra pero no hace nada) y
+## "empuje" (en algunos días, cuánto tarda en pasar la meta quien no vuelve a la superficie a propósito).
 ##
 ## campaign: un jugador que entra una vez por día, juega 60 minutos y se va (23 h de progreso offline). Compra lo
 ## que antes se paga solo, vuelve a la superficie cuando las reliquias por minuto dejan de subir y gasta en la
 ## estrella más barata que pueda. Deja una línea "baja,reliquias,segundos hasta poder volver,anillo 2 completo,
-## cruzó una ausencia,meta,día" por bajada (la usa tools/tree_sim/calibrate.mjs).
+## cruzó una ausencia,meta,día,metros pasados de la meta al volver,reliquias ganadas" por bajada (la usa tools/tree_sim/calibrate.mjs).
 ## descents: las primeras bajadas seguidas, con las reglas de hoy (+25% por reliquia, sin árbol) y con el árbol.
 ## stars: qué cambia cada estrella (de 0 a su máximo, con el resto de su anillo y anteriores comprados), medido en
 ## una bajada que viene de otra igual.
@@ -31,7 +32,7 @@ const AWAY: float = 23.0 * 3600.0
 const MAX_DAYS: int = 60
 ## Cuánto aguanta una bajada para llegar a la profundidad que abre un anillo antes de rendirse (s).
 const PUSH_LIMIT: float = 5400.0
-const MAX_TAPS: float = 10.0
+const MAX_TAPS: float = 6.0
 ## Perfil con pausas: golpea de PAUSE_BURST segundos y para PAUSE_REST (en promedio, 25% del tiempo sin golpear).
 const PAUSE_BURST: Vector2 = Vector2(30.0, 150.0)
 const PAUSE_REST: Vector2 = Vector2(10.0, 50.0)
@@ -47,12 +48,16 @@ const ORACLE_SECONDS: float = 660.0
 ## stars: la meta de cada comparación es adonde llega la base en este tiempo (s).
 const STAR_TARGET_SECONDS: float = 720.0
 const DESCENTS: int = 8
+## "empuje": en qué días se prueba y cuántos metros pasada la meta.
+const PUSH_DAYS: Array[int] = [2, 5, 10, 18, 24]
+const PUSH_METERS: Array[float] = [20.0, 40.0, 60.0]
 
 var _balance: Dictionary
 var _tree_data: Dictionary
 var _achievements: Dictionary
 var _random: RandomNumberGenerator = RandomNumberGenerator.new()
 var _muted: String = ""
+var _push_probe: bool = false
 
 
 func _initialize() -> void:
@@ -65,7 +70,9 @@ func _initialize() -> void:
 	var plain: PackedStringArray = PackedStringArray()
 	var options: PackedStringArray = PackedStringArray()
 	for arg: String in args.slice(2):
-		if arg.begins_with("sin="):
+		if arg == "empuje":
+			_push_probe = true
+		elif arg.begins_with("sin="):
 			_muted = arg.trim_prefix("sin=")
 			options.append(arg)
 		elif _tree_data.get("variants", {}).has(arg):
@@ -221,7 +228,14 @@ func _check_achievements(economy: EconomyTree, day: int, done: Dictionary, log: 
 	for entry: Dictionary in _achievements["list"]:
 		if done.has(entry["name"]):
 			continue
-		var reached: bool = (day >= int(entry["day"])) if entry.has("day") else float(stats.get(entry["stat"], 0.0)) >= float(entry["target"])
+		var reached: bool = false
+		if entry.has("day"):
+			reached = day >= int(entry["day"])
+		elif entry["stat"] == "overshoot":
+			# Pasar la meta de la bajada en curso por "target" metros, con la meta en "meta" m o más.
+			reached = economy.return_depth() >= float(entry["meta"]) and economy.depth() - economy.return_depth() >= float(entry["target"])
+		else:
+			reached = float(stats.get(entry["stat"], 0.0)) >= float(entry["target"])
 		if reached:
 			done[entry["name"]] = day
 			var fragments: int = int(_achievements["fragments"][entry["tier"]])
@@ -414,7 +428,7 @@ func _campaign(label: String, seed_value: int) -> void:
 			var descent: Dictionary = { "day": day, "ready": state["ready"], "time": state["clock"], "gained": gained, "target": economy.return_depth(), "away": state["away"], "ring2": ring2_start }
 			descents.append(descent)
 			today.append(descent)
-			print("baja,%d,%.0f,%d,%d,%.0f,%d" % [claimed_start, descent["ready"], int(ring2_start), int(descent["away"]), descent["target"], day])
+			print("baja,%d,%.0f,%d,%d,%.0f,%d,%.1f,%d" % [claimed_start, descent["ready"], int(ring2_start), int(descent["away"]), descent["target"], day, economy.depth() - economy.return_depth(), gained])
 			economy.prestige()
 			_check_achievements(economy, day, done, log)
 			var lit: Array[String] = _buy_stars(economy)
@@ -427,6 +441,9 @@ func _campaign(label: String, seed_value: int) -> void:
 			ring2_start = _ring_done(economy, 2)
 			state = _new_run_state(profile["pauses"])
 			_record_events(economy, events, day, played)
+			if _push_probe and day in PUSH_DAYS and not events.has("probado %d" % day):
+				events["probado %d" % day] = true
+				_probe_push(economy, profile, day)
 		var bought: int = economy.total_levels() - levels_start
 		purchases.append(bought)
 		print(_day_line(economy, day, bought, today, done))
@@ -450,6 +467,19 @@ func _day_line(economy: EconomyTree, day: int, bought: int, today: Array[Diction
 	var full_text: String = _clock(full[full.size() / 2]) if not full.is_empty() else "—"
 	return "%3d | %5d (%d) | %2d | %3d | %3d | %13s | %6s | %3d m | %3d m | %2d (%d)" % [day, economy.relics, economy.spent, bought, economy.total_levels(),
 		int(economy.stats.get("resets", 0)), ready_text, full_text, int(economy.stats.get("record_depth", 0.0)), int(economy.return_depth()), done.size(), int(economy.stats.get("fragments", 0))]
+
+
+## Desde el arranque de una bajada, cuánto juego activo hace falta para pasar la meta por PUSH_METERS.
+func _probe_push(economy: EconomyTree, profile: Dictionary, day: int) -> void:
+	var probe: EconomyTree = economy.clone()
+	var state: Dictionary = _new_run_state(profile["pauses"])
+	var cells: PackedStringArray = PackedStringArray()
+	for meters: float in PUSH_METERS:
+		while probe.depth() < economy.return_depth() + meters and state["clock"] < 4.0 * 3600.0:
+			_step(probe, profile["taps"], state)
+		cells.append("+%d m: %s" % [int(meters), _clock(state["clock"]) if state["clock"] < 4.0 * 3600.0 else "más de 4 h"])
+	print("empuje, día %d, meta %d m: %s" % [day, int(economy.return_depth()), " · ".join(cells)])
+	probe.free()
 
 
 ## Compras de estrellas por día en la mitad de la campaña (solo días jugados antes de completar el árbol).
@@ -688,7 +718,7 @@ func _run_descents(mode: String, profile: Dictionary, seed_value: int) -> Array[
 
 func _descents(seeds: int) -> void:
 	print("Bajadas seguidas, volviendo apenas se puede (mediana de %d). Entre paréntesis: meta en metros / reliquias ganadas en total / estrellas." % seeds)
-	for label: String in ["3", "3p", "1.5", "5", "10"]:
+	for label: String in ["3", "3p", "1.5", "5", "6"]:
 		var profile: Dictionary = _profile(label)
 		print(_profile_name(profile))
 		for mode: String in ["hoy", "arbol", "arbol y logros"]:

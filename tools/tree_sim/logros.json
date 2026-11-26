@@ -18,7 +18,7 @@
 		{ "cat": "Profundidad", "name": "Sin fondo", "desc": "450 m", "tier": "dificil", "stat": "record_depth", "target": 450 },
 		{ "cat": "Profundidad", "name": "Medio kilómetro", "desc": "500 m", "tier": "dificil", "stat": "record_depth", "target": 500 },
 		{ "cat": "Profundidad", "name": "Donde no llega el eco", "desc": "550 m", "tier": "epico", "stat": "record_depth", "target": 550 },
-		{ "cat": "Profundidad", "name": "El corazón del mundo", "desc": "575 m", "tier": "epico", "stat": "record_depth", "target": 575 },
+		{ "cat": "Profundidad", "name": "El corazón del mundo", "desc": "570 m", "tier": "epico", "stat": "record_depth", "target": 570 },
 
 		{ "cat": "Cofres", "name": "¿Qué habrá adentro?", "desc": "Primer cofre", "tier": "facil", "stat": "chests", "target": 1 },
 		{ "cat": "Cofres", "name": "Algo azul", "desc": "Primer cofre Raro", "tier": "facil", "stat": "chest_rare", "target": 1 },
@@ -53,7 +53,7 @@
 		{ "cat": "Resets", "name": "Ascensor propio", "desc": "50 veces", "tier": "dificil", "stat": "resets", "target": 50 },
 		{ "cat": "Resets", "name": "Mil escaleras", "desc": "90 veces", "tier": "epico", "stat": "resets", "target": 90 },
 		{ "cat": "Resets", "name": "Mochila llena", "desc": "10 reliquias en una sola bajada", "tier": "dificil", "stat": "best_reset", "target": 10 },
-		{ "cat": "Resets", "name": "Museo ambulante", "desc": "14 reliquias en una sola bajada", "tier": "epico", "stat": "best_reset", "target": 14 },
+		{ "cat": "Resets", "name": "Museo ambulante", "desc": "Con la meta en 540 m o más, pasala por 10 m", "tier": "epico", "stat": "overshoot", "meta": 540, "target": 10 },
 
 		{ "cat": "Frenesí y dinamita", "name": "Se te fue la mano", "desc": "Encendé el frenesí", "tier": "facil", "day": 1 },
 		{ "cat": "Frenesí y dinamita", "name": "Un minuto sin respirar", "desc": "1 min de frenesí seguido", "tier": "medio", "day": 2 },
