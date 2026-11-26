@@ -1,6 +1,9 @@
 extends Control
 ## Panel de debug: atajos para probar biomas, prestigio y botín sin jugar horas.
 ##
+## Con árbol de reliquias suma sus atajos: reliquias, fragmentos, abrir anillos, horas de AFK y borrar todo (la build de
+## prueba publicada en /test/ es de debug y tiene su propia partida).
+##
 ## SOLO EXISTE EN BUILDS DE DEBUG: main.gd lo crea con attach_if_debug(OS.is_debug_build()),
 ## que no hace nada en un export de release (el default de tools/export_web.ps1). Con
 ## `-DebugBuild` sí aparece. Arranca cerrado: solo se ve el botón DBG arriba a la izquierda.
@@ -20,6 +23,10 @@ const TOGGLE_POSITION: Vector2 = Vector2(8.0, 300.0)
 const HUD_GAP: float = 8.0
 ## Alto de los botones (px de diseño): 96 = 48 px en un celular de 360 px de ancho, igual que el juego.
 const BUTTON_HEIGHT: float = 96.0
+const GRANT_RELICS: int = 100
+const GRANT_FRAGMENTS: int = 100
+## Horas de AFK que se pueden simular de un toque.
+const AFK_HOURS: Array[int] = [1, 8, 23]
 
 var toggle_button: Button
 var body: PanelContainer
@@ -27,6 +34,7 @@ var gold_button: Button
 var time_button: Button
 ## Un botón por rareza del botín (en el orden de Economy.loot_table()); vacío si no hay botín.
 var chest_buttons: Array[Button] = []
+var wipe_button: Button
 
 
 ## Crea el panel como hijo de `parent` si `is_debug`; si no, no hace nada y devuelve null.
@@ -74,31 +82,52 @@ func _ready() -> void:
 	title.add_theme_color_override("font_color", Color(1.0, 0.55, 0.45))
 	box.add_child(title)
 
-	gold_button = _make_button("Oro ×%d" % int(GOLD_FACTOR), 26)
-	gold_button.pressed.connect(_on_gold_pressed)
-	box.add_child(gold_button)
+	# Todo en dos columnas: así entra en la pantalla de un celular.
+	var grid: GridContainer = GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	box.add_child(grid)
 
-	time_button = _make_button("Adelantar %s" % NumberFormat.format_duration(ADVANCE_SECONDS), 26)
-	time_button.pressed.connect(_on_time_pressed)
-	box.add_child(time_button)
+	gold_button = _grid_button(grid, "DebugGold", "Oro ×%d" % int(GOLD_FACTOR), _on_gold_pressed)
+	time_button = _grid_button(grid, "DebugAdvance", "Adelantar %s" % NumberFormat.format_duration(ADVANCE_SECONDS), _on_time_pressed)
+
+	if Economy.has_tree():
+		_grid_button(grid, "DebugRelics", "+%d reliquias" % GRANT_RELICS, func() -> void: Economy.grant_relics(GRANT_RELICS))
+		_grid_button(grid, "DebugFragments", "+%d fragmentos" % GRANT_FRAGMENTS, func() -> void: Economy.add_fragments(GRANT_FRAGMENTS))
+		_grid_button(grid, "DebugRings", "Abrir anillos", Economy.open_rings)
+		wipe_button = _grid_button(grid, "DebugWipe", "Borrar todo", _on_wipe_pressed)
+		for hours: int in AFK_HOURS:
+			_grid_button(grid, "DebugAfk%d" % hours, "AFK %d h" % hours, _on_afk_pressed.bind(hours))
 
 	var table: Array[Dictionary] = Economy.loot_table()
-	if not table.is_empty():
-		var chests_title: Label = Label.new()
-		chests_title.text = "Forzar cofre:"
-		chests_title.add_theme_font_size_override("font_size", 22)
-		box.add_child(chests_title)
-		var grid: GridContainer = GridContainer.new()
-		grid.columns = 2
-		grid.add_theme_constant_override("h_separation", 8)
-		grid.add_theme_constant_override("v_separation", 8)
-		box.add_child(grid)
-		for index: int in range(table.size()):
-			var button: Button = _make_button(str(table[index]["name"]), 24)
-			button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			button.pressed.connect(_on_chest_pressed.bind(index))
-			grid.add_child(button)
-			chest_buttons.append(button)
+	for index: int in range(table.size()):
+		chest_buttons.append(_grid_button(grid, "DebugChest%d" % index, str(table[index]["name"]), _on_chest_pressed.bind(index)))
+
+
+func _grid_button(grid: GridContainer, node_name: String, text: String, action: Callable) -> Button:
+	var button: Button = _make_button(text, 24)
+	button.name = node_name
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.pressed.connect(action)
+	grid.add_child(button)
+	return button
+
+
+## Borrar todo pide un segundo toque.
+func _on_wipe_pressed() -> void:
+	if wipe_button.text == "Borrar todo":
+		wipe_button.text = "¿Seguro? Tocá otra vez"
+		return
+	wipe_button.text = "Borrar todo"
+	Economy.reset()
+	Save.save_now()
+
+
+## Como volver después de `hours` horas fuera: la dinamita recarga y la cuadrilla junta lo del AFK, con su aviso.
+func _on_afk_pressed(hours: int) -> void:
+	Economy.advance_ability(hours * 3600.0)
+	Economy.apply_offline(hours * 3600.0)
 
 
 ## Se queda debajo del HUD de la escena (`%HudPanel` del padre), aunque cambie de alto.
