@@ -25,7 +25,7 @@ env:
   # La misma versión con la que se desarrolla el juego.
   GODOT_VERSION: 4.7.2
   PUBLISHED_REF: v0.6.1
-  TEST_REF: 214018fd96db26107d54e39dea71c41136935f63
+  TEST_REF: 176f246a14f9f54fef6b81ba7c098b69a31458f6
 
 jobs:
   publicar:
