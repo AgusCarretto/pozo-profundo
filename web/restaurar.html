@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+	<meta charset="utf-8">
+	<meta name="robots" content="noindex, nofollow">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Pozo Profundo: restaurar partida</title>
+	<style>
+		body { margin: 0 auto; max-width: 30rem; padding: 1.5rem; background: #262b44; color: #e4edf9; font: 1rem/1.5 system-ui, sans-serif; }
+		button, a.boton { display: block; width: 100%; box-sizing: border-box; margin: 1rem 0; padding: 1rem; border: 0; border-radius: .6rem; background: #52607c; color: #fff; font: inherit; text-align: center; text-decoration: none; }
+		button:disabled { opacity: .5; }
+		[hidden] { display: none; }
+	</style>
+</head>
+<body>
+	<h1>Restaurar partida</h1>
+	<p>Antes de pasar a la versión 0.7, el juego guardó una copia de tu partida en este navegador. Acá podés volver a ella.</p>
+	<p><strong>Cerrá el juego antes</strong> (todas sus pestañas): si está abierto, vuelve a guardar encima.</p>
+	<p id="estado">Buscando la copia…</p>
+	<button id="restaurar" type="button" hidden>Restaurar la partida de antes de la 0.7</button>
+	<a class="boton" href="./">Abrir el juego</a>
+	<script>
+		(function () {
+			// Las mismas claves que usa el juego (core/web_storage_mirror.gd y core/save.gd).
+			var PARTIDA = 'Pozo Profundo.save';
+			var COPIA = PARTIDA + '.antes-0.7';
+			var estado = document.getElementById('estado');
+			var boton = document.getElementById('restaurar');
+			var copia = null;
+			try {
+				copia = JSON.parse(window.localStorage.getItem(COPIA));
+			} catch (e) {
+				copia = null;
+			}
+			if (!copia || !copia.sections || !copia.sections.economy) {
+				estado.textContent = 'En este navegador no hay ninguna copia guardada.';
+				return;
+			}
+			var fecha = new Date(copia.saved_at * 1000).toLocaleString();
+			estado.textContent = 'Hay una copia del ' + fecha + ', con ' + (copia.sections.economy.relics || 0) + ' reliquias.';
+			boton.hidden = false;
+			var seguro = false;
+			boton.addEventListener('click', function () {
+				if (!seguro) {
+					seguro = true;
+					boton.textContent = 'Tocá otra vez para confirmar';
+					return;
+				}
+				try {
+					// La de ahora también se conserva, por las dudas.
+					var actual = window.localStorage.getItem(PARTIDA);
+					if (actual) {
+						window.localStorage.setItem(PARTIDA + '.antes-de-restaurar', actual);
+					}
+					// Con la hora de ahora: el juego carga la partida más nueva.
+					copia.saved_at = Math.floor(Date.now() / 1000);
+					window.localStorage.setItem(PARTIDA, JSON.stringify(copia));
+					estado.textContent = 'Listo. Abrí el juego.';
+				} catch (e) {
+					estado.textContent = 'No se pudo restaurar: este navegador no deja guardar.';
+				}
+				boton.disabled = true;
+			});
+		})();
+	</script>
+</body>
+</html>
