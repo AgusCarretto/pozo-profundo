@@ -29,6 +29,7 @@ var frenzy: FrenzyMeter = FrenzyMeter.new()
 ## Mientras corre la secuencia de la vuelta a la superficie (de begin_prestige a end_prestige).
 var prestige_running: bool = false
 
+var _thresholds: Dictionary = {}
 var _biome: String = ""
 var _options_open: bool = false
 ## Hasta cuándo (según `clock`) sigue el tema del prestigio una vez terminada la secuencia; -1 = no sigue.
@@ -43,7 +44,7 @@ func _init() -> void:
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	frenzy.configure(Economy.frenzy_settings())
+	refresh_thresholds()
 	Economy.hit_landed.connect(_on_hit_landed)
 	# Ir a comprar no corta el frenesí (sí lo cortan las Opciones y la vuelta a la superficie).
 	Economy.generator_bought.connect(_on_bought.unbind(2))
@@ -135,3 +136,11 @@ func _on_hit_landed(_amount: float) -> void:
 
 func _on_bought() -> void:
 	frenzy.hold(clock.call())
+
+
+## Los umbrales del frenesí cambiaron (una mejora los baja): se vuelve a configurar solo si de verdad cambiaron.
+func refresh_thresholds() -> void:
+	var settings: Dictionary = Economy.frenzy_settings()
+	if settings != _thresholds:
+		_thresholds = settings
+		frenzy.configure(settings)

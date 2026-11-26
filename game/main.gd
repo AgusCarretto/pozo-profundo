@@ -24,6 +24,7 @@ const SideButton := preload("res://game/side_button.gd")
 const SidePanel := preload("res://game/side_panel.gd")
 const SoundCues := preload("res://game/sound_cues.gd")
 const MusicDirector := preload("res://game/music_director.gd")
+const TreeView := preload("res://game/tree_view.gd")
 
 ## Color de cada rareza de cofre, por id del balance. Es presentación, no balance.
 const RARITY_COLORS: Dictionary = {
@@ -82,6 +83,9 @@ var _modal: Modal
 var _options: OptionsPanel
 var _screen_fx: ScreenFx
 var _music: MusicDirector
+## El árbol de reliquias y el botón que lo abre desde el cartel de Reliquias (solo si el balance tiene árbol).
+var _tree_view: TreeView
+var _tree_button: Button
 var _pick_card: PickCard
 var _ability_card: AbilityCard
 ## El relleno del botón de la Dinamita: sube a medida que recarga.
@@ -172,10 +176,11 @@ func _ready() -> void:
 	add_child(_music)
 
 	# Solo en builds de debug; en un export de release no se crea (ver debug_panel.gd).
-	DebugPanel.attach_if_debug(self, OS.is_debug_build())
+	var debug: Control = DebugPanel.attach_if_debug(self, OS.is_debug_build())
 	# Los carteles de Botín y Reliquias: encima del juego y del panel de debug.
 	move_child(_loot_panel, -1)
 	move_child(_relics_panel, -1)
+	_build_tree(debug)
 	# Opciones: encima del juego y del panel de debug, debajo del cartel.
 	_options = OptionsPanel.new()
 	add_child(_options)
@@ -211,16 +216,16 @@ func _ready() -> void:
 	_refresh()
 	_built = true
 
-	# Si el juego arrancó con progreso offline, Economy ya lo acreditó antes de que existiera esta escena.
-	if not Economy.pending_offline_report.is_empty():
-		_show_offline_notice(Economy.pending_offline_report)
-	_show_migration_notice()
+	# Lo que Economy dejó pendiente antes de que existiera esta escena (progreso offline, partida convertida).
+	_show_pending_notice()
 	check_storage()
 	check_ios_card()
 	_options.platform.request_persistent_storage()
 
 
 func _process(_delta: float) -> void:
+	# El frenesí lo mide el director de música; Economy lo usa si alguna estrella da algo por él.
+	Economy.set_frenzy(_music.frenzy.active)
 	if _dirty:
 		_refresh()
 	_refresh_ability_button() # la recarga corre sola
@@ -231,7 +236,7 @@ func _mark_dirty() -> void:
 
 
 func _on_tap() -> void:
-	Economy.hit()
+	Economy.tap()
 
 
 ## Cada golpe se ve: la roca se aplasta, la mina se sacude y sale el oro que dio flotando.
@@ -332,7 +337,7 @@ func _refresh() -> void:
 ## El aviso del botón de Reliquias: cuántas hay, o un ! cuando ya se puede volver a la superficie (para que no se
 ## pase por alto con el cartel cerrado). El de Botín no lleva: el cofre ya pagó.
 func _refresh_badges() -> void:
-	var relics: int = Economy.relics if _relics_shown < 0 else _relics_shown
+	var relics: int = Economy.available_relics() if _relics_shown < 0 else _relics_shown
 	if _relics_shown < 0 and Economy.can_prestige():
 		_relics_button.set_badge("!", true)
 	else:
@@ -361,7 +366,10 @@ func _refresh_depth() -> void:
 	var text: String = "Profundidad %d m" % int(floorf(Economy.depth()))
 	var has_biomes: bool = Economy.biome_count() > 0
 	if has_biomes:
-		text += " · %s ×%.2f" % [Economy.biome_name(Economy.biome_index()), Economy.biome_multiplier()]
+		text += " · %s" % Economy.biome_name(Economy.biome_index())
+		# Con árbol la meta de volver se corre: se muestra siempre (en lugar del multiplicador del bioma, que ya sale en
+		# el cartel al cambiar y está dentro del total de arriba).
+		text += " · Regreso %d m" % int(Economy.return_depth()) if Economy.has_tree() else " ×%.2f" % Economy.biome_multiplier()
 	_depth_label.text = text
 	_depth_bar.visible = has_biomes
 	_next_biome_label.visible = has_biomes
@@ -468,22 +476,22 @@ func _on_loot_dropped(rarity: int, amount: float) -> void:
 	var table: Array[Dictionary] = Economy.loot_table()
 	if rarity < 0 or rarity >= table.size():
 		return
-	_last_chest = { "rarity": rarity, "amount": amount }
+	_last_chest = { "rarity": rarity, "amount": amount, "relics": Economy.last_chest_relics }
 	_refresh_last_loot() # ya mismo: no hace falta esperar al próximo refresco
-	_celebrate_chest(table[rarity], amount)
+	_celebrate_chest(table[rarity], amount, Economy.last_chest_relics)
 
 
 ## El cofre cae en la mina con el brillo de su rareza, llueven monedas (más cuanto más rara) y sale un aviso con
 ## el oro que dio. Si dio reliquias, el botón de Reliquias rebota. El legendario además pausa un momento y destella.
-func _celebrate_chest(entry: Dictionary, amount: float) -> void:
+func _celebrate_chest(entry: Dictionary, amount: float, relics_given: int) -> void:
 	var color: Color = _rarity_color(entry["id"])
 	var special: bool = entry["id"] == SPECIAL_RARITY
 	var chest_icon: Texture2D = load(CHEST_ICON) as Texture2D
 	_mine_view.drop_chest(chest_icon, color, special)
 	_mine_view.rain_coins(load(COIN_ICON) as Texture2D, int(COINS_BY_RARITY.get(entry["id"], DEFAULT_COINS)))
 	var detail: String = "+%s de oro" % NumberFormat.format_number(amount)
-	if int(entry["relics"]) > 0:
-		detail += " · +%s" % _relics_phrase(entry["relics"])
+	if relics_given > 0:
+		detail += " · +%s" % _relics_phrase(relics_given)
 		Juice.bounce(_relics_button)
 		Audio.play_sfx("relic")
 	_mine_view.show_toast(chest_icon, "¡Cofre %s!" % entry["name"], detail, color)
@@ -506,8 +514,8 @@ func _refresh_last_loot() -> void:
 		return
 	var entry: Dictionary = table[int(_last_chest["rarity"])]
 	var text: String = "¡Cofre %s! +%s de oro" % [entry["name"], NumberFormat.format_number(_last_chest["amount"])]
-	if int(entry["relics"]) > 0:
-		text += " y %s" % _relics_phrase(entry["relics"])
+	if int(_last_chest.get("relics", 0)) > 0:
+		text += " y %s" % _relics_phrase(int(_last_chest["relics"]))
 	_last_loot_label.text = text
 	_last_loot_label.add_theme_color_override("font_color", _rarity_color(entry["id"]))
 
@@ -519,6 +527,9 @@ func _rarity_color(id: String) -> Color:
 # --- Reliquias y prestigio ---------------------------------------------------
 
 func _refresh_prestige() -> void:
+	if Economy.has_tree():
+		_refresh_tree_prestige()
+		return
 	var relics: int = Economy.relics if _relics_shown < 0 else _relics_shown
 	var relics_text: String = "Reliquias: %d" % relics
 	if relics > 0:
@@ -538,9 +549,49 @@ func _refresh_prestige() -> void:
 		_prestige_button.disabled = true
 
 
+## El cartel de Reliquias con árbol: las reliquias son para gastar y la meta de volver se corre.
+func _refresh_tree_prestige() -> void:
+	var available: int = Economy.available_relics() if _relics_shown < 0 else _relics_shown
+	_relics_label.text = "Reliquias: %d para gastar" % available
+	var target: int = int(Economy.return_depth())
+	_relics_hint.text = "Desde los %d m volvés a la superficie y ganás reliquias para el árbol. Ganadas en total: %d (×%.2f de oro)." % [
+		target, Economy.relics, Economy.relic_multiplier_for(Economy.relics)]
+	_refresh_runes()
+	if Economy.can_prestige():
+		_prestige_button.text = "Volver a la superficie\n+%s" % _relics_phrase(Economy.prestige_relics())
+		_prestige_button.disabled = false
+	else:
+		_prestige_button.text = "Volver a la superficie\nPróximo regreso a %d m" % target
+		_prestige_button.disabled = true
+
+
+## La pantalla del árbol va encima de los carteles del costado; el botón que la abre, en el de Reliquias. El panel de
+## debug (solo en la build de prueba) pasa encima del árbol mientras está abierto.
+func _build_tree(debug: Control) -> void:
+	_tree_view = TreeView.new()
+	add_child(_tree_view)
+	_tree_button = Button.new()
+	_tree_button.name = "TreeButton"
+	_tree_button.theme_type_variation = &"ButtonNeutral"
+	_tree_button.text = "Árbol de reliquias"
+	_tree_button.custom_minimum_size = Vector2(0, TreeView.BUTTON_HEIGHT)
+	_tree_button.focus_mode = Control.FOCUS_NONE
+	_tree_button.visible = Economy.has_tree()
+	_tree_button.pressed.connect(func() -> void:
+		_relics_panel.close()
+		_tree_view.open())
+	var box: Node = _prestige_button.get_parent()
+	box.add_child(_tree_button)
+	box.move_child(_tree_button, _prestige_button.get_index())
+	if debug != null:
+		var home: int = debug.get_index()
+		_tree_view.opened.connect(func() -> void: move_child(debug, _tree_view.get_index()))
+		_tree_view.closed.connect(func() -> void: move_child(debug, home))
+
+
 ## Una runa por reliquia (hasta MAX_RUNES_SHOWN), alternando entre los tres símbolos.
 func _refresh_runes() -> void:
-	var wanted: int = mini(Economy.relics if _relics_shown < 0 else _relics_shown, MAX_RUNES_SHOWN)
+	var wanted: int = mini(Economy.available_relics() if _relics_shown < 0 else _relics_shown, MAX_RUNES_SHOWN)
 	if wanted == _shown_runes:
 		return
 	_shown_runes = wanted
@@ -567,6 +618,9 @@ func _on_prestige_pressed() -> void:
 	if not Economy.can_prestige():
 		return
 	var gain: int = Economy.prestige_relics()
+	if Economy.has_tree():
+		_confirm_tree_prestige(gain)
+		return
 	var body: String = "Estás a %d m (%s).\n\nGanás %s: +%s de oro permanente (en total ×%.2f).\n\nVolvés a la superficie sin oro, sin cuadrilla y con el pico y la dinamita en nivel 0. Las reliquias te quedan para siempre." % [
 		int(floorf(Economy.depth())),
 		Economy.biome_name(Economy.biome_index()),
@@ -574,6 +628,13 @@ func _on_prestige_pressed() -> void:
 		NumberFormat.format_percent(gain * Economy.relic_bonus()),
 		Economy.relic_multiplier_for(Economy.relics + gain),
 	]
+	_modal.open("¿Volver a la superficie?", body, "Sí, volver", "Seguir cavando", _confirm_prestige, &"ButtonRed")
+
+
+func _confirm_tree_prestige(gain: int) -> void:
+	var next: int = int(Economy.prestige_min_depth() + Economy.relic_tree.shift_for(Economy.claimed_relics + gain))
+	var body: String = "Estás a %d m (%s).\n\nGanás %s para el árbol.\nPróximo regreso a %d m.\n\nVolvés sin oro, sin cuadrilla y con el pico y la dinamita en nivel 0, salvo lo que te dejen las estrellas. Las reliquias te quedan para siempre." % [
+		int(floorf(Economy.depth())), Economy.biome_name(Economy.biome_index()), _relics_phrase(gain), next]
 	_modal.open("¿Volver a la superficie?", body, "Sí, volver", "Seguir cavando", _confirm_prestige, &"ButtonRed")
 
 
@@ -587,7 +648,7 @@ func _confirm_prestige() -> void:
 	_relics_panel.close() # las reliquias ganadas vuelan al botón del costado
 	_music.begin_prestige()
 	await _screen_fx.cover(PRESTIGE_DARK if Settings.reduce_effects else PRESTIGE_WHITE, PRESTIGE_FADE_IN)
-	var before: int = Economy.relics
+	var before: int = Economy.available_relics()
 	var gained: int = Economy.prestige()
 	_mine_view.clear_effects()
 	_relics_shown = before
@@ -675,19 +736,41 @@ func _on_save_imported() -> void:
 	_mine_view.clear_effects()
 	_shown_biome = -1
 	_last_chest = {}
+	_tree_view.close()
 	_refresh()
-	_show_migration_notice()
+	_show_pending_notice()
+
+
+## El cartel es uno solo: se muestran de a uno los avisos pendientes (partida convertida, árbol, vuelta offline), y al
+## cerrar uno sale el siguiente.
+func _show_pending_notice() -> void:
+	if not Economy.pending_migration_report.is_empty():
+		_show_migration_notice()
+	elif not Economy.pending_tree_report.is_empty():
+		_show_tree_notice()
+	elif not Economy.pending_offline_report.is_empty():
+		_show_offline_notice(Economy.pending_offline_report)
+
+
+func _dismiss_and_continue(dismiss: Callable) -> void:
+	dismiss.call()
+	_show_pending_notice.call_deferred()
+
+
+## La partida es de antes del árbol: se le cuenta a quien venía jugando qué pasa con sus reliquias.
+func _show_tree_notice() -> void:
+	var relics: int = int(Economy.pending_tree_report["relics"])
+	var body: String = "Tus %s ahora se gastan en el árbol: Reliquias » Árbol de reliquias.\n\nYa no dan +25%% de oro cada una: las que ganaste te dan un bonus más chico para siempre, y las estrellas suman el resto." % _relics_phrase(relics)
+	_modal.open("¡Llegó el árbol de reliquias!", body, "Entendido", "", _dismiss_and_continue.bind(Economy.dismiss_tree_report))
 
 
 ## Una partida de antes del balance nuevo volvió a la superficie al cargarse: se cuenta qué pasó.
 func _show_migration_notice() -> void:
-	if Economy.pending_migration_report.is_empty():
-		return
 	var gained: int = Economy.pending_migration_report["relics_gained"]
 	var body: String = "Cambiamos el balance de la mina, así que volviste a la superficie.\n\nTus reliquias siguen con vos"
 	if gained > 0:
 		body += ", y sumamos %s que ya tenías ganadas en esta bajada" % _relics_phrase(gained)
-	_modal.open("¡Mina renovada!", body + ".", "¡A cavar!", "", Economy.dismiss_migration_report)
+	_modal.open("¡Mina renovada!", body + ".", "¡A cavar!", "", _dismiss_and_continue.bind(Economy.dismiss_migration_report))
 
 
 # --- Progreso offline --------------------------------------------------------

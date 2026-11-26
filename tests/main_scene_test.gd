@@ -77,6 +77,7 @@ func _balance_without_loot() -> Dictionary:
 func _real_balance() -> Dictionary:
 	var balance: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/balance.json"))
 	balance.erase("crit")
+	balance.erase("tap") # el tope de golpes se prueba en tap_limiter_test y tree_scene_test
 	return balance
 
 
