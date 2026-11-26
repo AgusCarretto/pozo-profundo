@@ -1,0 +1,55 @@
+{
+	"_nota": "Propuesta v2, ajustada con tools/simulate_tree.gd. Costo del nivel n = redondear(base x growth^(n-1)). return.points: [reliquias sacadas de bajadas, metros que baja la meta]; extra_every: +1 reliquia por cada tantos metros corridos.",
+	"cost_growth": 1.5,
+	"fragments_per_relic": 20,
+	"offline": { "efficiency": 0.05 },
+	"relic_bonus": { "each": 0.06, "full_until": 60, "after": 0.005 },
+	"return": { "points": [[5, 0], [9, 14], [12, 25], [20, 46], [40, 94], [65, 130], [100, 149], [180, 180], [300, 197], [500, 222], [700, 252], [1000, 283]], "extra_every": 30 },
+	"rings": {
+		"2": { "depth": 350, "resets": 8 },
+		"3": { "depth": 400, "resets": 25 }
+	},
+	"stars": [
+		{ "id": "core", "ring": 0, "max": 1, "base": 1, "from": [], "effects": [{ "type": "gold", "per_level": 0.5 }] },
+
+		{ "id": "f_brazo", "ring": 1, "max": 5, "base": 2, "growth": 1.15, "from": ["core"], "effects": [{ "type": "hit_share", "per_level": 0.012 }] },
+		{ "id": "f_templado", "ring": 1, "max": 5, "base": 2, "growth": 1.15, "from": ["f_brazo"], "effects": [{ "type": "hit", "per_level": 0.30 }] },
+		{ "id": "f_ojo", "ring": 1, "max": 5, "base": 2, "growth": 1.15, "from": ["f_brazo"], "effects": [{ "type": "crit_chance", "per_level": 0.03 }] },
+		{ "id": "f_brutal", "ring": 2, "max": 5, "base": 4, "growth": 1.4, "from": ["f_ojo"], "effects": [{ "type": "crit_mult", "per_level": 0.6 }] },
+		{ "id": "f_eco", "ring": 2, "max": 3, "base": 6, "growth": 1.4, "from": ["f_templado"], "effects": [{ "type": "double_hit", "per_level": 0.12 }] },
+		{ "id": "f_combo", "ring": 3, "max": 3, "base": 10, "growth": 1.4, "from": ["f_eco"], "effects": [{ "type": "frenzy_hit", "per_level": 0.30 }] },
+		{ "id": "f_umbral", "ring": 3, "max": 1, "base": 20, "growth": 1.4, "from": ["f_combo", "f_brutal"], "effects": [{ "type": "frenzy_threshold", "per_level": 1 }] },
+		{ "id": "f_furia", "ring": 3, "max": 1, "base": 40, "growth": 1.4, "from": ["f_umbral"], "requires_max": "f_umbral", "keystone": true, "effects": [{ "type": "crit_mult_mul", "mul": 4 }, { "type": "crit_chance_mul", "mul": 0.5 }] },
+
+		{ "id": "o_olfato", "ring": 1, "max": 5, "base": 2, "growth": 1.15, "from": ["core"], "effects": [{ "type": "chest_chance", "per_level": 0.20 }] },
+		{ "id": "o_botin", "ring": 1, "max": 5, "base": 2, "growth": 1.15, "from": ["o_olfato"], "effects": [{ "type": "chest_gold", "per_level": 0.25 }] },
+		{ "id": "o_gemologo", "ring": 1, "max": 3, "base": 2, "growth": 1.15, "from": ["o_olfato"], "effects": [{ "type": "weight_rare", "per_level": 0.5 }] },
+		{ "id": "o_dragon", "ring": 2, "max": 3, "base": 6, "growth": 1.4, "from": ["o_gemologo"], "effects": [{ "type": "weight_epic", "per_level": 0.8 }] },
+		{ "id": "o_doble", "ring": 2, "max": 3, "base": 6, "growth": 1.4, "from": ["o_botin"], "effects": [{ "type": "double_chest", "per_level": 0.12 }] },
+		{ "id": "o_corona", "ring": 3, "max": 2, "base": 15, "growth": 1.4, "from": ["o_dragon"], "effects": [{ "type": "weight_legendary", "per_level": 1.0 }] },
+		{ "id": "o_reliquia", "ring": 3, "max": 1, "base": 30, "growth": 1.4, "from": ["o_corona", "o_doble"], "effects": [{ "type": "legendary_relics", "per_level": 1 }] },
+		{ "id": "o_apostador", "ring": 3, "max": 1, "base": 40, "growth": 1.4, "from": ["o_reliquia"], "requires_max": "o_reliquia", "keystone": true, "effects": [{ "type": "no_common", "mul": 2.0 }] },
+
+		{ "id": "c_reclutas", "ring": 1, "max": 5, "base": 2, "growth": 1.15, "from": ["core"], "effects": [{ "type": "start_miners", "per_level": 5 }] },
+		{ "id": "c_capataz", "ring": 1, "max": 5, "base": 2, "growth": 1.15, "from": ["c_reclutas"], "effects": [{ "type": "crew", "per_level": 0.05 }] },
+		{ "id": "c_contrato", "ring": 1, "max": 5, "base": 2, "growth": 1.15, "from": ["c_reclutas"], "effects": [{ "type": "discount", "per_level": 0.04 }] },
+		{ "id": "c_bolsa", "ring": 1, "max": 3, "base": 2, "growth": 1.15, "from": ["c_contrato"], "effects": [{ "type": "start_gold", "values": [500, 5000, 50000] }] },
+		{ "id": "c_ventaja", "ring": 2, "max": 3, "base": 8, "growth": 1.4, "from": ["c_capataz"], "effects": [{ "type": "start_crew", "per_level": 1 }] },
+		{ "id": "c_hitos", "ring": 2, "max": 1, "base": 25, "growth": 1.4, "from": ["c_capataz", "c_contrato"], "effects": [{ "type": "milestone_mult", "values": [2.5] }] },
+		{ "id": "c_memoria", "ring": 3, "max": 1, "base": 30, "growth": 1.4, "from": ["c_hitos"], "effects": [{ "type": "keep_pick", "per_level": 1 }] },
+		{ "id": "c_mina", "ring": 3, "max": 1, "base": 40, "growth": 1.4, "from": ["c_memoria"], "requires_max": "c_memoria", "keystone": true, "effects": [{ "type": "crew_active", "mul": 1.3 }, { "type": "crew_idle", "mul": 0.7 }] },
+
+		{ "id": "t_mecha", "ring": 1, "max": 5, "base": 2, "growth": 1.15, "from": ["core"], "effects": [{ "type": "cooldown_cut", "per_level": 0.08 }] },
+		{ "id": "t_polvora", "ring": 1, "max": 5, "base": 2, "growth": 1.15, "from": ["t_mecha"], "effects": [{ "type": "ability", "per_level": 0.20 }] },
+		{ "id": "t_vigilia", "ring": 1, "max": 3, "base": 2, "growth": 1.15, "from": ["core"], "effects": [{ "type": "offline_eff", "values": [0.07, 0.09, 0.12] }] },
+		{ "id": "t_noche", "ring": 2, "max": 2, "base": 8, "growth": 1.4, "from": ["t_vigilia"], "effects": [{ "type": "offline_hours", "values": [10, 12] }] },
+		{ "id": "t_descenso", "ring": 2, "max": 1, "base": 15, "growth": 1.4, "from": ["t_polvora"], "effects": [{ "type": "shallow_depth", "per_level": 200 }, { "type": "shallow_mul", "mul": 3 }] },
+		{ "id": "t_memoria_din", "ring": 3, "max": 1, "base": 30, "growth": 1.4, "from": ["t_descenso", "t_noche"], "effects": [{ "type": "keep_ability", "per_level": 1 }] },
+		{ "id": "t_cuenta", "ring": 3, "max": 1, "base": 40, "growth": 1.4, "from": ["t_memoria_din"], "requires_max": "t_memoria_din", "keystone": true, "effects": [{ "type": "cooldown_mul", "mul": 0.5 }, { "type": "ability_mul", "mul": 0.75 }] },
+
+		{ "id": "p_suerte", "ring": 4, "max": 1, "base": 50, "from": [], "bridge": ["f_furia", "o_apostador"], "effects": [{ "type": "crit_chest", "per_level": 0.03 }] },
+		{ "id": "p_mineros", "ring": 4, "max": 1, "base": 50, "from": [], "bridge": ["o_apostador", "c_mina"], "effects": [{ "type": "passive_chest", "per_level": 1.0 }] },
+		{ "id": "p_turnos", "ring": 4, "max": 1, "base": 50, "from": [], "bridge": ["c_mina", "t_cuenta"], "effects": [{ "type": "offline_gain", "per_level": 0.5 }] },
+		{ "id": "p_critica", "ring": 4, "max": 1, "base": 50, "from": [], "bridge": ["t_cuenta", "f_furia"], "effects": [{ "type": "ability_crit", "per_level": 1 }] }
+	]
+}

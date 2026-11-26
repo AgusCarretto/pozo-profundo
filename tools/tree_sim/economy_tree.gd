@@ -4,6 +4,9 @@ extends "res://core/economy.gd"
 ## Las reliquias son los puntos que se gastan en el árbol. `relics` es el total ganado en la historia (de él sale un
 ## bonus pasivo chico: gastar nunca debilita) y `spent` lo gastado en estrellas.
 
+## Se considera que el jugador está golpeando desde este ritmo (piedra angular que premia jugar activo).
+const ACTIVE_TAPS: float = 0.5
+
 var stars: Dictionary = {}          # id -> definición (arbol.json)
 var tree: Dictionary = {}           # id -> nivel comprado
 var active_keystones: Array = []
@@ -13,56 +16,121 @@ var bonus_each: float = 0.05
 ## Desde esta cantidad cada reliquia suma `bonus_after` en vez de `bonus_each` (0 = sin tope).
 var bonus_full_until: float = 0.0
 var bonus_after: float = 0.0
-## Metros que baja la profundidad de volver (mínima y de la fórmula) por cada reliquia ya sacada de una bajada.
-var shift_per_relic: float = 0.0
+## Cómo se corre la profundidad de volver: {} = no se corre. Ver shift_now().
+var return_rule: Dictionary = {}
+## Metros corridos en la bajada en curso (se fijan al empezarla, con fix_target()).
+var run_shift: float = 0.0
 var claimed: int = 0
-
-
-func return_depth() -> float:
-	return prestige_min_depth() + shift_per_relic * claimed
-
-
-func prestige_relics() -> int:
-	return EconomyMath.relics_for_depth(depth() - shift_per_relic * claimed, _prestige["min_depth"], _prestige["depth_offset"], _prestige["depth_step"], _prestige["exponent"])
-
-
-func prestige() -> int:
-	var gained: int = super()
-	claimed += gained
-	return gained
 ## El jugador simulado sostiene el frenesí (golpea al ritmo del umbral o más).
 var taps_per_second: float = 3.0
-## Estadísticas para los logros.
+## Estadísticas para los logros y las métricas.
 var stats: Dictionary = {}
 
 var _fx_add: Dictionary = {}
 var _fx_mul: Dictionary = {}
 var _fx_set: Dictionary = {}
 var _base: Dictionary = {}
+var _balance_data: Dictionary = {}
+var _offline_base: Dictionary = {}
+var _away: bool = false
 
 
-func setup(balance: Dictionary, star_list: Array) -> void:
+## `offline_base` pisa valores de la sección "offline" del balance (propuesta de v0.7).
+func setup(balance: Dictionary, star_list: Array, offline_base: Dictionary = {}) -> void:
+	_balance_data = balance
+	_offline_base = offline_base
 	if not load_balance(balance):
 		push_error(last_error)
 	for star: Dictionary in star_list:
 		stars[star["id"]] = star
+	var offline: Dictionary = _offline.duplicate()
+	for key: String in offline_base:
+		offline[key] = float(offline_base[key])
 	_base = {
 		"hit_chance": _loot_hit_chance, "second_chance": _loot_second_chance,
 		"weights": _rarity_weights.duplicate(), "milestones": _milestones.duplicate(),
 		"milestone_mult": _milestone_multiplier, "crit": _crit.duplicate(),
-		"ability": _ability.duplicate(), "offline": _offline.duplicate(),
+		"ability": _ability.duplicate(), "offline": offline,
 		"frenzy": _frenzy.duplicate(),
 	}
 	apply_tree()
+
+
+## Copia con el mismo estado, para probar "qué pasaría si" sin tocar la partida simulada.
+func clone() -> Node:
+	var other: Node = get_script().new()
+	other.setup(_balance_data, stars.values(), _offline_base)
+	for key: String in ["bonus_each", "bonus_full_until", "bonus_after", "run_shift", "claimed", "taps_per_second", "spent", "relics", "gold", "run_gold", "pick_level", "ability_level", "ability_cooldown_left", "_revealed", "_max_biome"]:
+		other.set(key, get(key))
+	other.return_rule = return_rule
+	other.tree = tree.duplicate()
+	other.active_keystones = active_keystones.duplicate()
+	other.stats = stats.duplicate()
+	other.owned.assign(owned)
+	other.rng.state = rng.state
+	other.apply_tree()
+	return other
 
 
 func level_of(id: String) -> int:
 	return int(tree.get(id, 0))
 
 
+func total_levels() -> int:
+	var total: int = 0
+	for id: String in tree:
+		total += int(tree[id])
+	return total
+
+
 func available() -> int:
 	return relics - spent
 
+
+# --- Profundidad de volver -----------------------------------------------------
+
+## Metros que se corre la profundidad de volver según las reliquias ya sacadas de bajadas (las de cofres y logros no
+## cuentan). "points" = [[reliquias, metros], ...] en orden creciente: lineal entre puntos, 0 antes del primero y con la
+## pendiente del último tramo más allá. La tabla sigue a la fuerza que dan esas reliquias gastadas en el árbol.
+func shift_now() -> float:
+	if return_rule.is_empty():
+		return 0.0
+	var points: Array = return_rule["points"]
+	if claimed <= float(points[0][0]):
+		return float(points[0][1])
+	var i: int = 1
+	while i < points.size() - 1 and claimed > float(points[i][0]):
+		i += 1
+	var from: Array = points[i - 1]
+	var to: Array = points[i]
+	return roundf(lerpf(float(from[1]), float(to[1]), (claimed - float(from[0])) / (float(to[0]) - float(from[0]))))
+
+
+func fix_target() -> void:
+	run_shift = shift_now()
+
+
+func return_depth() -> float:
+	return prestige_min_depth() + run_shift
+
+
+## La fórmula de hoy medida desde la meta corrida, más una reliquia por cada "extra_every" metros que se corrió: bajar
+## a una meta más honda paga más.
+func prestige_relics() -> int:
+	var gained: int = EconomyMath.relics_for_depth(depth() - run_shift, _prestige["min_depth"], _prestige["depth_offset"], _prestige["depth_step"], _prestige["exponent"])
+	var every: float = float(return_rule.get("extra_every", 0.0))
+	if gained <= 0 or every <= 0.0:
+		return gained
+	return gained + int(run_shift / every)
+
+
+func prestige() -> int:
+	var gained: int = super()
+	claimed += gained
+	return gained
+
+
+# --- Árbol ---------------------------------------------------------------------
 
 ## Nivel que está surtiendo efecto (una piedra angular comprada pero apagada no cuenta).
 func _effective_level(id: String) -> int:
@@ -90,8 +158,15 @@ func apply_tree() -> void:
 	_loot_hit_chance = _base["hit_chance"] * (1.0 + add("chest_chance"))
 	_loot_second_chance = _base["second_chance"] * (1.0 + add("chest_chance")) * (1.0 + add("passive_chest"))
 	_rarity_weights.assign(_base["weights"])
+	# El peso que ganan las rarezas altas sale de los Comunes: así subir los Raros no hace menos probable un Legendario.
+	var gained: float = 0.0
 	for index: int in range(_rarities.size()):
-		_rarity_weights[index] *= 1.0 + add("weight_" + str(_rarities[index]["id"]))
+		var extra: float = _rarity_weights[index] * add("weight_" + str(_rarities[index]["id"]))
+		_rarity_weights[index] += extra
+		gained += extra
+	for index: int in range(_rarities.size()):
+		if _rarities[index]["id"] == "common":
+			_rarity_weights[index] = maxf(_rarity_weights[index] - gained, 0.0)
 	if _fx_mul.has("no_common"):
 		# Sin Comunes: cada una de las otras sale `no_common` veces más seguido que antes (por unidad de tiempo).
 		var total: float = 0.0
@@ -117,9 +192,6 @@ func apply_tree() -> void:
 	_offline = _base["offline"].duplicate()
 	_offline["efficiency"] = _fx_set.get("offline_eff", _offline["efficiency"])
 	_offline["max_hours"] = _fx_set.get("offline_hours", _offline["max_hours"])
-	if _fx_set.has("reloj_eff"):
-		_offline["efficiency"] = _fx_set["reloj_eff"]
-		_offline["max_hours"] = _fx_set["reloj_hours"]
 
 
 func add(type: String) -> float:
@@ -146,7 +218,8 @@ func relic_multiplier() -> float:
 
 
 func _base_output(index: int) -> float:
-	return super(index) * (1.0 + add("crew")) * mul("crew_mul")
+	var working: bool = taps_per_second >= ACTIVE_TAPS and not _away
+	return super(index) * (1.0 + add("crew")) * mul("crew_active" if working else "crew_idle")
 
 
 func hit_value() -> float:
@@ -168,10 +241,11 @@ func hit() -> float:
 	var critical: bool = rng.randf() < _crit["chance"]
 	if critical:
 		amount *= float(_crit["multiplier"])
-		stats["crits"] = stats.get("crits", 0) + 1
+		_count("crits", 1)
 	if add("double_hit") > 0.0 and rng.randf() < add("double_hit"):
 		amount *= 2.0
-	stats["hits"] = stats.get("hits", 0) + 1
+	_count("hits", 1)
+	_count("gold_hits", amount)
 	_earn(amount)
 	_roll_loot(_loot_hit_chance)
 	if critical and add("crit_chest") > 0.0:
@@ -179,10 +253,19 @@ func hit() -> float:
 	return amount
 
 
+func tick(delta: float) -> void:
+	_count("gold_crew", gold_per_second() * delta)
+	super(delta)
+
+
 func _earn(amount: float) -> void:
 	if add("shallow_depth") > 0.0 and depth() < add("shallow_depth"):
 		amount *= mul("shallow_mul")
 	super(amount)
+
+
+func _count(key: String, amount: float) -> void:
+	stats[key] = stats.get(key, 0) + amount
 
 
 # --- Cofres y dinamita ---------------------------------------------------------
@@ -196,11 +279,34 @@ func _open_chest(rarity: int) -> void:
 		if given > 0:
 			given += int(add("legendary_relics"))
 		relics += given
-		stats["chests"] = stats.get("chests", 0) + 1
-		var key: String = "chest_" + str(_rarities[rarity]["id"])
-		stats[key] = stats.get(key, 0) + 1
-		stats["chest_gold"] = stats.get("chest_gold", 0.0) + amount
-		stats["chest_relics"] = stats.get("chest_relics", 0) + given
+		_count("chests", 1)
+		_count("chest_" + str(_rarities[rarity]["id"]), 1)
+		_count("gold_chest", amount)
+		_count("chest_relics", given)
+
+
+## Cofres por segundo de juego (en promedio) golpeando a `taps` y con cuadrilla.
+func chest_rate(taps: float) -> float:
+	return taps * (_loot_hit_chance + _crit["chance"] * add("crit_chest")) + _loot_second_chance
+
+
+## Oro por segundo que dan los cofres en promedio (sin azar), con la producción de ahora.
+func chest_income(taps: float) -> float:
+	var table: Array[Dictionary] = loot_table()
+	var each: float = 0.0
+	for index: int in range(table.size()):
+		each += float(table[index]["chance"]) * loot_reward(index)
+	return chest_rate(taps) * each * (1.0 + add("chest_gold")) * (1.0 + add("double_chest"))
+
+
+## Reliquias por hora que dan los cofres en promedio.
+func chest_relics_per_hour(taps: float) -> float:
+	var table: Array[Dictionary] = loot_table()
+	var total: float = 0.0
+	for entry: Dictionary in table:
+		if int(entry["relics"]) > 0:
+			total += float(entry["chance"]) * (int(entry["relics"]) + add("legendary_relics"))
+	return chest_rate(taps) * total * (1.0 + add("double_chest")) * 3600.0
 
 
 func ability_reward() -> float:
@@ -215,14 +321,21 @@ func use_ability() -> float:
 		amount *= float(_crit["multiplier"])
 	_earn(amount)
 	ability_cooldown_left = ability_cooldown()
-	stats["dynamite"] = stats.get("dynamite", 0) + 1
+	_count("dynamite", 1)
+	_count("gold_ability", amount)
 	return amount
 
 
 func apply_offline(elapsed: float) -> Dictionary:
+	_away = true
 	var report: Dictionary = super(elapsed)
-	if not report.is_empty() and add("offline_gain") > 0.0:
-		_earn(float(report["gold"]) * add("offline_gain"))
+	if not report.is_empty():
+		var extra: float = float(report["gold"]) * add("offline_gain")
+		if extra > 0.0:
+			_earn(extra)
+		report["gold"] = float(report["gold"]) + extra
+		_count("gold_offline", report["gold"])
+	_away = false
 	return report
 
 
