@@ -1,7 +1,7 @@
 # v0.7 — Árbol de reliquias y logros: simulación
 
 Estado al 2026-11-26 (**cuarta vuelta**, con tus decisiones aplicadas). **Nada de esto está en el juego.** Rama `v07-arbol`.
-Especificación de partida: [arbol-reliquias.md](arbol-reliquias.md) (todavía sin actualizar: este documento la reemplaza donde no coinciden).
+Especificación para programar, ya con estos números: [arbol-reliquias.md](arbol-reliquias.md).
 
 ## Para mirar antes de programar
 1. **"Museo ambulante" no se podía resolver solo cambiando los metros**, así que le agregué una condición: **"Con la meta en 540 m o más, pasala por 10 m"**. Cuánto se pasa la meta *baja* a lo largo de la partida (~40 m el primer día, ~10 m al final). Con "pasala por 60 m", quien empuja a propósito lo saca en 33 min el día 2 y necesita más de 70 min del día 10 en adelante; jugando normal, sale al principio o nunca. La condición nueva sale en las 15 corridas, en los cinco perfiles, cerca del 83% de la partida. Si preferís otra cosa, se cambia en `logros.json`.
