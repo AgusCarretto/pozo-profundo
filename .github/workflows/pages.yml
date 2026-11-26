@@ -1,13 +1,15 @@
-# Publica el juego en GitHub Pages (https://aguscarretto.github.io/pozo-profundo/) como app instalable.
-# Corre solo cuando llega a main un cambio de project.godot (ahí vive la versión) y a mano desde la pestaña
-# Actions. Con el repo privado no hace nada. Necesita Pages con origen "GitHub Actions" y los secretos
-# SUPABASE_URL, SUPABASE_KEY y (opcional) FEEDBACK_URL.
+# Publica el juego en GitHub Pages (https://aguscarretto.github.io/pozo-profundo/):
+#   /        la versión publicada, exportada desde la etiqueta PUBLISHED_REF (app instalable).
+#   /test/   la build de prueba, exportada desde el commit TEST_REF (de debug, sin PWA, noindex, partida propia).
+# Corre al cambiar este archivo en main y a mano desde la pestaña Actions. Para publicar una versión nueva, etiquetarla
+# y cambiar PUBLISHED_REF; para actualizar la prueba, cambiar TEST_REF. Con el repo privado no hace nada. Necesita Pages
+# con origen "GitHub Actions" y los secretos SUPABASE_URL, SUPABASE_KEY y (opcional) FEEDBACK_URL.
 name: Publicar en GitHub Pages
 
 on:
   push:
     branches: [main]
-    paths: [project.godot]
+    paths: [.github/workflows/pages.yml]
   workflow_dispatch:
 
 permissions:
@@ -22,6 +24,8 @@ concurrency:
 env:
   # La misma versión con la que se desarrolla el juego.
   GODOT_VERSION: 4.7.2
+  PUBLISHED_REF: v0.7.0
+  TEST_REF: 176f246a14f9f54fef6b81ba7c098b69a31458f6
 
 jobs:
   publicar:
@@ -32,9 +36,25 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.PUBLISHED_REF }}
+          path: publicado
 
-      # Antes de bajar nada: si faltan los secretos, que falle enseguida.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TEST_REF }}
+          path: prueba
+
+      # La página para restaurar la copia de una partida sale de main: así está sea cual sea la etiqueta publicada.
+      - uses: actions/checkout@v7
+        with:
+          path: principal
+          sparse-checkout: web/restaurar.html
+          sparse-checkout-cone-mode: false
+
+      # Antes de bajar nada: si faltan los secretos, que falle enseguida. Solo la versión publicada los usa.
       - name: Configuración (métricas y Opinar)
+        working-directory: publicado
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -56,22 +76,28 @@ jobs:
           unzip -q -j "$templates" 'templates/web_*' 'templates/version.txt' -d "$dest"
           echo "GODOT=$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
 
-      - name: Exportar
+      - name: Exportar la versión publicada
+        working-directory: publicado
         run: |
           set -euo pipefail
-          mkdir -p build/pages
-          touch build/.gdignore
+          site="$GITHUB_WORKSPACE/site"
+          mkdir -p "$site"
           "$GODOT" --headless --path . --import
-          "$GODOT" --headless --path . --export-release "Pages" build/pages/index.html
-          test -f build/pages/index.pck
-          test -f build/pages/index.service.worker.js
+          "$GODOT" --headless --path . --export-release "Pages" "$site/index.html"
+          test -f "$site/index.pck"
+          test -f "$site/index.service.worker.js"
           # Lo que usa la pantalla de carga (igual que tools/export_web.ps1), cada fuente con su licencia.
-          cp assets/fonts/PixelifySans.ttf assets/fonts/OFL.txt assets/fonts/VT323Digits.ttf assets/fonts/VT323-OFL.txt build/pages/
-          cp assets/sprites/generated/rock_earth.png build/pages/loading_rock.png
+          cp assets/fonts/PixelifySans.ttf assets/fonts/OFL.txt assets/fonts/VT323Digits.ttf assets/fonts/VT323-OFL.txt "$site/"
+          cp assets/sprites/generated/rock_earth.png "$site/loading_rock.png"
+          cp "$GITHUB_WORKSPACE/principal/web/restaurar.html" "$site/restaurar.html"
+
+      - name: Exportar la build de prueba
+        working-directory: prueba
+        run: bash tools/build_test_web.sh "$GODOT" "$GITHUB_WORKSPACE/site/test"
 
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: build/pages
+          path: site
 
       - id: deploy
         uses: actions/deploy-pages@v5
