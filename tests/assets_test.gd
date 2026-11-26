@@ -15,6 +15,8 @@ const FONT_PATH: String = "res://assets/fonts/PixelifySans.ttf"
 const NUMBER_FONT_PATH: String = "res://assets/fonts/VT323Digits.ttf"
 const CREDITS_PATH: String = "res://CREDITS.md"
 const BALANCE_PATH: String = "res://data/balance.json"
+const TREE_PATH: String = "res://data/arbol.json"
+const STAR_ICON_DIR: String = "res://assets/sprites/generated/stars/"
 
 const MineView := preload("res://game/mine_view.gd")
 
@@ -50,6 +52,8 @@ func _initialize() -> void:
 	_test_background_is_low_contrast()
 	_test_rock_chips()
 	_test_orbit_runes()
+	_test_star_icons()
+	_test_game_icons()
 	_test_tiny_dungeon_tiles()
 	_test_ui_pack_and_font()
 	_test_credits()
@@ -429,6 +433,49 @@ func _test_orbit_runes() -> void:
 		_check(strokes.all(func(count: int) -> bool: return count >= 5), "runes_%s tiene un glifo en cada cuarto (%s)" % [id, str(strokes)])
 		_check(shades > 0, "runes_%s tiene dos tonos" % id)
 	_check_eq(pairs.size(), BiomePalette.IDS.size(), "cada bioma tiene runas de otro color")
+
+
+## Un ícono por estrella del árbol, de 16x16, con la paleta y todos distintos entre sí.
+func _test_star_icons() -> void:
+	_section("Íconos de las estrellas del árbol")
+	var tree: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(TREE_PATH))
+	var seen: Dictionary = {}
+	for star: Dictionary in tree["stars"]:
+		var id: String = star["id"]
+		var path: String = STAR_ICON_DIR + id + ".png"
+		var img: Image = _load_image(path)
+		if img == null or not ResourceLoader.exists(path):
+			_check(false, "%s tiene ícono e importado" % id)
+			continue
+		_check_eq(img.get_size(), Vector2i(16, 16), "%s es de 16x16" % id)
+		var off: Dictionary = _off_palette(img)
+		_check(off.is_empty(), "%s usa solo colores de la paleta (fuera: %s)" % [id, str(off)])
+		var opaque: int = 0
+		for y: int in range(img.get_height()):
+			for x: int in range(img.get_width()):
+				if img.get_pixel(x, y).a == 1.0:
+					opaque += 1
+		_check(opaque > 30 and opaque < 240, "%s tiene silueta (%d píxeles)" % [id, opaque])
+		var key: int = hash(img.get_data())
+		_check(not seen.has(key), "%s no repite el dibujo de %s" % [id, seen.get(key, "")])
+		seen[key] = id
+	_check_eq(tree["stars"].size(), 35, "son 35 estrellas")
+	# El dado es gris claro, para que no resalte más que el resto.
+	var die: Image = _load_image(STAR_ICON_DIR + "o_apostador.png")
+	if die != null:
+		var white: int = 0
+		for y: int in range(16):
+			for x: int in range(16):
+				if die.get_pixel(x, y) == Palette.WHITE:
+					white += 1
+		_check_eq(white, 0, "el dado no usa blanco")
+
+
+## Del pack Game Icons: los que ya usa el HUD y los de logros y árbol.
+func _test_game_icons() -> void:
+	_section("Game Icons importados")
+	for name: String in ["audioOn", "audioOff", "gear", "trophy", "medal1", "medal2", "locked", "target"]:
+		_check(ResourceLoader.exists("res://assets/ui/game_icons/%s.png" % name), "está %s" % name)
 
 
 func _test_tiny_dungeon_tiles() -> void:
