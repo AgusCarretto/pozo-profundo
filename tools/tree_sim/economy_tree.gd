@@ -33,6 +33,15 @@ var _base: Dictionary = {}
 var _balance_data: Dictionary = {}
 var _offline_base: Dictionary = {}
 var _away: bool = false
+## Con qué terminó la bajada anterior (lo que usan las estrellas que escalan con ella): {owned, gps, pick, ability}.
+var last_descent: Dictionary = {}
+## Estrella comprada a la que se le apagan los efectos, para medir cuánto pesa en la partida ("" = ninguna).
+var muted: String = ""
+## Racha: segundos golpeando sin parar y segundos desde el último golpe.
+var streak_seconds: float = 0.0
+var since_hit: float = 1000.0
+## Pasado este rato sin golpear, la racha se corta (s).
+const STREAK_BREAK: float = 5.0
 
 
 ## `offline_base` pisa valores de la sección "offline" del balance (propuesta de v0.7).
@@ -63,6 +72,10 @@ func clone() -> Node:
 	for key: String in ["bonus_each", "bonus_full_until", "bonus_after", "run_shift", "claimed", "taps_per_second", "spent", "relics", "gold", "run_gold", "pick_level", "ability_level", "ability_cooldown_left", "_revealed", "_max_biome"]:
 		other.set(key, get(key))
 	other.return_rule = return_rule
+	other.last_descent = last_descent.duplicate(true)
+	other.muted = muted
+	other.streak_seconds = streak_seconds
+	other.since_hit = since_hit
 	other.tree = tree.duplicate()
 	other.active_keystones = active_keystones.duplicate()
 	other.stats = stats.duplicate()
@@ -125,6 +138,12 @@ func prestige_relics() -> int:
 
 
 func prestige() -> int:
+	if prestige_relics() <= 0:
+		return 0
+	# Antes de reiniciar: lo que las estrellas "de arrastre" le pasan a la bajada que empieza.
+	last_descent = { "owned": owned.duplicate(), "gps": gold_per_second(), "pick": pick_level, "ability": ability_level }
+	streak_seconds = 0.0
+	since_hit = 1000.0
 	var gained: int = super()
 	claimed += gained
 	return gained
@@ -134,6 +153,8 @@ func prestige() -> int:
 
 ## Nivel que está surtiendo efecto (una piedra angular comprada pero apagada no cuenta).
 func _effective_level(id: String) -> int:
+	if id == muted:
+		return 0
 	if bool(stars[id].get("keystone", false)) and not active_keystones.has(id):
 		return 0
 	return level_of(id)
@@ -214,7 +235,20 @@ func crit_average() -> float:
 
 func relic_multiplier() -> float:
 	var full: float = float(relics) if bonus_full_until <= 0.0 else minf(relics, bonus_full_until)
-	return (1.0 + full * bonus_each + (relics - full) * bonus_after) * (1.0 + add("gold"))
+	return (1.0 + full * bonus_each + (relics - full) * bonus_after) * (1.0 + add("gold")) * (1.0 + streak_bonus())
+
+
+## Racha: un escalón por cada minuto entero golpeando sin parar, hasta el tope. No corre mientras no estás.
+func streak_bonus() -> float:
+	if _away:
+		return 0.0
+	return minf(floorf(streak_seconds / 60.0) * float(_fx_set.get("streak_rate", 0.0)), add("streak_cap"))
+
+
+## Pasa tiempo de juego para la racha (hit() la sostiene).
+func advance_streak(delta: float) -> void:
+	since_hit += delta
+	streak_seconds = streak_seconds + delta if since_hit < STREAK_BREAK else 0.0
 
 
 func _base_output(index: int) -> float:
@@ -235,6 +269,7 @@ func hit_average() -> float:
 
 
 func hit() -> float:
+	since_hit = 0.0
 	var amount: float = hit_value()
 	if frenzied():
 		amount *= 1.0 + add("frenzy_hit")
@@ -259,7 +294,8 @@ func tick(delta: float) -> void:
 
 
 func _earn(amount: float) -> void:
-	if add("shallow_depth") > 0.0 and depth() < add("shallow_depth"):
+	# Descenso rápido: hasta una fracción de la meta de la bajada.
+	if add("shallow_fraction") > 0.0 and depth() < add("shallow_fraction") * return_depth():
 		amount *= mul("shallow_mul")
 	super(amount)
 
@@ -277,7 +313,8 @@ func _open_chest(rarity: int) -> void:
 		_earn(amount)
 		var given: int = int(_rarities[rarity]["relics"])
 		if given > 0:
-			given += int(add("legendary_relics"))
+			var extra: float = add("legendary_relics")
+			given += int(extra) + (1 if rng.randf() < extra - int(extra) else 0)
 		relics += given
 		_count("chests", 1)
 		_count("chest_" + str(_rarities[rarity]["id"]), 1)
@@ -355,18 +392,17 @@ func buy_units(index: int, count: int) -> bool:
 
 
 func _reset_run() -> void:
-	var kept_pick: int = pick_level
-	var kept_ability: int = ability_level
 	super()
-	if add("keep_pick") > 0.0:
-		pick_level = kept_pick
-	if add("keep_ability") > 0.0:
-		ability_level = kept_ability
-	# Bolsa inicial: oro para gastar; no cuenta como ganado (no suma profundidad).
-	gold += float(_fx_set.get("start_gold", 0.0))
-	if owned.is_empty():
+	if owned.is_empty() or last_descent.is_empty():
 		return
-	owned[0] += int(add("start_miners"))
-	var starters: int = int(add("start_crew"))
-	for index: int in range(1, mini(starters + 1, owned.size())):
-		owned[index] += 1
+	if add("keep_pick") > 0.0:
+		pick_level = int(last_descent["pick"])
+	if add("keep_ability") > 0.0:
+		ability_level = int(last_descent["ability"])
+	# Bolsa inicial: minutos de la producción con la que terminaste. Es oro para gastar; no suma profundidad.
+	gold += float(_fx_set.get("carry_gold_minutes", 0.0)) * 60.0 * float(last_descent["gps"])
+	# Reclutas (mineros) y Ventaja inicial (el resto de la cuadrilla): una parte de lo que tenías al volver.
+	var before: Array = last_descent["owned"]
+	owned[0] += int(float(before[0]) * add("carry_miners"))
+	for index: int in range(1, owned.size()):
+		owned[index] += int(float(before[index]) * add("carry_crew"))
