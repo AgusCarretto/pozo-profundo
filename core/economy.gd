@@ -735,19 +735,26 @@ func can_buy_star(id: String) -> bool:
 func buy_star(id: String) -> bool:
 	if relic_tree == null or not relic_tree.buy(id, available_relics(), record_depth_now(), resets):
 		return false
-	# Recién vuelto: las estrellas que arrastran valen ya para esta bajada.
+	# Recién vuelto: las estrellas que arrastran y las piedras anotadas valen ya para esta bajada.
 	if at_surface:
+		relic_tree.apply_keystones()
 		_apply_start_bonuses()
 	tree_changed.emit()
 	gold_changed.emit(gold)
 	return true
 
 
-## Las piedras angulares se cambian solo en la superficie, después de haber vuelto alguna vez.
+## 1 = la piedra se prende desde la próxima bajada, -1 = se apaga, 0 = no hay nada pendiente.
+func keystone_pending(id: String) -> int:
+	if relic_tree == null:
+		return 0
+	return int(relic_tree.planned_keystones.has(id)) - int(relic_tree.active_keystones.has(id))
+
+
+## Las piedras angulares se prenden y apagan cuando sea; el cambio vale desde la próxima bajada. En la superficie, sin
+## haber empezado la bajada, vale ya.
 func set_keystone(id: String, active: bool) -> bool:
-	if relic_tree == null or not at_surface or resets < 1:
-		return false
-	if not relic_tree.set_keystone(id, active):
+	if relic_tree == null or not relic_tree.set_keystone(id, active, at_surface):
 		return false
 	tree_changed.emit()
 	gold_changed.emit(gold)
@@ -1016,6 +1023,8 @@ func _reset_run() -> void:
 	owned.resize(_generators.size())
 	owned.fill(0)
 	run_shift = 0.0 if relic_tree == null else relic_tree.shift_for(claimed_relics)
+	if relic_tree != null:
+		relic_tree.apply_keystones()
 	at_surface = true
 	_applied_start = {}
 	_last_hit_time = -1.0e12

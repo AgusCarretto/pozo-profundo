@@ -110,6 +110,20 @@ func _test_keystones_and_bridges() -> void:
 	_check(tree.set_keystone("f_furia", false), "se puede apagar")
 	_check(tree.set_keystone("c_mina", true), "y ahí entra")
 
+	# Cambios para la próxima bajada: se anotan y no surten efecto hasta aplicarlos.
+	_check(tree.set_keystone("c_mina", false, false), "apagar para después")
+	_check(tree.active_keystones.has("c_mina") and not tree.planned_keystones.has("c_mina"), "sigue activa y queda anotado")
+	_check(tree.set_keystone("f_furia", true, false), "hay lugar para la otra en la próxima")
+	_check(not tree.active_keystones.has("f_furia"), "pero todavía no surte efecto")
+	_check(not tree.set_keystone("c_mina", true, false) , "la próxima ya tiene 2")
+	var copy: RelicTree = _make()
+	copy.from_dict(JSON.parse_string(JSON.stringify(tree.to_dict())))
+	_check(copy.active_keystones.has("c_mina") and copy.planned_keystones.has("f_furia"), "lo anotado se guarda")
+	tree.apply_keystones()
+	_check(tree.active_keystones.has("f_furia") and not tree.active_keystones.has("c_mina"), "al aplicarlo cambian")
+	copy.from_dict({ "levels": copy.levels.duplicate(), "keystones": ["f_furia"] })
+	_check_eq(copy.planned_keystones, ["f_furia"] as Array[String], "un guardado sin lo anotado usa las activas")
+
 
 func _test_effects() -> void:
 	_section("Efectos")

@@ -19,7 +19,9 @@ enum State { HIDDEN, SEALED, OPEN, OWNED }
 var last_error: String = ""
 ## id -> nivel comprado (solo las que tienen nivel).
 var levels: Dictionary = {}
+## Las piedras que surten efecto ahora y las que van a surtirlo desde la próxima vez (apply_keystones()).
 var active_keystones: Array[String] = []
+var planned_keystones: Array[String] = []
 
 var _stars: Dictionary = {}
 var _ids: Array[String] = []
@@ -210,24 +212,37 @@ func buy(id: String, available: int, record_depth: float, resets: int) -> bool:
 	if not can_buy(id, available, record_depth, resets):
 		return false
 	levels[id] = level(id) + 1
-	if is_keystone(id) and active_keystones.size() < _max_keystones and not active_keystones.has(id):
-		active_keystones.append(id)
+	# Una piedra recién comprada entra si hay lugar (si la próxima vez ya tiene las suyas, queda apagada).
+	if is_keystone(id) and not planned_keystones.has(id) and planned_keystones.size() < _max_keystones:
+		planned_keystones.append(id)
+		if active_keystones.size() < _max_keystones and not active_keystones.has(id):
+			active_keystones.append(id)
 	_dirty = true
 	return true
 
 
-## Prende o apaga una piedra angular comprada. Prender falla si ya hay el máximo.
-func set_keystone(id: String, active: bool) -> bool:
+## Prende o apaga una piedra angular comprada. Prender falla si ya hay el máximo. Con apply_now = false el cambio
+## queda anotado en planned_keystones hasta apply_keystones().
+func set_keystone(id: String, active: bool, apply_now: bool = true) -> bool:
 	if not is_keystone(id) or level(id) <= 0:
 		return false
 	if not active:
-		active_keystones.erase(id)
-	elif not active_keystones.has(id):
-		if active_keystones.size() >= _max_keystones:
+		planned_keystones.erase(id)
+	elif not planned_keystones.has(id):
+		if planned_keystones.size() >= _max_keystones:
 			return false
-		active_keystones.append(id)
-	_dirty = true
+		planned_keystones.append(id)
+	if apply_now:
+		apply_keystones()
 	return true
+
+
+## Lo anotado pasa a surtir efecto.
+func apply_keystones() -> void:
+	if active_keystones == planned_keystones:
+		return
+	active_keystones = planned_keystones.duplicate()
+	_dirty = true
 
 
 func max_keystones() -> int:
@@ -324,11 +339,12 @@ func working_seconds() -> float:
 func clear() -> void:
 	levels = {}
 	active_keystones = []
+	planned_keystones = []
 	_dirty = true
 
 
 func to_dict() -> Dictionary:
-	return { "levels": levels.duplicate(), "keystones": active_keystones.duplicate() }
+	return { "levels": levels.duplicate(), "keystones": active_keystones.duplicate(), "next_keystones": planned_keystones.duplicate() }
 
 
 ## Tolera datos de otra versión: estrellas que no existen se ignoran y los niveles se recortan.
@@ -342,10 +358,20 @@ func from_dict(data: Dictionary) -> void:
 			var lv: int = clampi(int(saved[id]), 0, max_level(str(id)))
 			if lv > 0:
 				levels[str(id)] = lv
-	var keystones: Variant = data.get("keystones")
-	if keystones is Array:
-		for id: Variant in keystones:
-			set_keystone(str(id), true)
+	active_keystones = _owned_keystones(data.get("keystones"))
+	planned_keystones = _owned_keystones(data.get("next_keystones", data.get("keystones")))
+	_dirty = true
+
+
+## De una lista guardada, las piedras angulares compradas, sin repetir y sin pasar del máximo.
+func _owned_keystones(saved: Variant) -> Array[String]:
+	var result: Array[String] = []
+	if saved is Array:
+		for entry: Variant in saved:
+			var id: String = str(entry)
+			if is_keystone(id) and level(id) > 0 and not result.has(id) and result.size() < _max_keystones:
+				result.append(id)
+	return result
 
 
 func _fail(message: String) -> bool:
