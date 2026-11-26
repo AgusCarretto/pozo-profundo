@@ -9,6 +9,9 @@ extends Node
 ##
 ## Formato (JSON): { "version": 1, "saved_at": <unix>, "sections": { "<nombre>": {...} } }
 ##
+## Una sección puede pedir una copia de la partida antes de recibirla (para guardar la vieja antes de convertirla): ver
+## register_section. La copia va a `<path sin extensión>.<nombre>.json` (y a la copia del navegador) y no se pisa nunca.
+##
 ## En headless (tests, CI) no persiste por defecto, para no pisar la partida del jugador.
 ## En la web, además del archivo (IndexedDB, que se vacía de forma asíncrona) se guarda una copia sincrónica en
 ## localStorage (`mirror`), también cuando la página se oculta o se cierra; al cargar gana la más nueva.
@@ -40,6 +43,8 @@ var mirror: RefCounted = null
 var _sections: Dictionary = {}
 ## Secciones tal como estaban en el archivo leído (nombre -> Dictionary).
 var _loaded_sections: Dictionary = {}
+## Lo que se leyó, entero, para poder guardar una copia tal como estaba.
+var _loaded_payload: Dictionary = {}
 
 
 func _ready() -> void:
@@ -64,9 +69,10 @@ func _notification(what: int) -> void:
 
 
 ## Registra una sección. Si el archivo ya se leyó y tiene datos para ella, se los entrega
-## enseguida; si no, los recibe cuando se llame a load_from_disk().
-func register_section(section: String, to_dict: Callable, from_dict: Callable) -> void:
-	_sections[section] = { "to_dict": to_dict, "from_dict": from_dict }
+## enseguida; si no, los recibe cuando se llame a load_from_disk(). `backup_tag` (opcional) recibe esos datos antes de
+## entregarlos y, si devuelve un nombre, la partida se copia con ese nombre.
+func register_section(section: String, to_dict: Callable, from_dict: Callable, backup_tag: Callable = Callable()) -> void:
+	_sections[section] = { "to_dict": to_dict, "from_dict": from_dict, "backup_tag": backup_tag }
 	_deliver(section)
 
 
@@ -93,6 +99,7 @@ func load_from_disk() -> bool:
 			chosen = from_mirror
 	if chosen.is_empty():
 		return false
+	_loaded_payload = chosen
 	_loaded_sections = chosen["sections"]
 	loaded_saved_at = _saved_at(chosen)
 	for section: String in _sections:
@@ -142,6 +149,7 @@ func import_code(code: String) -> bool:
 	var data: Dictionary = read_code(code)
 	if data.is_empty():
 		return false
+	_loaded_payload = data
 	_loaded_sections = data["sections"]
 	for section: String in _sections:
 		_deliver(section)
@@ -186,8 +194,32 @@ func _saved_at(data: Dictionary) -> int:
 
 func _deliver(section: String) -> void:
 	var data: Variant = _loaded_sections.get(section)
-	if data is Dictionary and _sections.has(section):
-		(_sections[section]["from_dict"] as Callable).call(data)
+	if not (data is Dictionary and _sections.has(section)):
+		return
+	var backup_tag: Callable = _sections[section]["backup_tag"]
+	if backup_tag.is_valid():
+		var tag: String = str(backup_tag.call(data))
+		if tag != "":
+			_back_up(tag)
+	(_sections[section]["from_dict"] as Callable).call(data)
+
+
+## Guarda la partida leída, sin cambios, con otro nombre. Si ya hay una copia con ese nombre, se deja la que está.
+func _back_up(tag: String) -> void:
+	if not persistence_enabled or _loaded_payload.is_empty():
+		return
+	var text: String = JSON.stringify(_loaded_payload, "\t", true, true)
+	if mirror != null and mirror.has_method("back_up"):
+		mirror.call("back_up", tag, text)
+	var backup_path: String = "%s.%s.json" % [path.get_basename(), tag]
+	if FileAccess.file_exists(backup_path):
+		return
+	var file: FileAccess = FileAccess.open(backup_path, FileAccess.WRITE)
+	if file == null:
+		push_error("Save: no se pudo escribir la copia %s (error %d)" % [backup_path, FileAccess.get_open_error()])
+		return
+	file.store_string(text)
+	file.close()
 
 
 ## Escribe en `<path>.tmp` y después renombra: si el proceso muere a mitad de escritura,

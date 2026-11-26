@@ -1,0 +1,25 @@
+{
+	"saved_at": 1795717821,
+	"sections": {
+		"economy": {
+			"ability_level": 3,
+			"ability_wait": 0,
+			"balance_version": 2,
+			"gold": 2500000,
+			"max_biome": 3,
+			"owned": [
+				62,
+				40,
+				27,
+				6,
+				0,
+				0
+			],
+			"pick_level": 5,
+			"relics": 14,
+			"revealed": 5,
+			"run_gold": 40000000
+		}
+	},
+	"version": 1
+}

@@ -59,6 +59,8 @@ const SAVE_SECTION: String = "economy"
 const BALANCE_VERSION: int = 2
 ## Lo mismo cuando el balance tiene árbol de reliquias.
 const TREE_VERSION: int = 3
+## Nombre de la copia que Save guarda antes de convertir una partida de antes del árbol (web/restaurar.html la usa).
+const BACKUP_BEFORE_TREE: String = "antes-0.7"
 const SECONDS_PER_HOUR: float = 3600.0
 const X10_COUNT: int = 10
 ## Topes para datos de partida dañados o editados a mano (evitan desbordes a infinito).
@@ -195,7 +197,7 @@ func _ready() -> void:
 		return
 	var save: Node = get_node_or_null("/root/Save")
 	if save != null and save.has_method("register_section"):
-		save.register_section(SAVE_SECTION, to_dict, from_dict)
+		save.register_section(SAVE_SECTION, to_dict, from_dict, save_backup_tag)
 		# Save ya leyó el archivo (es el primer autoload): si había partida, la cuadrilla
 		# siguió trabajando desde la hora de ese save.
 		apply_offline_since(int(save.loaded_saved_at), Time.get_unix_time_from_system())
@@ -1378,6 +1380,13 @@ func to_dict() -> Dictionary:
 		data["achievements"] = achievements.to_dict()
 		data["descent_hits"] = _descent_hits
 	return data
+
+
+## Qué copia pedirle a Save antes de cargar `data`: una partida sin árbol se convierte y conviene conservar la de antes.
+func save_backup_tag(data: Dictionary) -> String:
+	if relic_tree != null and int(_number(data.get("balance_version"), 1.0)) < TREE_VERSION:
+		return BACKUP_BEFORE_TREE
+	return ""
 
 
 ## Restaura el estado desde un diccionario (p. ej. un JSON). Tolera claves faltantes,

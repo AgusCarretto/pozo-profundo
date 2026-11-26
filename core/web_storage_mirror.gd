@@ -33,6 +33,13 @@ func write(text: String) -> bool:
 	return WebPlatform.is_true(value)
 
 
+## Guarda `text` aparte (clave "<clave>.<tag>"), solo si todavía no hay nada ahí.
+func back_up(tag: String, text: String) -> bool:
+	var value: Variant = JavaScriptBridge.eval(
+		"(function(){try{var k=%s;if(window.localStorage.getItem(k)===null){window.localStorage.setItem(k,%s)}return true}catch(e){return false}})()" % [JSON.stringify("%s.%s" % [_key, tag]), JSON.stringify(text)], true)
+	return WebPlatform.is_true(value)
+
+
 ## Llama a `callback` cuando la página se va: al cerrarla o navegar (pagehide) y al dejar de verse
 ## (visibilitychange), que en un celular suele ser el último aviso antes de que el sistema descarte la pestaña.
 func on_page_hide(callback: Callable) -> void:
