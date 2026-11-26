@@ -1,10 +1,10 @@
 # Árbol de reliquias — especificación (v0.7)
 
-Escrito para: vos y quien programe la v0.7. Estado al 2026-11-26: **números aprobados, sin programar**.
+Escrito para: vos y quien programe la v0.7. Estado al 2026-11-26: **números aprobados**; el árbol y los logros ya están programados y en prueba.
 Los números salen de la simulación (`tools/tree_sim/arbol_v3.json` y `logros.json`; resultados en [v07-simulacion.md](v07-simulacion.md)). Al programar pasan a `data/`.
 
-## Definiciones que agregué (revisalas)
-La simulación necesitaba menos detalle que el juego. Estas reglas son propuesta mía:
+## Reglas agregadas a la simulación (confirmadas)
+La simulación necesitaba menos detalle que el juego:
 1. **Veta rica no se aplica al AFK.** En la simulación sí se aplicaba (y triplicaba todo el AFK aunque cruzara la línea); quitarlo no cambia el piso ni el ritmo.
 2. **A la par:** "mientras golpeás" = algún golpe en los últimos 5 s.
 3. **Un golpe que pasa el tope** no cuenta para nada.
@@ -115,7 +115,7 @@ La simulación necesitaba menos detalle que el juego. Estas reglas son propuesta
 ## 5. Piedras angulares y reasignar
 - Ventaja y desventaja. **Máximo 2 activas**; se pueden comprar las 4. Se cambian solo en la superficie, justo después de un reset.
 - Los puentes piden tener **compradas** las dos piedras angulares que unen, no activas.
-- "Reasignar estrellas": devuelve todas las reliquias gastadas (salvo el Corazón). Gratis la primera vez; después cuesta 10% de lo devuelto. Solo en la superficie. *(Sin simular.)*
+- "Reasignar estrellas" (**0.7.1**; la 0.7.0 solo prende y apaga angulares): devuelve todas las reliquias gastadas (salvo el Corazón). Gratis la primera vez; después cuesta 10% de lo devuelto. Solo en la superficie. *(Sin simular.)*
 
 ## 6. Reliquias y meta de volver
 - **Bonus histórico:** cada reliquia ganada en la historia (gastada o no) da +6% de oro hasta 60, y +0,5% desde ahí. Gastar nunca debilita.
