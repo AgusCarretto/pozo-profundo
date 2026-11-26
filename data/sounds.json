@@ -123,6 +123,18 @@
 		"biome": {
 			"files": ["res://assets/audio/interface_sounds/bong_001.ogg"],
 			"volume_db": -2
+		},
+		"achievement": {
+			"files": ["res://assets/audio/own/achievement.wav"],
+			"volume_db": 2
+		},
+		"star_buy": {
+			"files": ["res://assets/audio/interface_sounds/glass_003.ogg"],
+			"volume_db": -2
+		},
+		"ring_open": {
+			"files": ["res://assets/audio/own/ring_open.wav"],
+			"volume_db": 0
 		}
 	},
 	"music_volume_db": -10,

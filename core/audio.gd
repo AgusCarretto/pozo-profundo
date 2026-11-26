@@ -225,8 +225,9 @@ func has_music(id: String) -> bool:
 
 ## Hace sonar el SFX `id` (una variante y un tono al azar) y devuelve el reproductor que usó. Devuelve null
 ## sin sonar si el id no está en el catálogo (no es un error: un evento puede no tener sonido todavía), si
-## está todo en silencio o si el volumen de SFX está en 0.
-func play_sfx(id: String) -> AudioStreamPlayer:
+## está todo en silencio o si el volumen de SFX está en 0. `pitch_multiplier` sube o baja el tono del catálogo (para
+## un sonido que va subiendo, nivel a nivel).
+func play_sfx(id: String, pitch_multiplier: float = 1.0) -> AudioStreamPlayer:
 	if not _sfx.has(id) or _voices.is_empty() or not is_inside_tree() or waiting_for_gesture:
 		return null
 	if settings != null and (settings.muted or settings.sfx_volume <= 0.0):
@@ -242,7 +243,7 @@ func play_sfx(id: String) -> AudioStreamPlayer:
 	_last_variant[id] = variant
 	var player: AudioStreamPlayer = _take_voice()
 	player.stream = streams[variant]
-	player.pitch_scale = rng.randf_range(entry["pitch_min"], entry["pitch_max"])
+	player.pitch_scale = clampf(rng.randf_range(entry["pitch_min"], entry["pitch_max"]) * pitch_multiplier, PITCH_LIMITS.x, PITCH_LIMITS.y)
 	player.volume_db = entry["volume_db"]
 	player.play()
 	sfx_played.emit(id)

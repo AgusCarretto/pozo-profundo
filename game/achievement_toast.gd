@@ -3,6 +3,9 @@ extends Button
 ## sobre la parte baja de la barra de arriba, se va solo y al tocarlo se abre el librito (lo conecta main.gd). Mientras
 ## hay un cartel modal adelante, espera.
 
+## Se mostró con logros que todavía no se habían festejado.
+signal announced(ids: Array)
+
 const Achievements := preload("res://core/achievements.gd")
 
 const SHOW_SECONDS: float = 4.0
@@ -16,6 +19,8 @@ var _blocked: Callable
 ## Los logros que cuenta el aviso de ahora.
 var _ids: Array[String] = []
 var _left: float = 0.0
+## Los que llegaron y todavía no se anunciaron (porque había algo adelante).
+var _fresh: Array[String] = []
 
 
 func _init() -> void:
@@ -37,6 +42,7 @@ func push(ids: Array) -> void:
 	for id: String in ids:
 		if not _ids.has(id):
 			_ids.append(id)
+			_fresh.append(id)
 	if _ids.is_empty():
 		return
 	_left = SHOW_SECONDS
@@ -46,6 +52,7 @@ func push(ids: Array) -> void:
 
 func dismiss() -> void:
 	_ids.clear()
+	_fresh.clear()
 	visible = false
 
 
@@ -63,8 +70,13 @@ func _process(delta: float) -> void:
 
 func _show_if_free() -> void:
 	visible = not (_blocked.is_valid() and bool(_blocked.call()))
-	if visible:
-		_place()
+	if not visible:
+		return
+	_place()
+	if not _fresh.is_empty():
+		var ids: Array[String] = _fresh.duplicate()
+		_fresh.clear()
+		announced.emit(ids)
 
 
 func _compose() -> void:

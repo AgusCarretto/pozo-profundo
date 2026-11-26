@@ -26,7 +26,7 @@ const MUSIC_INTROS: Dictionary = { "earth": 10.0, "frenzy": 1.5 }
 ## El prestigio suena una vez; el resto loopea.
 const MUSIC_ONCE: Array[String] = ["prestige"]
 ## Los SFX que el juego pide sí o sí (los de los cofres se agregan por rareza del balance).
-const REQUIRED_SFX: Array[String] = ["hit", "crit", "milestone", "buy", "pick", "tab", "mode", "toggle", "open", "close", "prestige", "biome", "dynamite", "coins", "relic"]
+const REQUIRED_SFX: Array[String] = ["hit", "crit", "milestone", "buy", "pick", "tab", "mode", "toggle", "open", "close", "prestige", "biome", "dynamite", "coins", "relic", "achievement", "star_buy", "ring_open"]
 
 var _economy: Node
 var _audio: Node

@@ -27,6 +27,7 @@ Cada fila dice dónde vive el asset con una ruta entre comillas invertidas; `tes
 
 ## Assets propios
 
+- `assets/audio/own/` — jingles propios sintetizados por `tools/build_jingles.mjs`: logro conseguido y anillo nuevo del árbol.
 - `web/icons/` — ícono del juego (roca y pico propios), armado por `tools/build_icons.gd`.
 - `assets/sprites/generated/` — sprites de 16×16 dibujados por código con la paleta de Tiny Dungeon (`game/palette.gd`) por `tools/generate_sprites.gd`: roca, fondo, astillas y runas que orbitan de cada bioma, taladro, gólem, dinamita, runas, moneda, pico y gema. Los mineros de ese mismo directorio son personajes de Tiny Dungeon recoloreados por el mismo script.
 - `assets/sprites/generated/stars/` — los 35 íconos de las estrellas del árbol (16×16, misma paleta), armados por `tools/build_star_icons.gd`: dibujos propios (entre ellos llama, corona, dado, luna y reloj de arena) y copias de sprites del juego.

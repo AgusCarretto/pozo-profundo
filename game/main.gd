@@ -27,6 +27,7 @@ const MusicDirector := preload("res://game/music_director.gd")
 const TreeView := preload("res://game/tree_view.gd")
 const AchievementBook := preload("res://game/achievement_book.gd")
 const AchievementToast := preload("res://game/achievement_toast.gd")
+const AchievementCelebration := preload("res://game/achievement_celebration.gd")
 
 ## Color de cada rareza de cofre, por id del balance. Es presentación, no balance.
 const RARITY_COLORS: Dictionary = {
@@ -45,6 +46,9 @@ const SPECIAL_PAUSE: float = 0.3
 const SPECIAL_SLOW: float = 0.05
 const SPECIAL_FLASH: Color = Color(1.0, 0.97, 0.85, 0.85)
 const SPECIAL_FLASH_FADE: float = 0.5
+## Un logro se festeja parecido: destello dorado y una pausa más corta.
+const ACHIEVEMENT_FLASH: Color = Color(1.0, 0.9, 0.55, 0.7)
+const ACHIEVEMENT_PAUSE: float = 0.25
 ## Volver a la superficie: fundido (a blanco; a oscuro con "reducir efectos") y reliquias que vuelan al contador.
 const PRESTIGE_WHITE: Color = Color(1.0, 1.0, 1.0)
 const PRESTIGE_DARK: Color = Color(0.08, 0.07, 0.12)
@@ -92,6 +96,7 @@ var _tree_button: Button
 var _book: AchievementBook
 var _book_button: Button
 var _toast: AchievementToast
+var _celebration: AchievementCelebration
 var _pick_card: PickCard
 var _ability_card: AbilityCard
 ## El relleno del botón de la Dinamita: sube a medida que recarga.
@@ -195,6 +200,9 @@ func _ready() -> void:
 	add_child(_options)
 	_options.opened.connect(_music.set_options_open.bind(true))
 	_options.closed.connect(_music.set_options_open.bind(false))
+	# El festejo de los logros: encima también de Opciones (se puede conseguir uno mirando los Créditos).
+	_celebration = AchievementCelebration.new()
+	add_child(_celebration)
 	# Efectos de pantalla completa (destello del legendario): encima de todo, debajo del cartel.
 	_screen_fx = ScreenFx.new()
 	add_child(_screen_fx)
@@ -209,7 +217,8 @@ func _ready() -> void:
 	# El cartel va último entre los hijos: se dibuja encima de todo (también del panel de debug).
 	_modal = Modal.new()
 	add_child(_modal)
-	_toast.setup(%HudPanel, func() -> bool: return _modal.visible)
+	_toast.setup(%HudPanel, func() -> bool: return _modal.visible or _prestiging)
+	_toast.announced.connect(_celebrate_achievements)
 	Economy.achievements_unlocked.connect(_on_achievements_unlocked)
 
 	Economy.gold_changed.connect(_mark_dirty.unbind(1))
@@ -622,6 +631,7 @@ func _build_achievements() -> void:
 	add_child(_toast)
 	_toast.pressed.connect(func() -> void:
 		_toast.dismiss()
+		_celebration.dismiss()
 		_loot_panel.close()
 		_relics_panel.close()
 		_tree_view.close()
@@ -638,6 +648,15 @@ func _build_achievements() -> void:
 	var box: Node = _prestige_button.get_parent()
 	box.add_child(_book_button)
 	box.move_child(_book_button, _prestige_button.get_index())
+
+
+func _celebrate_achievements(ids: Array) -> void:
+	_celebration.play(ids.size(), str(Economy.achievements.entry(ids[0]).get("name", "")), Settings.reduce_effects)
+	Audio.play_sfx("achievement")
+	if Settings.reduce_effects:
+		return
+	_screen_fx.flash(ACHIEVEMENT_FLASH, SPECIAL_FLASH_FADE)
+	_screen_fx.hit_stop(ACHIEVEMENT_PAUSE, SPECIAL_SLOW)
 
 
 func _refresh_book_button() -> void:
@@ -726,6 +745,9 @@ func _confirm_prestige() -> void:
 	_prestiging = false
 	_music.end_prestige()
 	_mark_dirty()
+	# Con las reliquias en la mano, directo al árbol a gastarlas.
+	if Economy.has_tree():
+		_tree_view.open()
 
 
 ## Las reliquias ganadas (hasta MAX_FLYING_RELICS figuras) vuelan al contador; cada una que llega lo sube. Si se
@@ -806,6 +828,7 @@ func _on_save_imported() -> void:
 	_tree_view.close()
 	_book.close()
 	_toast.dismiss()
+	_celebration.dismiss()
 	_refresh()
 	_show_pending_notice()
 
