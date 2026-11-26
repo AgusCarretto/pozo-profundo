@@ -1,4 +1,4 @@
-extends "res://core/economy.gd"
+extends "res://tools/tree_sim/economy_v06.gd"
 ## SOLO PARA SIMULAR (v0.7): el Economy real con los efectos del árbol de reliquias encima. No lo usa el juego.
 ##
 ## Las reliquias son los puntos que se gastan en el árbol. `relics` es el total ganado en la historia (de él sale un
