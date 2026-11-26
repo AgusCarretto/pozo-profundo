@@ -26,6 +26,7 @@ func _initialize() -> void:
 	await _test_tap_selects_and_buys()
 	await _test_drag_pans_without_buying()
 	await _test_what_each_state_says()
+	await _test_icons_and_badges()
 	await _test_branches_are_told_apart()
 	await _test_return_target_is_visible()
 	await _test_tap_cap_in_the_game()
@@ -218,13 +219,62 @@ func _test_what_each_state_says() -> void:
 			pass
 	_tree.call("select", "f_furia")
 	await _frames()
-	_check(keystone.visible and not keystone.disabled, "piedra angular comprada: se puede prender y apagar en la superficie")
+	_check(keystone.visible and not keystone.disabled, "piedra angular comprada: se puede prender y apagar")
+	var pending: Control = _part("f_furia", "Pending")
 	await _tap(keystone)
-	_check(not _economy.relic_tree.active_keystones.has("f_furia"), "el toque la apaga")
+	_check(not _economy.relic_tree.active_keystones.has("f_furia"), "en la superficie el toque la apaga ya")
+	_check(not pending.visible, "sin nada pendiente")
 	_check(keystone.size.y >= TOUCH_MIN - 0.5, "y su botón mide 96 o más")
 	_economy.hit()
 	_tree.call("select", "f_furia")
-	_check(keystone.disabled, "ya empezada la bajada no se cambia")
+	await _tap(keystone)
+	_check(not _economy.relic_tree.active_keystones.has("f_furia"), "ya empezada la bajada no cambia todavía")
+	_check(pending.visible and str(pending.get("text")).replace("\n", " ") == "Activa desde la próxima bajada", "la estrella lo dice (%s)" % str(pending.get("text")))
+	_check(info.text.contains("Activa desde la próxima bajada"), "y el panel también (%s)" % info.text)
+	await _tap(keystone)
+	_check_eq(_economy.keystone_pending("f_furia"), 0, "otro toque cancela el cambio")
+	_check(not pending.visible, "y se va el aviso")
+	_economy.relic_tree.set_keystone("f_furia", true)
+	_tree.call("select", "f_furia")
+	await _tap(keystone)
+	_check(_economy.relic_tree.active_keystones.has("f_furia"), "una activa tampoco cambia a mitad de bajada")
+	_check(str(pending.get("text")).replace("\n", " ") == "Se apaga en la próxima bajada", "y avisa que se apaga (%s)" % str(pending.get("text")))
+	var over: Array[String] = []
+	var balloon: Rect2 = pending.get_global_rect()
+	for id: String in _economy.relic_tree.ids():
+		var star: Control = _tree.call("star_button", id)
+		if id != "f_furia" and star.get_global_rect().intersects(balloon):
+			over.append(id)
+	_check(over.is_empty(), "el aviso no tapa otra estrella (%s)" % str(over))
+	(_tree.find_child("CloseTree", true, false) as Button).pressed.emit()
+	await _frames()
+
+
+func _part(id: String, node_name: String) -> Control:
+	return (_tree.call("star_button", id) as Control).find_child(node_name, true, false) as Control
+
+
+func _test_icons_and_badges() -> void:
+	_section("Íconos y globitos de nivel")
+	_economy.reset()
+	_economy.resets = 1
+	_economy.grant_relics(20)
+	await _frames()
+	await _open_tree()
+	var icon: TextureRect = _part("core", "Icon") as TextureRect
+	_check(icon.visible and icon.texture.resource_path.ends_with("stars/core.png"), "el Corazón disponible muestra su ícono")
+	_check(not _part("core", "Badge").visible, "con un solo nivel no hay globito")
+	_check(not _part("f_brazo", "Icon").visible, "una oculta no muestra el suyo")
+	_economy.buy_star("core")
+	_economy.buy_star("f_brazo")
+	_economy.buy_star("f_brazo")
+	await _frames()
+	var badge: Control = _part("f_brazo", "Badge")
+	_check(badge.visible and badge.get("text") == "2/5", "el nivel va en un globito (%s)" % str(badge.get("text")))
+	var star: Control = _tree.call("star_button", "f_brazo")
+	var center: Vector2 = star.get_global_rect().get_center()
+	_check(badge.get_global_rect().position.x > center.x and badge.get_global_rect().position.y > center.y, "abajo a la derecha de la estrella")
+	_check(not badge.get_global_rect().intersects((_part("f_brazo", "Icon")).get_global_rect().grow(-8.0)), "sin tapar el ícono")
 	(_tree.find_child("CloseTree", true, false) as Button).pressed.emit()
 	await _frames()
 

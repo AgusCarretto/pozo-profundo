@@ -233,6 +233,9 @@ func _build_stars() -> void:
 		var star: TreeStar = TreeStar.new()
 		star.setup(id, str(branch.get("shape", "circle")), COLORS.get(str(branch.get("color", "")), Palette.FROST), Economy.relic_tree.is_keystone(id))
 		star.position = _at(data) - star.custom_minimum_size * 0.5
+		# El aviso de cambio pendiente va del lado donde no está la estrella de la que cuelga.
+		star.balloon_above = (data.get("from", []) as Array).any(func(parent: Variant) -> bool:
+			return _at(Economy.relic_tree.star(str(parent))).y > _at(data).y)
 		star.pressed.connect(_on_star_pressed.bind(id))
 		_canvas.add_child(star)
 		_stars[id] = star
@@ -294,7 +297,7 @@ func _refresh() -> void:
 	_available_label.text = "1 reliquia para gastar" if available == 1 else "%d reliquias para gastar" % available
 	for id: String in _stars:
 		var star: TreeStar = _stars[id]
-		star.show_state(Economy.star_state(id), Economy.relic_tree.level(id), Economy.relic_tree.max_level(id), id == selected)
+		star.show_state(Economy.star_state(id), Economy.relic_tree.level(id), Economy.relic_tree.max_level(id), id == selected, Economy.keystone_pending(id))
 	_canvas.queue_redraw()
 	_refresh_detail()
 
@@ -335,15 +338,20 @@ func _refresh_detail() -> void:
 		var cost: int = tree.next_cost(selected)
 		_show_price("Comprar", "1 reliquia" if cost == 1 else "%d reliquias" % cost, Economy.can_buy_star(selected))
 	if tree.is_keystone(selected) and level > 0:
-		var active: bool = tree.active_keystones.has(selected)
+		var chosen: bool = tree.planned_keystones.has(selected)
+		var pending: int = Economy.keystone_pending(selected)
 		_keystone_button.visible = true
-		_keystone_button.text = "Activa\ntocá para apagar" if active else "Apagada\ntocá para prender"
-		var full: bool = not active and tree.active_keystones.size() >= tree.max_keystones()
-		_keystone_button.disabled = full or not Economy.at_surface or Economy.resets < 1
+		if pending != 0:
+			_keystone_button.text = "Cambio anotado\ntocá para cancelar"
+			lines.append("Activa desde la próxima bajada." if pending > 0 else "Se apaga en la próxima bajada.")
+		else:
+			_keystone_button.text = "Activa\ntocá para apagar" if chosen else "Apagada\ntocá para prender"
+		var full: bool = not chosen and tree.planned_keystones.size() >= tree.max_keystones()
+		_keystone_button.disabled = full
 		if full:
-			lines.append("Ya hay %d piedras activas: apagá otra primero." % tree.max_keystones())
-		elif not Economy.at_surface:
-			lines.append("Se cambian recién vuelto a la superficie.")
+			lines.append("Ya hay %d piedras elegidas: apagá otra primero." % tree.max_keystones())
+		elif pending == 0 and not Economy.at_surface:
+			lines.append("Los cambios valen desde la próxima bajada.")
 	_text_label.text = "\n".join(lines)
 
 
@@ -383,6 +391,6 @@ func _on_buy() -> void:
 
 
 func _on_keystone() -> void:
-	if Economy.set_keystone(selected, not Economy.relic_tree.active_keystones.has(selected)):
+	if Economy.set_keystone(selected, not Economy.relic_tree.planned_keystones.has(selected)):
 		Audio.play_sfx("toggle")
 		_refresh()
