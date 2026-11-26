@@ -341,7 +341,7 @@ func _test_real_balance_file() -> void:
 	e.owned[0] = 10
 	e.loot_dropped.connect(func(_rarity: int, _amount: float) -> void: _fail_loot())
 	e.apply_offline(100.0 * HOUR)
-	_check_near(e.gold, 72900.0, "100 h fuera acreditan 8 h (al 25% desde el minuto 2)")
+	_check_near(e.gold, 15540.0, "100 h fuera acreditan 8 h (al 5% desde el minuto 2)")
 
 
 func _fail_loot() -> void:
@@ -375,7 +375,7 @@ func _test_boot_from_a_real_save() -> void:
 	var booted: EconomyScript = EconomyScript.new()
 	root.add_child(booted) # corre _ready(): carga balance, se registra en Save y acredita el offline
 	_nodes.append(booted)
-	_check(booted.gold >= 100.0 + 18900.0 and booted.gold < 100.0 + 18900.0 + 100.0, "100 de oro + 2 h afuera = ~19.000 (tiene %s)" % str(booted.gold))
+	_check(booted.gold >= 100.0 + 4740.0 and booted.gold < 100.0 + 4740.0 + 100.0, "100 de oro + 2 h afuera = ~4.840 (tiene %s)" % str(booted.gold))
 	_check_eq(booted.pending_offline_report.get("capped"), false, "hay aviso pendiente, sin tope")
 	_check(absf(float(booted.pending_offline_report.get("seconds", 0.0)) - 7200.0) < 5.0, "de ~2 h (%s s)" % str(booted.pending_offline_report.get("seconds")))
 	_check_eq(booted.owned_count(0), 10, "y el resto del save se cargó")

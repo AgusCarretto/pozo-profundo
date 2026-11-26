@@ -320,7 +320,8 @@ func _test_real_balance_file() -> void:
 	e.run_gold = 8.6e8 # ~400 m
 	_check_eq(e.prestige_relics(), 6, "a 400 m: 6")
 	_check_eq(e.prestige(), 6, "prestige() las entrega")
-	_check_near(e.relic_multiplier(), 2.5, "x2.5")
+	_check_near(e.relic_multiplier(), 1.36, "con árbol las reliquias son moneda: 6 ganadas dan +6% cada una")
+	_check_eq(e.available_relics(), 6, "y quedan para gastar")
 	var old: EconomyScript = EconomyScript.new()
 	_nodes.append(old)
 	old.load_balance_file("res://data/balance.json")

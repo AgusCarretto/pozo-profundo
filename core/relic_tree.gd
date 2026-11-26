@@ -236,6 +236,12 @@ func max_keystones() -> int:
 
 # --- Efectos ---------------------------------------------------------------------
 
+## Si hay algún efecto de este tipo surtiendo efecto.
+func has_effect(type: String) -> bool:
+	_recompute()
+	return _add.has(type) or _mul.has(type) or _set.has(type)
+
+
 func add(type: String) -> float:
 	_recompute()
 	return float(_add.get(type, 0.0))

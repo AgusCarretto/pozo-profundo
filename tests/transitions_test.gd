@@ -124,7 +124,7 @@ func _test_offline_welcome() -> void:
 	root.get_node("Audio").sfx_played.connect(record)
 	_economy.reset()
 	_economy.owned[0] = 10
-	_economy.apply_offline(11520.0) # 3 h 12 min con 10 oro/s -> 29.700 de oro (al 25% desde el minuto 2)
+	_economy.apply_offline(11520.0) # 3 h 12 min con 10 oro/s -> 6.900 de oro (al 5% desde el minuto 2)
 	await process_frame
 	_check(modal.visible, "aparece el aviso de vuelta")
 	var counter: Label = modal.get("counter_label") as Label
@@ -134,7 +134,7 @@ func _test_offline_welcome() -> void:
 	_check(heard.has("coins"), "que suena")
 	if counter == null or coins == null:
 		return
-	_check(counter.text != "+29.7K", "el contador arranca de abajo (%s)" % counter.text)
+	_check(counter.text != "+6.90K", "el contador arranca de abajo (%s)" % counter.text)
 	var panel: Control = modal.find_children("*", "PanelContainer", true, false)[0] as Control
 	_check(coins.get_index() < panel.get_parent().get_index(), "caen detrás del cartel (se lee igual)")
 	var seen: Dictionary = {}
@@ -143,7 +143,7 @@ func _test_offline_welcome() -> void:
 		await process_frame
 		seen[counter.text] = true
 	_check(seen.size() >= 4, "va subiendo de a poco (%d valores)" % seen.size())
-	_check_eq(counter.text, "+29.7K", "y termina en lo que juntó la cuadrilla")
+	_check_eq(counter.text, "+6.90K", "y termina en lo que juntó la cuadrilla")
 	(modal.get("confirm_button") as Button).pressed.emit()
 	await process_frame
 	_check(not modal.visible, "se cierra con el botón")

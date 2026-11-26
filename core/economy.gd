@@ -4,6 +4,10 @@ extends Node
 ## Código reutilizable entre juegos: no debe depender de nada de res://game/.
 ## Los números de balance se leen de res://data/ (load_balance_file), nunca se escriben acá.
 ## Las fórmulas viven en economy_math.gd; el formato de números en number_format.gd.
+##
+## Con la sección "tree" (árbol de reliquias, ver relic_tree.gd; en el balance se nombra con "tree_file") las
+## reliquias son una moneda: `relics` son las ganadas en toda la historia (dan un bonus pasivo), lo gastado lo
+## lleva el árbol y la profundidad para volver se corre. Sin esa sección todo funciona como antes del árbol.
 
 ## El oro cambió (golpe, compra, producción pasiva, carga de partida).
 signal gold_changed(gold: float)
@@ -26,21 +30,29 @@ signal ability_used(amount: float)
 ## (segundos acreditados, oro ganado y si se cortó por el tope). Es el mismo dato que
 ## queda en `pending_offline_report` hasta que la UI llame a dismiss_offline_report().
 signal offline_progress(report: Dictionary)
+## Cambió el árbol de reliquias o lo que se le puede dar (una compra, una piedra angular, reliquias de afuera).
+signal tree_changed
 
 enum BuyMode { X1, X10, MAX }
 
 const EconomyMath := preload("res://core/economy_math.gd")
+const RelicTree := preload("res://core/relic_tree.gd")
+const TapLimiter := preload("res://core/tap_limiter.gd")
 
 const DEFAULT_BALANCE_PATH: String = "res://data/balance.json"
 const SAVE_SECTION: String = "economy"
 ## Versión de lo que se guarda. Una partida sin este dato se jugó con las reglas de la sección "legacy".
 const BALANCE_VERSION: int = 2
+## Lo mismo cuando el balance tiene árbol de reliquias.
+const TREE_VERSION: int = 3
 const SECONDS_PER_HOUR: float = 3600.0
 const X10_COUNT: int = 10
 ## Topes para datos de partida dañados o editados a mano (evitan desbordes a infinito).
 const MAX_LOADED_OWNED: float = 1000000.0
 const MAX_LOADED_PICK_LEVEL: float = 300.0
 const MAX_LOADED_RELICS: float = 1000000.0
+const MAX_LOADED_COUNTER: float = 10000000.0
+const MAX_LOADED_METERS: float = 100000.0
 
 var gold: float = 0.0
 ## Unidades compradas de cada generador (mismo orden que en el balance).
@@ -64,6 +76,37 @@ var last_hit_critical: bool = false
 var pending_migration_report: Dictionary = {}
 ## Azar del botín y de los críticos. Los tests le fijan la semilla para repetir una tirada.
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+
+## Árbol de reliquias; null si el balance no tiene "tree".
+var relic_tree: RelicTree = null
+## Reliquias sacadas de bajadas (no las de cofres ni fragmentos): de ellas sale cuánto se corre la meta.
+var claimed_relics: int = 0
+## Fragmentos de reliquia juntados en la historia.
+var fragments: int = 0
+## Veces que se volvió a la superficie y profundidad máxima de las bajadas anteriores (abren anillos del árbol).
+var resets: int = 0
+var record_depth: float = 0.0
+## Metros que se corrió la meta de volver en la bajada en curso (se fija al empezarla).
+var run_shift: float = 0.0
+## Recién llegado a la superficie (todavía no golpeaste ni compraste): se pueden cambiar las piedras angulares.
+var at_surface: bool = true
+## Aviso de que la partida pasó al árbol de reliquias y el jugador todavía no lo vio ({} = ninguno): {relics}.
+var pending_tree_report: Dictionary = {}
+## Reliquias que dio el último cofre abierto.
+var last_chest_relics: int = 0
+## Reloj monotónico en segundos para lo que depende del ritmo (tope de golpes, racha). Los tests lo reemplazan.
+var clock: Callable = func() -> float: return Time.get_ticks_usec() / 1000000.0
+
+## Con qué terminó la bajada anterior: {owned, gps, pick, ability}. Lo usan las estrellas que arrastran.
+var _last_descent: Dictionary = {}
+## Lo que esas estrellas ya dieron en la bajada en curso, para sumar solo la diferencia al comprar otra.
+var _applied_start: Dictionary = {}
+var _tap_limiter: TapLimiter = TapLimiter.new()
+var _frenzied: bool = false
+## Mientras se acredita una ausencia (la racha y el bonus por jugar activo no cuentan).
+var _away: bool = false
+var _last_hit_time: float = -1.0e12
+var _streak_since: float = 0.0
 
 ## Multiplicador global de oro: bioma x (1 + 0.25 x reliquias).
 ## Se calcula en cada lectura; no se asigna.
@@ -143,6 +186,12 @@ func load_balance_file(path: String) -> bool:
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
 	if not (parsed is Dictionary):
 		return _fail("%s no es un JSON válido" % path)
+	var tree_file: String = str((parsed as Dictionary).get("tree_file", ""))
+	if tree_file != "":
+		var tree_data: Variant = JSON.parse_string(FileAccess.get_file_as_string(tree_file)) if FileAccess.file_exists(tree_file) else null
+		if not (tree_data is Dictionary):
+			return _fail("no se pudo leer el árbol %s" % tree_file)
+		(parsed as Dictionary)["tree"] = tree_data
 	return load_balance(parsed)
 
 
@@ -216,7 +265,18 @@ func load_balance(balance: Dictionary) -> bool:
 	if parsed_frenzy == null:
 		return false
 
+	var parsed_tree: RelicTree = null
+	if balance.has("tree"):
+		parsed_tree = RelicTree.new()
+		if not (balance["tree"] is Dictionary) or not parsed_tree.load_data(balance["tree"]):
+			return _fail("tree: %s" % parsed_tree.last_error)
+	var parsed_tap: Variant = _read_numbers(balance, "tap", ["max_hits", "window_seconds"])
+	if parsed_tap == null:
+		return false
+
 	last_error = ""
+	relic_tree = parsed_tree
+	_tap_limiter.configure(parsed_tap)
 	_cost_growth = growth
 	_generators = parsed_generators
 	_pick = parsed_pick
@@ -314,14 +374,15 @@ func ability_seconds(level: int) -> float:
 
 
 func ability_cooldown() -> float:
-	return float(_ability.get("cooldown", 0.0))
+	return float(_ability.get("cooldown", 0.0)) * (1.0 - _tree_add("cooldown_cut")) * _tree_mul("cooldown_mul")
 
 
 ## Lo que pagaría usarla ahora: lo que más sea entre sus segundos de producción y sus golpes. 0 sin comprarla.
 func ability_reward() -> float:
 	if not has_ability() or ability_level <= 0:
 		return 0.0
-	return EconomyMath.chest_reward(gold_per_second(), hit_value(), ability_seconds(ability_level), _ability["hits"])
+	var amount: float = EconomyMath.chest_reward(gold_per_second(), hit_value(), ability_seconds(ability_level), _ability["hits"])
+	return amount * (1.0 + _tree_add("ability")) * _tree_mul("ability_mul")
 
 
 func ability_ready() -> bool:
@@ -333,17 +394,22 @@ func upgrade_ability() -> bool:
 		return false
 	gold -= ability_cost()
 	ability_level += 1
+	at_surface = false
 	ability_upgraded.emit(ability_level)
 	gold_changed.emit(gold)
 	return true
 
 
-## Usa la habilidad si está lista y devuelve el oro que dio (0 si no estaba). No es un golpe: sin crítico ni cofre.
+## Usa la habilidad si está lista y devuelve el oro que dio (0 si no estaba). No es un golpe: sin cofre, y solo es
+## crítico si el árbol lo permite.
 func use_ability() -> float:
 	if not ability_ready():
 		return 0.0
+	at_surface = false
 	var amount: float = ability_reward()
-	_earn(amount)
+	if _tree_add("ability_crit") > 0.0 and rng.randf() < crit_chance():
+		amount *= crit_multiplier()
+	amount = _earn(amount)
 	ability_cooldown_left = ability_cooldown()
 	ability_used.emit(amount)
 	gold_changed.emit(gold)
@@ -421,19 +487,20 @@ func biome_multiplier() -> float:
 
 ## Probabilidad (0 a 1) de que un golpe suelte un cofre.
 func loot_chance_per_hit() -> float:
-	return _loot_hit_chance
+	return minf(_loot_hit_chance * (1.0 + _tree_add("chest_chance")) * _loot_rate(), 1.0)
 
 
 ## Probabilidad (0 a 1) por segundo de que la cuadrilla encuentre un cofre (solo si produce).
 func loot_chance_per_second() -> float:
-	return _loot_second_chance
+	return minf(_loot_second_chance * (1.0 + _tree_add("chest_chance")) * (1.0 + _tree_add("passive_chest")) * _loot_rate(), 1.0)
 
 
 ## Las rarezas con su probabilidad real (peso / suma de pesos) y su premio, para mostrarlas al jugador:
 ## [{id, name, chance, seconds, hits, relics}] en el orden del balance.
 func loot_table() -> Array[Dictionary]:
+	var weights: Array[float] = _effective_weights()
 	var total: float = 0.0
-	for weight: float in _rarity_weights:
+	for weight: float in weights:
 		total += weight
 	var table: Array[Dictionary] = []
 	for index: int in range(_rarities.size()):
@@ -441,7 +508,7 @@ func loot_table() -> Array[Dictionary]:
 		table.append({
 			"id": rarity["id"],
 			"name": rarity["name"],
-			"chance": _rarity_weights[index] / total,
+			"chance": weights[index] / total,
 			"seconds": rarity["seconds"],
 			"hits": rarity["hits"],
 			"relics": rarity["relics"],
@@ -454,7 +521,38 @@ func loot_table() -> Array[Dictionary]:
 func loot_reward(rarity: int) -> float:
 	if rarity < 0 or rarity >= _rarities.size():
 		return 0.0
-	return EconomyMath.chest_reward(gold_per_second(), hit_value(), _rarities[rarity]["seconds"], _rarities[rarity]["hits"])
+	var amount: float = EconomyMath.chest_reward(gold_per_second(), hit_value(), _rarities[rarity]["seconds"], _rarities[rarity]["hits"])
+	return amount * (1.0 + _tree_add("chest_gold"))
+
+
+## Los pesos de las rarezas con el árbol encima: lo que ganan las que no son la primera (la común) sale de ella, así
+## subir una rareza no diluye a las demás. "no_common" la saca.
+func _effective_weights() -> Array[float]:
+	var weights: Array[float] = _rarity_weights.duplicate()
+	if relic_tree == null or weights.is_empty():
+		return weights
+	var gained: float = 0.0
+	for index: int in range(1, weights.size()):
+		var extra: float = weights[index] * _tree_add("weight_" + str(_rarities[index]["id"]))
+		weights[index] += extra
+		gained += extra
+	weights[0] = 0.0 if relic_tree.has_effect("no_common") else maxf(weights[0] - gained, 0.0)
+	return weights
+
+
+## Cuánto más (o menos) seguido salen cofres cuando "no_common" saca los comunes: cada una de las otras rarezas sale
+## ese tanto de veces más seguido que antes.
+func _loot_rate() -> float:
+	if relic_tree == null or not relic_tree.has_effect("no_common"):
+		return 1.0
+	var total: float = 0.0
+	for weight: float in _rarity_weights:
+		total += weight
+	var rest: float = 0.0
+	for weight: float in _effective_weights():
+		rest += weight
+	# El total con los comunes es el mismo de siempre: los pesos extra salieron de ellos.
+	return rest * relic_tree.mul("no_common") / total
 
 
 ## Abre un cofre de la rareza `rarity` (índice de loot_table()): el oro entra en el acto y, si la rareza las da,
@@ -468,22 +566,33 @@ func drop_loot(rarity: int) -> void:
 
 ## El cofre sin avisar gold_changed: el golpe y el tick lo avisan una sola vez, al final.
 func _open_chest(rarity: int) -> void:
-	var amount: float = loot_reward(rarity)
-	_earn(amount)
-	# Después de calcular el oro: la reliquia nueva multiplica de acá en adelante.
-	relics = mini(relics + int(_rarities[rarity]["relics"]), int(MAX_LOADED_RELICS))
-	loot_dropped.emit(rarity, amount)
+	var double_chance: float = _tree_add("double_chest")
+	var times: int = 2 if double_chance > 0.0 and rng.randf() < double_chance else 1
+	for i: int in range(times):
+		var amount: float = _earn(loot_reward(rarity))
+		# Después de calcular el oro: la reliquia nueva multiplica de acá en adelante.
+		var given: int = int(_rarities[rarity]["relics"])
+		if given > 0:
+			var extra: float = _tree_add("legendary_relics")
+			if extra > 0.0:
+				given += int(extra) + (1 if rng.randf() < extra - int(extra) else 0)
+		last_chest_relics = given
+		relics = mini(relics + given, int(MAX_LOADED_RELICS))
+		loot_dropped.emit(rarity, amount)
 
 
 # --- Reliquias y prestigio ---------------------------------------------------
 
-## Multiplicador de oro de las reliquias que tenés (x1 si el balance no tiene prestigio).
+## Multiplicador de oro de las reliquias que tenés (x1 si el balance no tiene prestigio). Con árbol incluye además
+## lo que multiplica a todo el oro: las estrellas y la racha.
 func relic_multiplier() -> float:
-	return relic_multiplier_for(relics)
+	return relic_multiplier_for(relics) * (1.0 + streak_bonus())
 
 
 ## Multiplicador que darían `count` reliquias (para mostrar cómo quedaría tras una subida).
 func relic_multiplier_for(count: int) -> float:
+	if relic_tree != null:
+		return relic_tree.history_multiplier(count) * (1.0 + relic_tree.add("gold"))
 	if _prestige.is_empty():
 		return 1.0
 	return EconomyMath.relic_multiplier(count, _prestige["bonus_per_relic"])
@@ -499,11 +608,21 @@ func prestige_min_depth() -> float:
 	return _prestige.get("min_depth", 0.0)
 
 
-## Reliquias que daría volver a la superficie ahora: 0 si todavía no llegaste a la profundidad mínima.
+## Profundidad desde la que se puede volver en la bajada en curso: la mínima más lo que se corrió la meta.
+func return_depth() -> float:
+	return prestige_min_depth() + run_shift
+
+
+## Reliquias que daría volver a la superficie ahora: 0 si todavía no llegaste a la meta. La fórmula se mide desde la
+## meta corrida y, con árbol, bajar a una meta más honda paga más.
 func prestige_relics() -> int:
 	if _prestige.is_empty():
 		return 0
-	return EconomyMath.relics_for_depth(depth(), _prestige["min_depth"], _prestige["depth_offset"], _prestige["depth_step"], _prestige["exponent"])
+	var gained: int = EconomyMath.relics_for_depth(depth() - run_shift, _prestige["min_depth"], _prestige["depth_offset"], _prestige["depth_step"], _prestige["exponent"])
+	var every: float = 0.0 if relic_tree == null else relic_tree.return_extra_every()
+	if gained <= 0 or every <= 0.0:
+		return gained
+	return gained + int(run_shift / every)
 
 
 func can_prestige() -> bool:
@@ -517,6 +636,12 @@ func prestige() -> int:
 	var gained: int = prestige_relics()
 	if gained <= 0:
 		return 0
+	if relic_tree != null:
+		# Antes de reiniciar: con qué termina esta bajada (para las estrellas que arrastran) y los hitos.
+		_last_descent = { "owned": owned.duplicate(), "gps": gold_per_second(), "pick": pick_level, "ability": ability_level }
+		record_depth = record_depth_now()
+		resets += 1
+		claimed_relics = mini(claimed_relics + gained, int(MAX_LOADED_RELICS))
 	relics = mini(relics + gained, int(MAX_LOADED_RELICS))
 	_max_biome = max_biome()
 	_revealed = _revealed_count()
@@ -525,13 +650,158 @@ func prestige() -> int:
 	return gained
 
 
+# --- Árbol de reliquias --------------------------------------------------------
+
+func has_tree() -> bool:
+	return relic_tree != null
+
+
+## Reliquias para gastar (sin árbol, todas las que tenés).
+func available_relics() -> int:
+	if relic_tree == null:
+		return relics
+	return maxi(relics - relic_tree.spent(), 0)
+
+
+## La profundidad máxima contando la bajada en curso (abre los anillos).
+func record_depth_now() -> float:
+	return maxf(record_depth, depth())
+
+
+func star_state(id: String) -> int:
+	if relic_tree == null:
+		return RelicTree.State.HIDDEN
+	return relic_tree.state(id, record_depth_now(), resets)
+
+
+func can_buy_star(id: String) -> bool:
+	return relic_tree != null and relic_tree.can_buy(id, available_relics(), record_depth_now(), resets)
+
+
+func buy_star(id: String) -> bool:
+	if relic_tree == null or not relic_tree.buy(id, available_relics(), record_depth_now(), resets):
+		return false
+	# Recién vuelto: las estrellas que arrastran valen ya para esta bajada.
+	if at_surface:
+		_apply_start_bonuses()
+	tree_changed.emit()
+	gold_changed.emit(gold)
+	return true
+
+
+## Las piedras angulares se cambian solo en la superficie, después de haber vuelto alguna vez.
+func set_keystone(id: String, active: bool) -> bool:
+	if relic_tree == null or not at_surface or resets < 1:
+		return false
+	if not relic_tree.set_keystone(id, active):
+		return false
+	tree_changed.emit()
+	gold_changed.emit(gold)
+	return true
+
+
+func dismiss_tree_report() -> void:
+	pending_tree_report = {}
+
+
+## Fragmentos de reliquia: al juntar los que pide el árbol se convierten solos en una.
+func add_fragments(count: int) -> void:
+	if relic_tree == null or count <= 0:
+		return
+	var each: int = relic_tree.fragments_per_relic()
+	var before: int = fragments
+	fragments = mini(fragments + count, int(MAX_LOADED_COUNTER))
+	relics = mini(relics + fragments / each - before / each, int(MAX_LOADED_RELICS))
+	tree_changed.emit()
+	gold_changed.emit(gold)
+
+
+## Reliquias de afuera (herramientas de prueba): no corren la meta.
+func grant_relics(count: int) -> void:
+	if count <= 0:
+		return
+	relics = mini(relics + count, int(MAX_LOADED_RELICS))
+	tree_changed.emit()
+	gold_changed.emit(gold)
+
+
+## Cumple los hitos que abren los anillos (herramientas de prueba).
+func open_rings() -> void:
+	if relic_tree == null:
+		return
+	for ring: int in [2, 3]:
+		var gate: Dictionary = relic_tree.ring_requirement(ring)
+		resets = maxi(resets, int(gate.get("resets", 0)))
+		record_depth = maxf(record_depth, float(gate.get("depth", 0.0)))
+	tree_changed.emit()
+
+
+## Segundos desde el último golpe.
+func _since_hit() -> float:
+	return float(clock.call()) - _last_hit_time
+
+
+## Racha: un escalón por cada minuto entero golpeando sin parar, hasta el tope. No corre mientras no estás.
+func streak_bonus() -> float:
+	if relic_tree == null or _away or not relic_tree.has_effect("streak_cap") or _since_hit() >= relic_tree.streak_break_seconds():
+		return 0.0
+	var minutes: float = floorf((float(clock.call()) - _streak_since) / 60.0)
+	return minf(minutes * relic_tree.value("streak_rate", 0.0), relic_tree.add("streak_cap"))
+
+
+## Lo que multiplica a la cuadrilla según estés golpeando o no.
+func _crew_stance() -> float:
+	if relic_tree == null:
+		return 1.0
+	var working: bool = not _away and _since_hit() < relic_tree.working_seconds()
+	return relic_tree.mul("crew_active" if working else "crew_idle")
+
+
+## El medidor de frenesí vive en quien mide el ritmo; acá solo importa si está prendido (algunas estrellas lo usan).
+func set_frenzy(active: bool) -> void:
+	_frenzied = active
+
+
+## Lo que se tiene al empezar una bajada gracias a la anterior: {gold, owned, pick, ability}.
+func _start_bonuses() -> Dictionary:
+	var crew: Array[int] = []
+	crew.resize(owned.size())
+	crew.fill(0)
+	var result: Dictionary = { "gold": 0.0, "owned": crew, "pick": 0, "ability": 0 }
+	if relic_tree == null or _last_descent.is_empty():
+		return result
+	result["gold"] = relic_tree.value("carry_gold_seconds", 0.0) * float(_last_descent.get("gps", 0.0))
+	var before: Array = _last_descent.get("owned", [])
+	for index: int in range(mini(crew.size(), before.size())):
+		crew[index] = int(float(before[index]) * relic_tree.add("carry_crew"))
+	if relic_tree.add("keep_pick") > 0.0:
+		result["pick"] = int(_last_descent.get("pick", 0))
+	if relic_tree.add("keep_ability") > 0.0:
+		result["ability"] = int(_last_descent.get("ability", 0))
+	return result
+
+
+## Da lo que falte de los bonus de arranque: comprar una estrella en la superficie suma solo la diferencia. El oro es
+## para gastar y no cuenta para la profundidad.
+func _apply_start_bonuses() -> void:
+	var now: Dictionary = _start_bonuses()
+	var given_owned: Array = _applied_start.get("owned", [])
+	gold += float(now["gold"]) - float(_applied_start.get("gold", 0.0))
+	for index: int in range(owned.size()):
+		var had: int = int(given_owned[index]) if index < given_owned.size() else 0
+		owned[index] += int(now["owned"][index]) - had
+	pick_level = maxi(pick_level, int(now["pick"]))
+	ability_level = maxi(ability_level, mini(int(now["ability"]), ability_max_level()))
+	_applied_start = now
+
+
 # --- Botín (tirada) -----------------------------------------------------------
 
 ## Tira por un cofre con probabilidad `chance`. Si sale, sortea la rareza y lo abre.
 func _roll_loot(chance: float) -> void:
 	if _rarities.is_empty() or chance <= 0.0 or rng.randf() >= chance:
 		return
-	_open_chest(EconomyMath.pick_weighted(_rarity_weights, rng.randf()))
+	_open_chest(EconomyMath.pick_weighted(_effective_weights(), rng.randf()))
 
 
 # --- Estado ------------------------------------------------------------------
@@ -543,7 +813,17 @@ func reset() -> void:
 	_revealed = 1
 	pending_offline_report = {}
 	pending_migration_report = {}
+	pending_tree_report = {}
+	claimed_relics = 0
+	fragments = 0
+	resets = 0
+	record_depth = 0.0
+	_last_descent = {}
+	_tap_limiter.reset()
+	if relic_tree != null:
+		relic_tree.clear()
 	_reset_run()
+	tree_changed.emit()
 
 
 ## Reinicia solo la partida en curso: oro, oro ganado (profundidad), cuadrilla y pico. Las reliquias no se tocan.
@@ -555,6 +835,12 @@ func _reset_run() -> void:
 	ability_cooldown_left = 0.0
 	owned.resize(_generators.size())
 	owned.fill(0)
+	run_shift = 0.0 if relic_tree == null else relic_tree.shift_for(claimed_relics)
+	at_surface = true
+	_applied_start = {}
+	_last_hit_time = -1.0e12
+	_frenzied = false
+	_apply_start_bonuses()
 	gold_changed.emit(gold)
 
 
@@ -580,7 +866,7 @@ func gold_per_second() -> float:
 
 ## Cuánto multiplican los hitos que ya alcanzó el generador `index` (1 = ninguno).
 func milestone_multiplier(index: int) -> float:
-	return pow(_milestone_multiplier, milestone_tier(index))
+	return pow(milestone_step(), milestone_tier(index))
 
 
 ## Cuántos hitos alcanzó el generador `index` (0 = ninguno): la interfaz lo usa para su aspecto.
@@ -596,7 +882,9 @@ func milestone_tier(index: int) -> int:
 
 ## Por cuánto multiplica cada hito (2 = el doble). 1 si no hay hitos.
 func milestone_step() -> float:
-	return _milestone_multiplier
+	if relic_tree == null or _milestones.is_empty():
+		return _milestone_multiplier
+	return relic_tree.value("milestone_mult", _milestone_multiplier)
 
 
 ## Cantidad del próximo hito del generador `index`; 0 si ya no queda ninguno (o no hay hitos).
@@ -610,7 +898,20 @@ func next_milestone(index: int) -> int:
 
 
 func _base_output(index: int) -> float:
-	return owned[index] * float(_generators[index]["base_rate"]) * milestone_multiplier(index)
+	return owned[index] * float(_generators[index]["base_rate"]) * milestone_multiplier(index) * (1.0 + _tree_add("crew")) * _crew_stance()
+
+
+## Precio base del generador con los descuentos del árbol.
+func _base_cost(index: int) -> float:
+	return float(_generators[index]["base_cost"]) * (1.0 - _tree_add("discount"))
+
+
+func _tree_add(type: String) -> float:
+	return 0.0 if relic_tree == null else relic_tree.add(type)
+
+
+func _tree_mul(type: String) -> float:
+	return 1.0 if relic_tree == null else relic_tree.mul(type)
 
 
 ## Producción pasiva según un reloj monotónico (µs, p. ej. Time.get_ticks_usec()) y, de respaldo, la hora de
@@ -651,7 +952,7 @@ func tick(delta: float) -> void:
 	_earn(rate * delta)
 	# La chance por segundo es p: en un tick de `delta` segundos la chance es 1 - (1 - p)^delta,
 	# así un frame lento no tira menos cofres que varios rápidos.
-	_roll_loot(1.0 - pow(1.0 - _loot_second_chance, delta))
+	_roll_loot(1.0 - pow(1.0 - loot_chance_per_second(), delta))
 	gold_changed.emit(gold)
 
 
@@ -659,7 +960,10 @@ func tick(delta: float) -> void:
 
 ## Los umbrales del frenesí del balance (para core/frenzy_meter.gd); {} si el balance no tiene "frenzy".
 func frenzy_settings() -> Dictionary:
-	return _frenzy.duplicate()
+	var settings: Dictionary = _frenzy.duplicate()
+	if settings.has("hits_per_second"):
+		settings["hits_per_second"] = maxf(float(settings["hits_per_second"]) - _tree_add("frenzy_threshold"), 1.0)
+	return settings
 
 
 # --- Progreso offline ------------------------------------------------------------
@@ -668,12 +972,18 @@ func frenzy_settings() -> Dictionary:
 func offline_max_seconds() -> float:
 	if _offline.is_empty():
 		return 0.0
-	return float(_offline["max_hours"]) * SECONDS_PER_HOUR
+	var hours: float = float(_offline["max_hours"])
+	if relic_tree != null:
+		hours = relic_tree.value("offline_hours", hours)
+	return hours * SECONDS_PER_HOUR
 
 
 ## Cuánto rinde la cuadrilla mientras no estás (0.25 = 25%). 0 si el balance no tiene "offline".
 func offline_efficiency() -> float:
-	return _offline.get("efficiency", 0.0)
+	var efficiency: float = _offline.get("efficiency", 0.0)
+	if relic_tree != null:
+		efficiency = relic_tree.value("offline_eff", efficiency)
+	return efficiency
 
 
 ## Acredita lo que produjo la cuadrilla durante `elapsed` segundos de ausencia, hasta el tope: los primeros
@@ -687,10 +997,13 @@ func apply_offline(elapsed: float) -> Dictionary:
 	if _offline.is_empty():
 		return {}
 	var seconds: float = EconomyMath.offline_seconds(elapsed, offline_max_seconds())
-	var gained: float = gold_per_second() * EconomyMath.offline_paid_seconds(seconds, _offline["away_seconds"], _offline["efficiency"])
+	_away = true
+	var gained: float = gold_per_second() * EconomyMath.offline_paid_seconds(seconds, _offline["away_seconds"], offline_efficiency()) * (1.0 + _tree_add("offline_gain"))
 	if seconds <= 0.0 or gained <= 0.0:
+		_away = false
 		return {}
 	_earn(gained)
+	_away = false
 	var report: Dictionary = { "seconds": seconds, "gold": gained, "capped": elapsed > offline_max_seconds() }
 	gold_changed.emit(gold)
 	if elapsed >= _offline["away_seconds"]:
@@ -728,18 +1041,53 @@ func _queue_offline_notice(report: Dictionary) -> void:
 # --- Golpe y pico ------------------------------------------------------------
 
 func hit_value() -> float:
-	return EconomyMath.hit_value(pick_level, _pick["power_base"], multiplier, gold_per_second(), _pick["passive_share"])
+	var value: float = EconomyMath.hit_value(pick_level, _pick["power_base"], multiplier, gold_per_second(), float(_pick["passive_share"]) + _tree_add("hit_share"))
+	return value * (1.0 + _tree_add("hit")) * _tree_mul("hit_mul")
 
 
-## Un golpe a la roca, que puede salir crítico. Devuelve el oro ganado.
+func crit_chance() -> float:
+	if _crit.is_empty():
+		return 0.0
+	return (float(_crit["chance"]) + _tree_add("crit_chance")) * _tree_mul("crit_chance_mul")
+
+
+func crit_multiplier() -> float:
+	if _crit.is_empty():
+		return 1.0
+	return (float(_crit["multiplier"]) + _tree_add("crit_mult")) * _tree_mul("crit_mult_mul")
+
+
+## Un toque del jugador: un golpe, salvo que ya haya demasiados en el último segundo (balance "tap"). Devuelve el
+## oro ganado, o 0 si el toque no contó.
+func tap() -> float:
+	if not _tap_limiter.allow(float(clock.call())):
+		return 0.0
+	return hit()
+
+
+## Un golpe a la roca, que puede salir crítico. Devuelve el oro ganado. No mira el tope de golpes: eso es tap().
 func hit() -> float:
+	var now: float = clock.call()
+	if relic_tree != null:
+		if now - _last_hit_time >= relic_tree.streak_break_seconds():
+			_streak_since = now
+		_last_hit_time = now
+	at_surface = false
 	var amount: float = hit_value()
-	last_hit_critical = not _crit.is_empty() and _crit["chance"] > 0.0 and rng.randf() < _crit["chance"]
+	if _frenzied:
+		amount *= 1.0 + _tree_add("frenzy_hit")
+	var chance: float = crit_chance()
+	last_hit_critical = chance > 0.0 and rng.randf() < chance
 	if last_hit_critical:
-		amount *= float(_crit["multiplier"])
-	_earn(amount)
+		amount *= crit_multiplier()
+	var double_chance: float = _tree_add("double_hit")
+	if double_chance > 0.0 and rng.randf() < double_chance:
+		amount *= 2.0
+	amount = _earn(amount)
 	hit_landed.emit(amount)
-	_roll_loot(_loot_hit_chance)
+	_roll_loot(loot_chance_per_hit())
+	if last_hit_critical and _tree_add("crit_chest") > 0.0:
+		_roll_loot(_tree_add("crit_chest"))
 	gold_changed.emit(gold)
 	return amount
 
@@ -754,6 +1102,7 @@ func upgrade_pick() -> bool:
 		return false
 	gold -= cost
 	pick_level += 1
+	at_surface = false
 	pick_upgraded.emit(pick_level)
 	gold_changed.emit(gold)
 	return true
@@ -766,7 +1115,7 @@ func upgrade_pick() -> bool:
 func quote(index: int, mode: int) -> Dictionary:
 	if not _is_valid_index(index):
 		return { "count": 0, "cost": 0.0, "affordable": false }
-	var base_cost: float = _generators[index]["base_cost"]
+	var base_cost: float = _base_cost(index)
 	var count: int = 1
 	if mode == BuyMode.X10:
 		count = X10_COUNT
@@ -782,6 +1131,7 @@ func buy_generator(index: int, mode: int) -> int:
 	if not offer["affordable"]:
 		return 0
 	var count: int = offer["count"]
+	at_surface = false
 	gold -= offer["cost"]
 	var before: int = owned[index]
 	owned[index] += count
@@ -796,7 +1146,7 @@ func buy_generator(index: int, mode: int) -> int:
 # --- Guardado ----------------------------------------------------------------
 
 func to_dict() -> Dictionary:
-	return {
+	var data: Dictionary = {
 		"balance_version": BALANCE_VERSION,
 		"gold": gold,
 		"owned": owned.duplicate(),
@@ -808,16 +1158,37 @@ func to_dict() -> Dictionary:
 		"ability_level": ability_level,
 		"ability_wait": ability_cooldown_left,
 	}
+	if relic_tree != null:
+		data["balance_version"] = TREE_VERSION
+		data["tree"] = relic_tree.to_dict()
+		data["claimed_relics"] = claimed_relics
+		data["fragments"] = fragments
+		data["resets"] = resets
+		data["record_depth"] = record_depth_now()
+		data["run_shift"] = run_shift
+		data["at_surface"] = at_surface
+		data["last_descent"] = _last_descent.duplicate(true)
+		data["applied_start"] = _applied_start.duplicate(true)
+	return data
 
 
 ## Restaura el estado desde un diccionario (p. ej. un JSON). Tolera claves faltantes,
 ## tipos incorrectos, negativos, NaN/infinitos y cantidades de generadores distintas a
 ## las del balance actual: lo inválido se reemplaza por 0.
 func from_dict(data: Dictionary) -> void:
+	# El árbol primero: de él salen topes de lo demás (por ejemplo, la recarga de la habilidad).
+	if relic_tree != null:
+		var saved_tree: Variant = data.get("tree")
+		relic_tree.from_dict(saved_tree if saved_tree is Dictionary else {})
+	_last_hit_time = -1.0e12
+	_frenzied = false
+	pending_tree_report = {}
 	gold = maxf(_number(data.get("gold"), 0.0), 0.0)
 	# Lo ganado nunca puede ser menos que lo que tenés: cubre saves anteriores a la
-	# profundidad (sin run_gold) y datos editados a mano.
-	run_gold = maxf(_number(data.get("run_gold"), 0.0), gold)
+	# profundidad (sin run_gold) y datos editados a mano. Con árbol sí puede: el oro con el que arranca una bajada
+	# (la Bolsa) no se ganó en ella.
+	var carries_bag: bool = relic_tree != null and int(_number(data.get("balance_version"), 1.0)) >= TREE_VERSION
+	run_gold = maxf(_number(data.get("run_gold"), 0.0), 0.0 if carries_bag else gold)
 	relics = int(clampf(_number(data.get("relics"), 0.0), 0.0, MAX_LOADED_RELICS))
 	pick_level = int(clampf(_number(data.get("pick_level"), 0.0), 0.0, MAX_LOADED_PICK_LEVEL))
 	owned.fill(0)
@@ -833,9 +1204,62 @@ func from_dict(data: Dictionary) -> void:
 	# Quien tiene reliquias llegó al menos hasta donde se puede volver a la superficie (partidas sin el dato).
 	if relics > 0:
 		_max_biome = maxi(_max_biome, EconomyMath.biome_index(prestige_min_depth(), _biome_meters_each, biome_count()))
-	if int(_number(data.get("balance_version"), 1.0)) < BALANCE_VERSION:
+	var version: int = int(_number(data.get("balance_version"), 1.0))
+	if relic_tree != null and version >= TREE_VERSION:
+		_load_tree_state(data)
+	else:
+		claimed_relics = 0
+		fragments = 0
+		resets = 0
+		record_depth = 0.0
+		run_shift = 0.0
+		at_surface = run_gold <= 0.0
+		_last_descent = {}
+		_applied_start = {}
+	if version < BALANCE_VERSION:
 		_migrate_old_run()
+	if relic_tree != null and version < TREE_VERSION:
+		_migrate_to_tree()
 	gold_changed.emit(gold)
+	tree_changed.emit()
+
+
+func _load_tree_state(data: Dictionary) -> void:
+	claimed_relics = int(clampf(_number(data.get("claimed_relics"), 0.0), 0.0, MAX_LOADED_RELICS))
+	fragments = int(clampf(_number(data.get("fragments"), 0.0), 0.0, MAX_LOADED_COUNTER))
+	resets = int(clampf(_number(data.get("resets"), 0.0), 0.0, MAX_LOADED_COUNTER))
+	record_depth = clampf(_number(data.get("record_depth"), 0.0), 0.0, MAX_LOADED_METERS)
+	run_shift = clampf(_number(data.get("run_shift"), 0.0), 0.0, MAX_LOADED_METERS)
+	at_surface = data.get("at_surface") == true
+	_last_descent = _read_descent(data.get("last_descent"))
+	_applied_start = _read_descent(data.get("applied_start"))
+
+
+## Una "foto" de bajada guardada ({owned, gps o gold, pick, ability}) con sus números saneados; {} si no hay.
+func _read_descent(value: Variant) -> Dictionary:
+	if not (value is Dictionary) or not (value.get("owned") is Array):
+		return {}
+	var crew: Array[int] = []
+	for entry: Variant in value["owned"]:
+		crew.append(int(clampf(_number(entry, 0.0), 0.0, MAX_LOADED_OWNED)))
+	return {
+		"owned": crew,
+		"gps": maxf(_number(value.get("gps"), 0.0), 0.0),
+		"gold": maxf(_number(value.get("gold"), 0.0), 0.0),
+		"pick": int(clampf(_number(value.get("pick"), 0.0), 0.0, MAX_LOADED_PICK_LEVEL)),
+		"ability": int(clampf(_number(value.get("ability"), 0.0), 0.0, ability_max_level())),
+	}
+
+
+## La partida es de antes del árbol: las reliquias quedan para gastar y cuentan como sacadas de bajadas. La bajada en
+## curso sigue con su meta de siempre; la corrida arranca en la próxima.
+func _migrate_to_tree() -> void:
+	claimed_relics = relics
+	resets = 1 if relics > 0 else 0
+	record_depth = maxf(depth(), _max_biome * _biome_meters_each)
+	if relics > 0:
+		record_depth = maxf(record_depth, prestige_min_depth())
+		pending_tree_report = { "relics": relics }
 
 
 ## El jugador ya vio el aviso de la conversión.
@@ -860,10 +1284,14 @@ func _migrate_old_run() -> void:
 
 # --- Internos ----------------------------------------------------------------
 
-## Suma oro ganado: va al oro y a lo ganado en la partida (profundidad). No emite señales.
-func _earn(amount: float) -> void:
+## Suma oro ganado: va al oro y a lo ganado en la partida (profundidad). No emite señales. Devuelve lo que entró:
+## con la veta del árbol, antes de cierta fracción de la meta todo vale más (no lo juntado estando fuera).
+func _earn(amount: float) -> float:
+	if relic_tree != null and not _away and relic_tree.has_effect("shallow_fraction") and depth() < relic_tree.add("shallow_fraction") * return_depth():
+		amount *= relic_tree.mul("shallow_mul")
 	gold += amount
 	run_gold += amount
+	return amount
 
 
 ## Registra el motivo del rechazo en last_error y devuelve false (para `return _fail(...)`).

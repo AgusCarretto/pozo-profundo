@@ -429,12 +429,12 @@ func _test_offline_notice() -> void:
 	_check(not _modal().visible, "30 s fuera se acreditan sin aviso")
 	await _set_gold(0.0)
 	_economy.owned[0] = 10
-	_economy.apply_offline(11520.0) # 3 h 12 min -> 10 oro/s x (120 + 11.400 x 25%) = 29.700 de oro
+	_economy.apply_offline(11520.0) # 3 h 12 min -> 10 oro/s x (120 + 11.400 x 5%) = 6.900 de oro
 	_check(_modal().visible, "al volver aparece el aviso")
 	var body: String = _modal().body_label.text
 	_check(body.contains("3 h 12 min"), "dice cuánto estuviste fuera (%s)" % body.replace("\n", " | "))
-	_check(body.contains("29.7K"), "y cuánto oro juntó la cuadrilla")
-	_check(body.contains("25%"), "y a cuánto rinde sin vos")
+	_check(body.contains("6.90K"), "y cuánto oro juntó la cuadrilla")
+	_check(body.contains("5%"), "y a cuánto rinde sin vos")
 	_check(not _modal().cancel_button.visible, "es solo un aviso: no hay botón de cancelar")
 	_modal().confirm_button.pressed.emit()
 	_check(not _modal().visible, "se cierra con el botón")
@@ -535,7 +535,7 @@ func _test_debug_panel_tools() -> void:
 	await _set_gold(0.0)
 	_economy.owned[0] = 10 # 10 oro/s
 	panel.time_button.pressed.emit()
-	_check_eq(_economy.gold, 9900.0, "'Adelantar 1 h' con 10 oro/s suma 9.900 (cuenta como ausencia)")
+	_check_eq(_economy.gold, 2940.0, "'Adelantar 1 h' con 10 oro/s suma 2.940 (cuenta como ausencia)")
 	_check(_modal().visible, "y avisa con el cartel de bienvenida")
 	_check(_modal().body_label.text.contains("1 h"), "de 1 h (%s)" % _modal().body_label.text.replace("\n", " | "))
 	_modal().confirm_button.pressed.emit()
