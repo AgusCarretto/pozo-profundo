@@ -1,236 +1,311 @@
 # v0.7 — Árbol de reliquias y logros: simulación
 
-Estado al 2026-11-26 (segunda vuelta). **Nada de esto está en el juego**: es la simulación y espera aprobación. Rama `v07-arbol`.
+Estado al 2026-11-26 (**tercera vuelta**). **Nada de esto está en el juego**: es la simulación y espera aprobación. Rama `v07-arbol`.
 Especificación de partida: [arbol-reliquias.md](arbol-reliquias.md) (todavía sin actualizar con estos cambios).
 
-## Cómo retomar
-- Archivos: `tools/simulate_tree.gd` (simulador), `tools/tree_sim/economy_tree.gd` (el Economy real con los efectos del árbol encima), `tools/tree_sim/arbol_v2.json` (propuesta: todos los números), `logros.json`.
-- Correr con el Godot de consola (ruta en `tools/run_tests.ps1`); cada campaña tarda ~2 min y se pueden lanzar en paralelo:
-  - `godot --headless --path . --script res://tools/simulate_tree.gd -- campaign res://tools/tree_sim/arbol_v2.json 3 1` (golpes/s y semilla; con `oraculo` al final anota hasta dónde se llega en 10 min al empezar cada bajada)
-  - `... -- descents res://tools/tree_sim/arbol_v2.json 7` (primeras 8 bajadas contra las reglas de hoy)
-  - `... -- stars res://tools/tree_sim/arbol_v2.json 5 <parte> <partes>` (qué cambia cada estrella)
-- Jugador simulado: golpea sin pausas, compra casi óptimo, usa la dinamita, entra una vez por día 60 min (23 h fuera), vuelve a la superficie cuando las reliquias por minuto dejan de mejorar y compra siempre la estrella más barata. Es optimista.
+## Para decidir antes de programar
+1. **Bolsa inicial con 1 / 3 / 10 min rompe el balance:** acorta una bajada **55%** por 7 reliquias (las demás estrellas fuertes, 15–30%). La propuesta lo deja con tus números y la meta calibrada alrededor. Alternativa medida: **10 / 20 / 40 segundos → 25%**. Recomiendo la alternativa y recalibrar.
+2. **Ventaja inicial y Descenso rápido siguen sin notarse** con los números pedidos (0%). Medido: Ventaja en **25 / 50 / 75%** acorta 22% (con la Bolsa corta); Descenso rápido hasta el **95% de la meta** acorta 27% (hasta el 50% o el 80%, casi nada: la profundidad es logarítmica y esos metros son menos del 2% del oro).
+3. **Reclutas y Memoria no se notan con ningún número** (0–1%): los mineros pesan muy poco al final, y el pico y la dinamita se recompran enseguida. Opciones: dejarlas como comodidad, o juntar Reclutas con Ventaja.
+4. **Bonus histórico:** recomiendo el **normal**. El chico funciona (la meta queda calibrada), pero al final multiplica ×3,2 en vez de ×9,5, el árbol tarda hasta 4 días más (a 1,5 golpes/s, 38–39 días: pasa las 5 semanas) y tres logros quedan fuera de alcance (Donde no llega el eco, El corazón del mundo, Queso suizo).
+5. **Logros:** "Museo ambulante" a 14 no sale nunca (la mejor bajada posible es de **11** reliquias): propongo 11. "El corazón del mundo" a 575 m queda al límite (récord final 572–580 m): propongo 570.
+6. **El tope de 10 golpes/s casi no frena:** un autoclicker completa el árbol en 15–16 días (la mitad) con bajadas de 4–6 min. Un tope de 6 lo acercaría al jugador de 5 golpes/s (21–23 días). Inferido de los datos, sin simular.
+7. **Compras por día:** se cumplen las 3 entre los días 10 y 22 (como mucho 2 días flojos); del **23 al 25 bajan a 1–2** porque solo quedan piedras angulares y puentes. Si importa, hay que abaratarlos o sumar niveles.
+8. **La meta salta unos 100 m** entre las 20 y las 40 reliquias sacadas (de 351 a 447 m), porque ahí el jugador se hace fuerte de golpe. Con la Bolsa corta debería suavizarse (sin verificar).
+9. **Racha casi no existe para quien hace pausas** (2%, contra 7–15% sin pausas). Opción: que comprar la sostenga, como ya sostiene el frenesí.
+10. **Las bajadas 2.ª a 8.ª**, volviendo apenas se puede, quedan en 12–16 min a 3 golpes/s (hoy bajan de 18 a 6). Es lo que pide el piso, pero conviene que lo veas en la tabla.
 
-## Tus seis pedidos
+## Qué cambió en esta vuelta
 | Pedido | Qué quedó | Resultado simulado |
 |---|---|---|
-| 1. Primer reset: Corazón y 1–2 estrellas | Estrellas del anillo 1 desde 2 reliquias y **20 fragmentos = 1 reliquia** (eran 10) | 5–6 reliquias: Corazón + 1 o 2 estrellas. **Cumple** |
-| 2. Ninguna bajada de menos de ~10 min a 3 golpes/s | La meta baja según las reliquias ganadas (tabla) y **más hondo paga más** | 95% de las bajadas sobre 10:15; mediana 12:11–12:48; en tres partidas, 4 de ~200 bajo 10 min (mínima 8:44). **Cumple** |
-| 3. Capataz y Mina sola; activo mejor; AFK alto | Capataz +5% por nivel; Mina sola pasa a **A la par**; AFK base de 25% a **5%** | 8 h fuera pasan de ~65 min de juego activo a ~14 (sin árbol). **Cumple** |
-| 4. Que Fortuna se note | Números más altos; el peso extra de las rarezas sale de los Comunes | Anillo 1: +9 a +17% (antes 0 a +5%). **Cumple**, salvo Corona y Reliquia escondida, que dan reliquias y no velocidad |
-| 5. Cuenta regresiva | Sin cambios | Aprobada |
-| 6. Repetir a 1,5, 3 y 5 golpes/s | Hecho, 3 semillas cada uno | Ver Resultados |
+| 1. Estrellas que escalan | Reclutas, Bolsa, Ventaja, Descenso, Memoria unida y **Racha** nueva, como las pediste | ⚠️ Bolsa 55% (demasiado); Reclutas, Ventaja, Descenso y Memoria 0–3% |
+| 2. Bonus chico | Simulado con su propia meta calibrada | Funciona, con los costos del punto 4 |
+| 3. Mitad de campaña | Probé crecimiento ×1,3 (A) y **más niveles más baratos** (B, el elegido) | A: 2,0–2,2 compras/día. B: 3,5. ⚠️ cumple hasta el día 22 |
+| 4. Jugador con pausas | Golpea 30–150 s y para 10–50 s (25% sin golpear); en la pausa sigue comprando y usando dinamita | Árbol en 31–32 días; bajadas algo más largas |
+| 5. Tope de 10 golpes/s | Simulado 10 golpes/s | Ver punto 6 de arriba |
+| 6. Días hasta árbol completo | Columna nueva en "Estrella por estrella" | Corona ahorra ~3 días, Reliquia escondida ~1, Apostador ~1 |
+| 7. AFK y cofres | **Confirmado en el código del juego** | El AFK no abre cofres y el cofre escala con el oro/s (detalle abajo) |
+| 8. Logros | Mil escaleras 90, Museo ambulante 14, El corazón del mundo 575 m | Mil escaleras sale (día 26–27); los otros, punto 5 de arriba |
+| 9. Cuenta regresiva 10% | Aplicado | Pasa de 3–8% a **5–14%**; sigue siendo la piedra angular más floja (las otras 11–26%) |
+| 10. Contadores v0.8 | Agregados al final | — |
+| Tu aclaración sobre el piso | El piso de ~10 min vale hasta completar el anillo 2; después apunto a ~9 | Cumple (tablas de abajo) |
+
+**Punto 7, en detalle:** `apply_offline` no sortea cofres (`tests/offline_test.gd` lo comprueba con la chance forzada al 100%). El cofre paga lo que sea mayor entre N segundos de producción y M golpes (`tests/loot_test.gd`), y esos golpes incluyen el 6% del oro/s. Excepción que ya estaba a propósito: una ausencia de menos de 2 min es juego activo y puede salir un cofre.
+
+## Cómo retomar
+- Archivos: `tools/simulate_tree.gd` (simulador), `tools/tree_sim/economy_tree.gd` (el Economy real con los efectos del árbol encima), `tools/tree_sim/arbol_v3.json` (propuesta: todos los números), `tools/tree_sim/calibrate.mjs` (calibra la tabla de la meta), `logros.json`.
+- Correr con el Godot de consola (ruta en `tools/run_tests.ps1`); cada campaña tarda ~2 min y se pueden lanzar en paralelo:
+  - `godot --headless --path . --script res://tools/simulate_tree.gd -- campaign res://tools/tree_sim/arbol_v3.json 3 1` (perfil y semilla; `3p` = con pausas; sumar `chico` para el bonus chico o `sin=o_corona` para apagar una estrella)
+  - `... -- descents res://tools/tree_sim/arbol_v3.json 7` y `... -- stars res://tools/tree_sim/arbol_v3.json 15 <parte> <partes>`
+  - `node tools/tree_sim/calibrate.mjs tools/tree_sim/arbol_v3.json salida.json [chico]` (~20 min) y pasar los `puntos` al árbol. **Cualquier cambio de estrellas pide recalibrar.**
+- Jugador simulado: compra casi óptimo, usa la dinamita, entra una vez por día 60 min (23 h fuera), vuelve a la superficie cuando las reliquias por minuto dejan de mejorar y compra siempre la estrella más barata. Es optimista.
 
 ## Decisiones ya tomadas
-1. Las reliquias **dejan de dar +25% de oro**: son solo la moneda del árbol.
-2. Bonus pasivo chico por **reliquias ganadas en toda la historia**, para que gastar nunca debilite.
-3. Testers: conservan sus reliquias para gastarlas, cuentan para el bonus histórico y un cartel se los avisa la primera vez.
-4. La meta de volver se corre y se ve en el juego: **"Próximo regreso a X m"**.
-5. "Planos viejos" pasa a ser **"Bolsa inicial"**.
-6. **Cuenta regresiva ★** en lugar de "Reloj de arena" (aprobada).
-7. Ninguna bajada menos de ~10 min a 3 golpes/s. Esto **reemplaza** la condición anterior ("las siguientes al menos tan cortas como hoy").
-8. El jugador activo tiene que ser el más beneficiado.
+1. Las reliquias **dejan de dar +25% de oro**: son la moneda del árbol, con un bonus pasivo por reliquias ganadas en la historia.
+2. Testers: conservan sus reliquias, cuentan para el bonus histórico y un cartel se los avisa.
+3. La meta de volver se corre según una **tabla** y se ve en el juego: "Próximo regreso a X m".
+4. "Planos viejos" es **"Bolsa inicial"**; "Cuenta regresiva ★" reemplaza a "Reloj de arena"; "A la par ★" reemplaza a "Mina sola".
+5. El piso de ~10 min es a 3 golpes/s y **hasta completar el anillo 2**; después las bajadas pueden acortarse.
+6. Aprobado: cofres como fuente principal de oro, 5 golpes/s por debajo del piso, 3.ª y 4.ª bajada más largas que hoy, AFK base 5%, meta por tabla.
+7. El jugador activo es el más beneficiado.
 
 ## La propuesta (falta tu OK)
 ### Meta de volver a la superficie
-Depende de las reliquias **sacadas de bajadas** (las de cofres y logros no la corren). Se fija al empezar cada bajada y comprar estrellas no la mueve. Es una tabla en `data/`, lineal entre puntos:
+Depende de las reliquias **sacadas de bajadas**; se fija al empezar cada bajada. Lineal entre puntos:
 
-| Reliquias de bajadas | 0–5 | 9 | 12 | 20 | 40 | 65 | 100 | 180 | 300 | 500 | 700 | 1000 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Meta (m) | 300 | 314 | 325 | 346 | 394 | 430 | 449 | 480 | 497 | 522 | 552 | 583 |
+| Reliquias | 0–3 | 6 | 9 | 12 | 20 | 40 | 65 | 100 | 180 | 300 | 500 | 700 | 1000 | 1400 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Bonus normal (m) | 300 | 314 | 322 | 333 | 351 | 447 | 458 | 483 | 502 | 512 | 526 | 544 | 580 | 621 |
+| Bonus chico (m) | 300 | 300 | 300 | 304 | 308 | 394 | 417 | 442 | 467 | 475 | 493 | 510 | 541 | 582 |
 
-- **Más hondo paga más:** la fórmula de reliquias de hoy, medida desde la meta, más 1 reliquia por cada 30 m que se corrió. Se ganan ~3 por bajada al principio y más de 10 al final.
-- Por qué una tabla y no una fórmula: probé metros fijos por reliquia (se queda corta enseguida) y un logaritmo (las bajadas 2.ª–8.ª quedaban o en 14–18 min o en 8 min). El jugador se hace fuerte de golpe, después de a poco, y se estanca juntando para las piedras angulares.
-- La partida completa termina cerca de 560–580 m. Más allá de 400 m todo es Abismo: **los mapas nuevos quedan para más adelante**.
+Más hondo paga más: +1 reliquia por cada 30 m de meta corrida. **Cambió:** la calibra un programa en vez de a mano (en la tabla normal sumé 3 m entre 40 y 500 reliquias, porque el 5% de bajadas más rápidas quedaba en 9:18).
 
-### AFK
-| | Hoy | Propuesta |
-|---|---|---|
-| Eficiencia base | 25% | 5% |
-| Vigilia (3 niveles) | — | 7 / 9 / 12% |
-| Tope (Turno noche, 2 niveles) | 8 h | 8 h; con la estrella 10 / 12 h |
-| Turnos rotativos (puente) | — | +50% |
+### AFK (sin cambios)
+Base 5% (hoy 25%); Vigilia 7 / 9 / 12%; tope 8 h, con Turno noche 10 / 12 h; Turnos rotativos +50%.
 
-Los primeros 2 min siguen pagando completo. Solo con el árbol entero se vuelve cerca de lo que hoy paga una noche. En toda una campaña a 3 golpes/s el AFK es el 7–9% del oro.
+### Árbol
+**1025 reliquias en 128 compras** (antes 918 en 98): anillo 1: 145 · anillo 2: 272 · anillo 3: 407 · puentes: 200. Requisitos de anillo sin cambios (350 m y 8 resets; 400 m y 25 resets). ★ = piedra angular (máximo 2 activas).
+Decisiones mías al aplicar tus pedidos: Ventaja usa las mismas partes que Reclutas (5/10/15%) y no incluye mineros; "oro/s de la bajada anterior" es el que se veía al volver; Memoria queda en la rama Cuadrilla y Racha en Tiempo (requisito de Cuenta regresiva); Racha tiene 5 niveles que suben el tope hasta tu +30% y se reinicia al volver; para sumar compras repartí en más niveles también Eco, Corazón de dragón, Doble cofre e Hitos dorados (anillo 2).
 
-### Cambios de estrellas
-- **A la par ★** (reemplaza a Mina sola): la cuadrilla rinde ×1,3 mientras golpeás y ×0,7 si no (también AFK). Acorta ~25% jugando a cualquier ritmo; quien deja el juego solo, pierde.
-- **Capataz:** +5% por nivel (era +20% y acortaba 45%; ahora 19%).
-- **Fortuna:** Olfato +20%, Botín generoso +25%, Gemólogo +50% de Raros, Corazón de dragón +80% de Épicos, Doble cofre +12%, Corona +100% de Legendarios, Mineros con suerte +100%. Los Raros, Épicos y Legendarios extra salen de los Comunes (antes, subir los Raros bajaba los Legendarios y con ellos las reliquias).
-- **Pólvora:** +20% por nivel (era +25%).
-
-### Costos y anillos
-- Anillo 1: 2, 2, 3, 3, 3. Anillos 2 y 3: crecimiento ×1,4. Piedras angulares: 40. Puentes: 50. **Árbol completo = 918 reliquias** (anillo 1: 151 · anillo 2: 216 · anillo 3: 350 · puentes: 200).
-- Requisitos sin cambios: anillo 2 = 350 m y 8 resets; anillo 3 = 400 m y 25 resets.
-- Bonus histórico (+6% por reliquia hasta 60, después +0,5%) y Corazón (+50%) sin cambios.
-
-★ = piedra angular (máximo 2 activas).
-
-| id | Nombre | Efecto por nivel | Anillo | Costo por nivel | Total |
-|---|---|---|---|---|---|
-| core | Corazón del pozo | +50% de oro | 0 | 1 | 1 |
-| f_brazo | Brazo fuerte | cada golpe suma +1,2% del oro/s | 1 | 2, 2, 3, 3, 3 | 13 |
-| f_templado | Pico templado | +30% de golpe | 1 | 2, 2, 3, 3, 3 | 13 |
-| f_ojo | Ojo certero | +3% de crítico | 1 | 2, 2, 3, 3, 3 | 13 |
-| f_brutal | Golpe brutal | +0,6× de daño crítico | 2 | 4, 6, 8, 11, 15 | 44 |
-| f_eco | Eco | +12% de golpe doble | 2 | 6, 8, 12 | 26 |
-| f_combo | Combo | en frenesí, +30% de golpe | 3 | 10, 14, 20 | 44 |
-| f_umbral | Mano rápida | frenesí con 1 golpe/s menos | 3 | 20 | 20 |
-| f_furia | Furia ciega ★ | críticos ×4, mitad de chance | 3 | 40 | 40 |
-| o_olfato | Olfato | +20% de chance de cofre | 1 | 2, 2, 3, 3, 3 | 13 |
-| o_botin | Botín generoso | +25% de oro por cofre | 1 | 2, 2, 3, 3, 3 | 13 |
-| o_gemologo | Gemólogo | +50% de Raros (salen de los Comunes) | 1 | 2, 2, 3 | 7 |
-| o_dragon | Corazón de dragón | +80% de Épicos (salen de los Comunes) | 2 | 6, 8, 12 | 26 |
-| o_doble | Doble cofre | +12% de cofre doble | 2 | 6, 8, 12 | 26 |
-| o_corona | Corona | +100% de Legendarios | 3 | 15, 21 | 36 |
-| o_reliquia | Reliquia escondida | el Legendario da +1 reliquia | 3 | 30 | 30 |
-| o_apostador | Apostador ★ | sin Comunes; el resto sale ×2 | 3 | 40 | 40 |
-| c_reclutas | Reclutas | empezás con +5 mineros | 1 | 2, 2, 3, 3, 3 | 13 |
-| c_capataz | Capataz | +5% de cuadrilla (antes +20%) | 1 | 2, 2, 3, 3, 3 | 13 |
-| c_contrato | Contrato barato | −4% de costo de generadores | 1 | 2, 2, 3, 3, 3 | 13 |
-| c_bolsa | Bolsa inicial | empezás con 500 / 5.000 / 50.000 de oro | 1 | 2, 2, 3 | 7 |
-| c_ventaja | Ventaja inicial | empezás con 1 Taladro / Topo / Gólem | 2 | 8, 11, 16 | 35 |
-| c_hitos | Hitos dorados | hitos ×2,5 | 2 | 25 | 25 |
-| c_memoria | Memoria | conservás el Pico | 3 | 30 | 30 |
-| c_mina | A la par ★ | cuadrilla ×1,3 mientras golpeás, ×0,7 si no | 3 | 40 | 40 |
-| t_mecha | Mecha corta | −8% de recarga de dinamita | 1 | 2, 2, 3, 3, 3 | 13 |
-| t_polvora | Pólvora | +20% de dinamita | 1 | 2, 2, 3, 3, 3 | 13 |
-| t_vigilia | Vigilia | AFK 7 / 9 / 12% (base 5%) | 1 | 2, 2, 3 | 7 |
-| t_noche | Turno noche | tope AFK 10 / 12 h (base 8) | 2 | 8, 11 | 19 |
-| t_descenso | Descenso rápido | hasta 200 m, oro ×3 | 2 | 15 | 15 |
-| t_memoria_din | Mecha guardada | conservás la Dinamita | 3 | 30 | 30 |
-| t_cuenta | Cuenta regresiva ★ | dinamita recarga en la mitad, paga 25% menos | 3 | 40 | 40 |
-| p_suerte | Golpe de suerte | 3% de cofre por crítico | 4 | 50 | 50 |
-| p_mineros | Mineros con suerte | +100% de cofres de la cuadrilla | 4 | 50 | 50 |
-| p_turnos | Turnos rotativos | +50% de producción AFK | 4 | 50 | 50 |
-| p_critica | Dinamita crítica | la dinamita puede hacer crítico | 4 | 50 | 50 |
+| id | Nombre | Efecto por nivel | Anillo | Niveles | Costo por nivel | Total | Cambió |
+|---|---|---|---|---|---|---|---|
+| core | Corazón del pozo | +50% de oro | 0 | 1 | 1 | 1 |  |
+| f_brazo | Brazo fuerte | cada golpe suma +1,2% del oro/s | 1 | 5 | 2, 2, 3, 3, 3 | 13 |  |
+| f_templado | Pico templado | +30% de golpe | 1 | 5 | 2, 2, 3, 3, 3 | 13 |  |
+| f_ojo | Ojo certero | +3% de crítico | 1 | 5 | 2, 2, 3, 3, 3 | 13 |  |
+| f_brutal | Golpe brutal | +0,6× de daño crítico | 2 | 5 | 5, 6, 7, 8, 9 | 35 | costo |
+| f_eco | Eco | +6% de golpe doble | 2 | 6 | 5, 6, 7, 8, 9, 10 | 45 | niveles |
+| f_combo | Combo | en frenesí, +12% de golpe | 3 | 8 | 6, 6, 7, 8, 8, 9, 10, 10 | 64 | niveles |
+| f_umbral | Mano rápida | frenesí con 1 golpe/s menos | 3 | 1 | 15 | 15 | costo |
+| f_furia | Furia ciega ★ | críticos ×4, mitad de chance | 3 | 1 | 40 | 40 |  |
+| o_olfato | Olfato | +20% de chance de cofre | 1 | 5 | 2, 2, 3, 3, 3 | 13 |  |
+| o_botin | Botín generoso | +25% de oro por cofre | 1 | 5 | 2, 2, 3, 3, 3 | 13 |  |
+| o_gemologo | Gemólogo | +50% de Raros | 1 | 3 | 2, 2, 3 | 7 |  |
+| o_dragon | Corazón de dragón | +40% de Épicos | 2 | 6 | 5, 6, 7, 8, 9, 10 | 45 | niveles |
+| o_doble | Doble cofre | +6% de cofre doble | 2 | 6 | 5, 6, 7, 8, 9, 10 | 45 | niveles |
+| o_corona | Corona | +25% de Legendarios | 3 | 8 | 6, 6, 7, 8, 8, 9, 10, 10 | 64 | niveles |
+| o_reliquia | Reliquia escondida | +20% de chance de +1 reliquia por Legendario | 3 | 5 | 7, 8, 8, 9, 10 | 42 | niveles |
+| o_apostador | Apostador ★ | sin Comunes; el resto sale ×2 | 3 | 1 | 40 | 40 |  |
+| c_reclutas | Reclutas | empezás con 5 / 10 / 15% de los mineros que tenías | 1 | 3 | 2, 2, 3 | 7 | **efecto** |
+| c_capataz | Capataz | +5% de cuadrilla | 1 | 5 | 2, 2, 3, 3, 3 | 13 |  |
+| c_contrato | Contrato barato | −4% de costo de generadores | 1 | 5 | 2, 2, 3, 3, 3 | 13 |  |
+| c_bolsa | Bolsa inicial | empezás con 1 / 3 / 10 min del oro/s con el que volviste | 1 | 3 | 2, 2, 3 | 7 | **efecto** |
+| c_ventaja | Ventaja inicial | empezás con 5 / 10 / 15% del resto de la cuadrilla que tenías | 2 | 3 | 8, 10, 14 | 32 | **efecto** |
+| c_hitos | Hitos dorados | hitos ×2,1 … ×2,5 | 2 | 5 | 6, 7, 8, 9, 10 | 40 | niveles |
+| c_memoria | Memoria | conservás el Pico y la Dinamita | 3 | 1 | 20 | 20 | **unida** |
+| c_mina | A la par ★ | cuadrilla ×1,3 mientras golpeás, ×0,7 si no | 3 | 1 | 40 | 40 |  |
+| t_mecha | Mecha corta | −8% de recarga de dinamita | 1 | 5 | 2, 2, 3, 3, 3 | 13 |  |
+| t_polvora | Pólvora | +20% de dinamita | 1 | 5 | 2, 2, 3, 3, 3 | 13 |  |
+| t_vigilia | Vigilia | AFK 7 / 9 / 12% (base 5%) | 1 | 3 | 2, 2, 3 | 7 |  |
+| t_noche | Turno noche | tope AFK 10 / 12 h (base 8) | 2 | 2 | 8, 10 | 18 | costo |
+| t_descenso | Descenso rápido | oro ×3 hasta el 50% de la meta | 2 | 1 | 12 | 12 | **efecto** |
+| t_racha | Racha | +2% de oro por minuto golpeando sin parar; tope 6 / 12 / 18 / 24 / 30% | 3 | 5 | 7, 8, 8, 9, 10 | 42 | **nueva** |
+| t_cuenta | Cuenta regresiva ★ | dinamita recarga en la mitad, paga 10% menos | 3 | 1 | 40 | 40 | **efecto** |
+| p_suerte | Golpe de suerte | 3% de cofre por crítico | 4 | 1 | 50 | 50 |  |
+| p_mineros | Mineros con suerte | +100% de cofres de la cuadrilla | 4 | 1 | 50 | 50 |  |
+| p_turnos | Turnos rotativos | +50% de producción AFK | 4 | 1 | 50 | 50 |  |
+| p_critica | Dinamita crítica | la dinamita puede hacer crítico | 4 | 1 | 50 | 50 |  |
 
 ## Resultados
-### Las primeras 8 bajadas, una atrás de otra
+1 h por día hasta completar el árbol; rangos de 3 semillas. "Se puede volver" es el momento en que se llega a la meta (lo que tardaría quien vuelve apenas puede); el jugador simulado se queda un rato más. No cuentan las bajadas con una ausencia en el medio, que el AFK adelanta.
+
+### Compras por día (punto 3)
+Compras de estrellas (niveles) por día entre el 10 y el 25, a 3 golpes/s, 3 semillas.
+
+| | Árbol | Compras/día (promedio) | Días con menos de 3 | Árbol completo |
+|---|---|---|---|---|
+| A: anillos 2 y 3 con crecimiento ×1,3 | 889 reliquias, 96 compras | 2,0–2,2 | 9–10 de 13 | día 23–24 |
+| **B: más niveles, más baratos** | 1025 reliquias, 128 compras | **3,5–3,6** | 2–5 de 16 (casi todos del 23 al 25) | día 28–30 |
+
+A no puede llegar: al día 10 le quedan unas 26 compras y hacen falta 48.
+
+### Partidas completas, bonus normal (+6% / +0,5%)
+| | 3 g/s | 3 g/s con pausas | 1,5 g/s | 5 g/s | 10 g/s (techo) |
+|---|---|---|---|---|---|
+| Primer reset | 44–49 min | 45–49 min | 49–52 min | 37–43 min | 30–35 min |
+| Se puede volver, hasta completar el anillo 2: mínimo | 8:49–9:50 | 9:18–10:58 | 11:20–11:50 | 6:09–7:15 | 3:33–4:41 |
+| … 5% más rápido | 10:25–10:47 | 10:56–11:48 | 12:43–13:35 | 6:49–7:28 | 4:18–4:52 |
+| … mediana | 12:43–13:23 | 14:02–15:08 | 16:06–16:17 | 8:54–9:32 | 5:55–6:15 |
+| … bajadas bajo 10 min | 2–4% | 0–2% | 0% | 64–73% | 97–98% |
+| Bajada completa (mediana), hasta completar el anillo 2 | 18:32–19:02 | 20:18–21:28 | 22:36–22:58 | 12:46–13:52 | 8:46–9:14 |
+| Se puede volver, con el anillo 2 completo: mínimo | 7:21–7:29 | 8:17–9:23 | 8:12–10:12 | 4:58–5:29 | 2:56–3:33 |
+| … 5% más rápido | 7:30–7:56 | 8:39–9:32 | 8:41–10:18 | 5:27–5:52 | 3:02–3:43 |
+| … mediana | 9:08–9:49 | 11:51–11:58 | 13:56–14:10 | 6:28–7:25 | 4:00–4:40 |
+| … bajadas bajo 10 min | 54–78% | 23–24% | 0–15% | 100% | 100% |
+| Bajada completa (mediana), con el anillo 2 completo | 13:08–14:02 | 16:48–16:56 | 19:34–19:54 | 9:30–10:48 | 6:10–7:04 |
+| Anillo 1 completo | día 8 | día 8 | día 9 | día 6–7 | día 5 |
+| Anillo 2 completo | día 22–23 | día 23–25 | día 25 | día 16–17 | día 12 |
+| Primera piedra angular | día 23–25 | día 25–27 | día 28 | día 18–19 | día 12–13 |
+| Primer puente | día 26–28 | día 28–30 | día 32 | día 20–21 | día 14–15 |
+| **Árbol completo** | **día 28–30** | **día 31–32** | **día 35** | **día 21–23** | **día 15–16** |
+| Compras por día, días 10–25: promedio | 3.5–3.6 | 3.4–3.5 | 3.6 | 4.2–4.5 | 5.3–5.8 |
+| … día con menos compras | 1 | 1–2 | 2–3 | 1–2 | 2–3 |
+| … días con menos de 3 | 2 de 16, 5 de 16, 4 de 16 | 1 de 16, 1 de 16, 3 de 16 | 0 de 16, 1 de 16, 0 de 16 | 5 de 13, 4 de 12, 4 de 11 | 1 de 6, 0 de 5, 0 de 5 |
+| Oro: golpes | 27–28% | 23–24% | 12–12% | 38–39% | 48–50% |
+| Oro: cofres | 39–40% | 38–40% | 43–44% | 37–37% | 35–36% |
+| Oro: dinamita | 19–19% | 20–20% | 25–26% | 13–14% | 9–9% |
+| Oro: AFK | 7–8% | 9–10% | 8–10% | 6–6% | 3–4% |
+
+### Partidas completas, bonus chico (+2% / +0,1%)
+| | 3 g/s | 3 g/s con pausas | 1,5 g/s | 5 g/s | 10 g/s (techo) |
+|---|---|---|---|---|---|
+| Primer reset | 47–50 min | 48–50 min | 51–54 min | 40–45 min | 32–36 min |
+| Se puede volver, hasta completar el anillo 2: mínimo | 8:57–9:02 | 7:29–10:15 | 8:46–11:01 | 5:44–6:15 | 3:07–3:46 |
+| … 5% más rápido | 10:02–10:38 | 11:07–11:15 | 11:16–12:04 | 6:32–6:37 | 3:39–4:14 |
+| … mediana | 12:11–12:30 | 13:34–14:02 | 14:25–14:37 | 8:16–8:42 | 5:12–5:33 |
+| … bajadas bajo 10 min | 2–5% | 0–2% | 0–2% | 75–82% | 97–97% |
+| Bajada completa (mediana), hasta completar el anillo 2 | 17:26–18:02 | 19:38–20:08 | 20:44–20:56 | 11:58–12:34 | 7:48–8:16 |
+| Se puede volver, con el anillo 2 completo: mínimo | 6:03–7:29 | 8:35–9:30 | 8:36–10:06 | 3:46–4:11 | 2:52–3:23 |
+| … 5% más rápido | 7:11–7:58 | 8:59–9:30 | 9:14–10:51 | 4:21–5:53 | 3:25–3:57 |
+| … mediana | 9:13–9:48 | 11:36–11:49 | 13:24–14:24 | 6:46–7:11 | 3:54–4:48 |
+| … bajadas bajo 10 min | 68–74% | 9–17% | 0–9% | 100% | 100% |
+| Bajada completa (mediana), con el anillo 2 completo | 13:14–14:00 | 16:26–16:44 | 18:52–20:12 | 9:54–10:30 | 6:02–7:14 |
+| Anillo 1 completo | día 9 | día 9–10 | día 10–11 | día 7–8 | día 6 |
+| Anillo 2 completo | día 24–25 | día 26–28 | día 28–29 | día 18–19 | día 12–13 |
+| Primera piedra angular | día 26 | día 28–29 | día 30–32 | día 19–20 | día 13–14 |
+| Primer puente | día 29 | día 32–33 | día 35–36 | día 21–23 | día 15–16 |
+| **Árbol completo** | **día 31–32** | **día 35–36** | **día 38–39** | **día 23–24** | **día 16–17** |
+| Compras por día, días 10–25: promedio | 3.7–3.9 | 3.7–3.9 | 3.7–3.9 | 4.1–4.3 | 5.4–6.2 |
+| … día con menos compras | 1–2 | 2–3 | 2–3 | 1 | 2 |
+| … días con menos de 3 | 1 de 16, 2 de 16, 1 de 16 | 0 de 16, 1 de 16, 1 de 16 | 0 de 16, 1 de 16, 1 de 16 | 3 de 14, 5 de 14, 4 de 13 | 2 de 7, 1 de 6, 2 de 7 |
+| Oro: golpes | 27–28% | 23–24% | 12–12% | 39–40% | 50–51% |
+| Oro: cofres | 38–39% | 38–38% | 41–42% | 35–36% | 33–34% |
+| Oro: dinamita | 19–19% | 20–21% | 25–26% | 14–14% | 9–9% |
+| Oro: AFK | 6–8% | 10–10% | 10–11% | 5–6% | 4–4% |
+
+### Las primeras 8 bajadas, bonus normal
 Volviendo apenas se puede, sin ausencias (mediana de 7).
 
 | Golpes/s | Reglas | 1.ª | 2.ª | 3.ª | 4.ª | 5.ª | 6.ª | 7.ª | 8.ª |
 |---|---|---|---|---|---|---|---|---|---|
-| 3 | hoy | 28:15 | 18:06 | 12:36 | 10:34 | 8:53 | 7:10 | 6:41 | 6:13 |
-| 3 | árbol | 28:15 | 16:12 | 14:41 | 13:22 | 11:54 | 12:33 | 12:33 | 12:05 |
-| 3 | árbol y logros | 27:13 | 14:21 | 13:06 | 11:04 | 11:18 | 10:03 | 11:02 | 10:21 |
-| 1,5 | hoy | 30:52 | 20:08 | 15:05 | 12:38 | 9:44 | 8:19 | 7:54 | 6:49 |
-| 1,5 | árbol | 30:52 | 17:31 | 16:14 | 15:51 | 14:24 | 14:35 | 13:26 | 14:54 |
-| 1,5 | árbol y logros | 30:02 | 15:58 | 14:56 | 14:10 | 13:30 | 13:27 | 13:53 | 12:08 |
-| 5 | hoy | 24:59 | 15:49 | 11:51 | 9:13 | 8:07 | 7:01 | 5:37 | 5:12 |
-| 5 | árbol | 24:59 | 14:15 | 13:11 | 10:52 | 10:24 | 10:21 | 10:41 | 11:00 |
-| 5 | árbol y logros | 23:48 | 13:05 | 10:14 | 9:20 | 9:13 | 9:07 | 9:16 | 8:56 |
+| 3 | hoy | 28:16 | 17:40 | 13:06 | 10:23 | 9:11 | 7:32 | 6:36 | 6:08 |
+| 3 | árbol | 28:16 | 16:09 | 15:34 | 15:16 | 14:04 | 13:57 | 13:59 | 13:15 |
+| 3 | árbol y logros | 27:13 | 14:19 | 13:58 | 13:10 | 12:24 | 12:07 | 12:20 | 12:30 |
+| 3 con pausas | hoy | 29:09 | 19:07 | 14:44 | 10:46 | 9:38 | 8:10 | 6:50 | 6:24 |
+| 3 con pausas | árbol | 29:09 | 17:17 | 16:49 | 15:34 | 14:00 | 14:12 | 14:37 | 14:10 |
+| 3 con pausas | árbol y logros | 28:01 | 15:24 | 14:49 | 13:38 | 13:29 | 12:30 | 13:18 | 13:10 |
+| 1,5 | hoy | 30:58 | 20:09 | 16:08 | 12:32 | 9:55 | 8:46 | 7:56 | 6:41 |
+| 1,5 | árbol | 30:58 | 17:53 | 17:22 | 18:04 | 15:38 | 16:17 | 16:35 | 15:52 |
+| 1,5 | árbol y logros | 29:54 | 16:03 | 15:49 | 15:37 | 14:03 | 15:57 | 13:23 | 14:36 |
+| 5 | hoy | 24:47 | 16:01 | 12:10 | 9:14 | 8:15 | 7:13 | 6:03 | 5:41 |
+| 5 | árbol | 24:47 | 14:07 | 13:56 | 13:01 | 11:42 | 11:24 | 12:17 | 10:53 |
+| 5 | árbol y logros | 23:57 | 13:15 | 10:58 | 10:26 | 10:31 | 10:53 | 10:16 | 9:59 |
+| 10 | hoy | 19:47 | 12:24 | 8:45 | 7:07 | 6:12 | 5:10 | 4:24 | 4:24 |
+| 10 | árbol | 19:47 | 10:53 | 9:39 | 9:09 | 8:03 | 8:08 | 8:31 | 7:51 |
+| 10 | árbol y logros | 18:42 | 9:27 | 8:42 | 7:51 | 7:04 | 7:31 | 7:33 | 7:26 |
 
-### Partidas completas
-1 h por día hasta completar el árbol; rangos de 3 semillas. "Se puede volver" es el momento en que se llega a la meta (lo que tardaría quien vuelve apenas puede); el jugador simulado se queda un rato más. Se excluyen las bajadas con una ausencia en el medio, que el AFK adelanta.
+### Las primeras 8 bajadas, bonus chico
 
-| | 1,5 golpes/s | 3 golpes/s | 5 golpes/s |
-|---|---|---|---|
-| Primer reset | 49–52 min | 44–49 min | 37–43 min |
-| Se puede volver: mínimo | 10:27–11:47 | 8:44–10:10 | 6:31–7:26 |
-| Se puede volver: 5% más rápido | 11:52–12:13 | 10:16–10:19 | 7:18–7:46 |
-| Se puede volver: mediana | 16:18–16:56 | 12:11–12:48 | 9:04–9:40 |
-| Bajada completa: mediana | 23:26–23:44 | 17:28–18:22 | 13:14–14:02 |
-| Bajadas bajo 10 min | 0% | 0–4% | 60–77% |
-| Anillo 1 completo | día 9 | día 8 | día 6–7 |
-| Anillo 2 completo | día 22–23 | día 18–19 | día 14–15 |
-| Primera piedra angular | día 27–28 | día 22–23 | día 17–18 |
-| Primer puente | día 32–34 | día 26 | día 19–21 |
-| **Árbol completo** | **día 35–37** | **día 28–29** | **día 21–23** |
-| Oro: golpes / cofres / dinamita / AFK | 11–12 / 43–48 / 23–24 / 7–14% | 27–29 / 41–43 / 16–17 / 7–9% | 37 / 41 / 12 / 4–5% |
+| Golpes/s | Reglas | 1.ª | 2.ª | 3.ª | 4.ª | 5.ª | 6.ª | 7.ª | 8.ª |
+|---|---|---|---|---|---|---|---|---|---|
+| 3 | árbol | 28:16 | 17:26 | 16:33 | 15:41 | 13:49 | 13:04 | 13:51 | 12:46 |
+| 3 | árbol y logros | 27:32 | 16:32 | 15:20 | 13:53 | 12:11 | 12:57 | 12:24 | 11:46 |
+| 3 con pausas | árbol | 29:09 | 18:52 | 18:23 | 15:51 | 14:10 | 14:48 | 14:20 | 14:07 |
+| 3 con pausas | árbol y logros | 28:49 | 17:57 | 17:39 | 14:51 | 14:06 | 13:34 | 13:00 | 12:44 |
+| 1,5 | árbol | 30:58 | 19:42 | 19:21 | 17:44 | 16:34 | 14:47 | 16:09 | 14:39 |
+| 1,5 | árbol y logros | 30:58 | 18:52 | 18:19 | 17:12 | 15:44 | 15:19 | 14:46 | 13:48 |
+| 5 | árbol | 24:47 | 15:31 | 14:43 | 12:57 | 11:58 | 11:19 | 11:34 | 10:18 |
+| 5 | árbol y logros | 24:37 | 14:35 | 13:56 | 11:29 | 11:12 | 10:25 | 10:21 | 9:30 |
+| 10 | árbol | 19:47 | 12:00 | 10:44 | 9:36 | 8:49 | 7:59 | 7:53 | 7:39 |
+| 10 | árbol y logros | 19:15 | 11:05 | 9:46 | 8:16 | 7:45 | 7:24 | 7:34 | 6:44 |
 
-El resto del oro es la cuadrilla mientras jugás (5–9%).
-
-### Día por día (3 golpes/s, semilla 1)
+### Día por día (bonus normal, 3 golpes/s, semilla 1)
 ```
-día | reliquias ganadas (gastadas) | estrellas | niveles | resets | se puede volver a los (mín/mediana) | bajada completa (mediana) | récord | meta | logros (frag.)
+día | reliquias ganadas (gastadas) | compras del día | niveles | resets | se puede volver a los (mín/mediana) | bajada completa (mediana) | récord | meta | logros (frag.)
   primer reset a los 46:02: 6 reliquias (con fragmentos) → encendió core, f_brazo, sobran 1
-  1 |     6 (5) |  2 |   3 |   1 | 27:58 / 27:58 |  46:02 | 341 m | 300 m | 20 (55)
-  2 |    17 (17) |  5 |   9 |   4 | 10:10 / 11:24 |  20:04 | 360 m | 328 m | 25 (77)
-  3 |    32 (31) |  9 |  16 |   7 | 10:37 / 11:02 |  20:16 | 386 m | 358 m | 31 (106)
-  4 |    54 (53) | 14 |  27 |  11 | 10:16 / 11:26 |  16:12 | 417 m | 403 m | 35 (133)
-  5 |    82 (80) | 14 |  36 |  15 | 10:58 / 12:46 |  18:02 | 451 m | 434 m | 39 (160)
-  6 |   103 (101) | 14 |  43 |  18 | 11:27 / 12:35 |  17:46 | 463 m | 445 m | 40 (185)
-  7 |   133 (131) | 14 |  53 |  22 | 11:29 / 13:08 |  18:30 | 483 m | 458 m | 41 (195)
-  8 |   166 (162) | 15 |  62 |  26 | 10:49 / 11:46 |  16:42 | 483 m | 470 m | 44 (215)
-  9 |   188 (188) | 18 |  66 |  29 | 11:30 / 12:39 |  17:52 | 491 m | 478 m | 45 (225)
- 10 |   227 (220) | 19 |  70 |  33 | 13:21 / 13:28 |  18:56 | 507 m | 484 m | 49 (280)
- 11 |   252 (249) | 21 |  73 |  36 | 13:48 / 14:22 |  20:12 | 507 m | 488 m | 49 (280)
- 12 |   277 (271) | 21 |  75 |  39 | 12:12 / 14:05 |  19:48 | 507 m | 491 m | 49 (280)
- 13 |   304 (295) | 21 |  77 |  42 | 14:21 / 14:55 |  20:56 | 521 m | 495 m | 51 (295)
- 14 |   330 (321) | 21 |  79 |  45 | 14:07 / 15:04 |  21:06 | 523 m | 498 m | 51 (295)
- 15 |   356 (351) | 22 |  81 |  48 | 13:29 / 14:56 |  20:56 | 525 m | 501 m | 53 (310)
- 16 |   387 (382) | 23 |  83 |  51 | 15:14 / 15:38 |  21:52 | 526 m | 505 m | 54 (320)
- 17 |   414 (402) | 23 |  84 |  54 | 16:00 / 16:09 |  22:36 | 527 m | 508 m | 54 (320)
- 18 |   449 (443) | 24 |  86 |  58 | 12:23 / 13:29 |  19:00 | 527 m | 512 m | 54 (320)
- 19 |   478 (468) | 25 |  87 |  61 | 12:26 / 13:18 |  18:44 | 527 m | 515 m | 55 (330)
- 20 |   519 (498) | 26 |  88 |  65 | 10:44 / 12:46 |  18:00 | 532 m | 520 m | 56 (355)
- 21 |   550 (528) | 27 |  89 |  68 | 13:22 / 14:13 |  19:58 | 533 m | 524 m | 56 (355)
- 22 |   581 (558) | 28 |  90 |  71 | 13:54 / 14:00 |  19:40 | 537 m | 528 m | 56 (355)
- 23 |   647 (638) | 30 |  92 |  75 | 10:14 / 12:24 |  17:30 | 550 m | 533 m | 60 (410)
- 24 |   701 (678) | 31 |  93 |  79 | 11:15 / 12:06 |  17:06 | 552 m | 539 m | 60 (410)
- 25 |   760 (718) | 32 |  94 |  83 | 10:43 / 10:58 |  15:34 | 556 m | 544 m | 62 (445)
- 26 |   806 (768) | 33 |  95 |  86 | 10:13 / 12:05 |  17:06 | 561 m | 549 m | 64 (480)
- 27 |   866 (818) | 34 |  96 |  90 | 10:50 / 10:52 |  15:26 | 568 m | 554 m | 64 (480)
- 28 |   926 (918) | 36 |  98 |  94 | 10:40 / 11:20 |  16:04 | 572 m | 558 m | 65 (505)
+  1 |     6 (5) |  3 |   3 |   1 | 27:58 / 27:58 |  46:02 | 341 m | 300 m | 20 (55)
+  2 |    18 (17) |  6 |   9 |   4 | 11:58 / 12:41 |  22:28 | 364 m | 335 m | 26 (82)
+  3 |    31 (29) |  6 |  15 |   7 | 11:17 / 11:52 |  20:56 | 384 m | 370 m | 31 (106)
+  4 |    51 (51) | 11 |  26 |  10 | 12:18 / 17:17 |  24:08 | 441 m | 448 m | 36 (143)
+  5 |    81 (80) | 10 |  36 |  14 | 10:49 / 12:33 |  17:44 | 469 m | 462 m | 39 (180)
+  6 |   102 (101) |  7 |  43 |  17 | 12:57 / 14:29 |  20:20 | 483 m | 477 m | 40 (185)
+  7 |   129 (128) |  9 |  52 |  20 | 15:02 / 16:19 |  22:50 | 502 m | 487 m | 44 (240)
+  8 |   163 (161) |  9 |  61 |  24 | 10:25 / 10:52 |  15:26 | 502 m | 494 m | 47 (260)
+  9 |   187 (184) |  4 |  65 |  27 | 13:17 / 13:33 |  19:04 | 508 m | 500 m | 47 (260)
+ 10 |   214 (214) |  5 |  70 |  30 | 13:23 / 14:10 |  19:56 | 519 m | 503 m | 49 (280)
+ 11 |   247 (241) |  4 |  74 |  34 | 13:31 / 13:34 |  19:04 | 522 m | 506 m | 50 (290)
+ 12 |   271 (269) |  4 |  78 |  37 | 11:55 / 13:52 |  19:30 | 522 m | 508 m | 50 (290)
+ 13 |   297 (292) |  3 |  81 |  40 | 13:19 / 14:20 |  20:08 | 523 m | 510 m | 51 (295)
+ 14 |   326 (324) |  4 |  85 |  43 | 14:17 / 14:38 |  20:34 | 528 m | 512 m | 52 (305)
+ 15 |   355 (348) |  3 |  88 |  46 | 15:30 / 15:38 |  21:52 | 529 m | 514 m | 54 (320)
+ 16 |   384 (380) |  4 |  92 |  49 | 12:55 / 16:23 |  22:54 | 531 m | 516 m | 54 (320)
+ 17 |   423 (421) |  5 |  97 |  53 | 11:15 / 12:22 |  17:28 | 534 m | 519 m | 55 (330)
+ 18 |   452 (448) |  3 | 100 |  56 | 12:45 / 13:31 |  19:02 | 534 m | 521 m | 55 (330)
+ 19 |   484 (484) |  4 | 104 |  59 | 12:10 / 13:46 |  19:24 | 540 m | 523 m | 55 (330)
+ 20 |   532 (524) |  4 | 108 |  63 |  9:51 / 12:43 |  17:58 | 544 m | 525 m | 56 (355)
+ 21 |   580 (574) |  5 | 113 |  67 |  9:35 / 13:37 |  19:10 | 544 m | 528 m | 56 (355)
+ 22 |   612 (604) |  3 | 116 |  70 | 12:58 / 13:06 |  18:28 | 544 m | 531 m | 57 (365)
+ 23 |   661 (645) |  3 | 119 |  73 | 13:27 / 15:24 |  21:36 | 555 m | 533 m | 60 (425)
+ 24 |   704 (665) |  1 | 120 |  77 | 11:20 / 12:09 |  17:12 | 558 m | 537 m | 60 (425)
+ 25 |   756 (745) |  2 | 122 |  82 |   8:59 / 9:47 |  14:00 | 558 m | 541 m | 61 (435)
+ 26 |   818 (785) |  1 | 123 |  87 |   8:41 / 9:14 |  13:14 | 558 m | 546 m | 61 (435)
+ 27 |   869 (825) |  1 | 124 |  91 |   8:43 / 9:00 |  12:56 | 562 m | 551 m | 64 (495)
+ 28 |   946 (925) |  2 | 126 |  96 |   8:24 / 9:39 |  13:50 | 571 m | 557 m | 66 (530)
+ 29 |  1022 (975) |  1 | 127 | 101 |   7:21 / 8:50 |  12:44 | 572 m | 563 m | 66 (530)
+ 30 |  1033 (1025) |  1 | 128 | 102 |             — |      — | 577 m | 564 m | 67 (555)
 ```
 
 ### Estrella por estrella
-Cuánto acorta una bajada pasar la estrella de 0 al máximo, con las demás de su anillo y anteriores al máximo (sin piedras angulares). La meta de cada fila es adonde se llega en 12 min sin la estrella; promedio de 5 semillas. La última columna son valores promedio, sin azar, medidos a los 10 min de bajada (3 golpes/s): lo que la prueba de tiempo no ve (cofres, reliquias, AFK en minutos de juego activo, segunda bajada).
+Cuánto acorta una bajada pasar la estrella de 0 al máximo, con las demás de su anillo y anteriores al máximo (sin otras piedras angulares), en una bajada que viene de otra igual. La meta de cada fila es adonde se llega en 12 min sin la estrella; promedio de **15 semillas** (antes 5; el ruido ahora es de unos ±4 puntos). "Días hasta árbol completo": campaña a 3 golpes/s con la estrella comprada pero sin efecto, contra con efecto (3 semillas). La última columna son valores sin azar a los 10 min de bajada.
 
-| Estrella | Anillo | Costo | 3 g/s | 1,5 g/s | 5 g/s | Qué más cambia |
-|---|---|---|---|---|---|---|
-| Corazón del pozo | 0 | 1 | +31% | +35% | +35% | 2 h fuera = 4:12 → 6:18 min de juego · 8 h fuera = 13:47 → 20:40 min de juego · 23 h fuera = 13:47 → 20:40 min de juego |
-| Brazo fuerte | 1 | 13 | +11% | +6% | +15% | cofres 28.6% → 26.1% del ingreso |
-| Pico templado | 1 | 13 | +12% | +8% | +17% | cofres 29.2% → 26.1% del ingreso |
-| Ojo certero | 1 | 13 | +4% | +3% | +4% | cofres 26.6% → 26.1% del ingreso |
-| Golpe brutal | 2 | 44 | +13% | +8% | +14% | cofres 37.4% → 33.8% del ingreso |
-| Eco | 2 | 26 | +9% | +12% | +4% | cofres 36.4% → 33.8% del ingreso |
-| Combo | 3 | 44 | +22% | +0% | +24% | cofres 35.9% → 29.2% del ingreso |
-| Mano rápida | 3 | 20 | +22% | +0% | +0% | cofres 35.9% → 29.2% del ingreso |
-| Furia ciega ★ | 3 | 40 | +23% | +13% | +26% | cofres 29.2% → 23.2% del ingreso |
-| Olfato | 1 | 13 | +15% | +15% | +14% | cofres 15.0% → 26.1% del ingreso · 14.4 → 28.8 cofres cada 10 min · reliquias de cofres/h 0.4 → 0.9 |
-| Botín generoso | 1 | 13 | +17% | +15% | +16% | cofres 13.5% → 26.1% del ingreso |
-| Gemólogo | 1 | 7 | +9% | +6% | +9% | cofres 20.7% → 26.1% del ingreso |
-| Corazón de dragón | 2 | 26 | +10% | +9% | +5% | cofres 26.8% → 33.8% del ingreso |
-| Doble cofre | 2 | 26 | +9% | +9% | +3% | cofres 27.3% → 33.8% del ingreso · reliquias de cofres/h 0.9 → 1.2 |
-| Corona | 3 | 36 | +4% | +2% | +2% | cofres 27.4% → 29.2% del ingreso · reliquias de cofres/h 2.4 → 7.1 |
-| Reliquia escondida | 3 | 30 | +0% | +0% | +0% | reliquias de cofres/h 3.5 → 7.1 |
-| Apostador ★ | 3 | 40 | +21% | +27% | +25% | cofres 29.2% → 42.9% del ingreso · 28.8 → 34.2 cofres cada 10 min · reliquias de cofres/h 7.1 → 14.1 |
-| Reclutas | 1 | 13 | -0% | -2% | -1% |  |
-| Capataz | 1 | 13 | +19% | +17% | +19% | 8 h fuera = 9:56 → 12:26 min de juego · 23 h fuera = 9:56 → 12:26 min de juego |
-| Contrato barato | 1 | 13 | +10% | +9% | +9% |  |
-| Bolsa inicial | 1 | 7 | +1% | +1% | +1% |  |
-| Ventaja inicial | 2 | 35 | +1% | +1% | +0% |  |
-| Hitos dorados | 2 | 25 | +21% | +18% | +18% | 2 h fuera = 1:48 → 2:19 min de juego · 8 h fuera = 6:35 → 8:29 min de juego · 23 h fuera = 9:47 → 12:36 min de juego |
-| Memoria | 3 | 30 | +0% | +0% | +0% | 2.ª bajada seguida 11:28 → 11:23 (+1%) |
-| A la par ★ | 3 | 40 | +25% | +26% | +25% | 2 h fuera = 1:25 → 0:59 min de juego · 8 h fuera = 5:12 → 3:38 min de juego · 23 h fuera = 7:43 → 5:24 min de juego |
-| Mecha corta | 1 | 13 | +11% | +12% | +7% | cofres 30.2% → 26.1% del ingreso |
-| Pólvora | 1 | 13 | +15% | +17% | +11% | cofres 33.1% → 26.8% del ingreso |
-| Vigilia | 1 | 7 | +0% | +0% | +0% | 2 h fuera = 1:17 → 2:38 min de juego · 8 h fuera = 4:13 → 9:40 min de juego · 23 h fuera = 4:13 → 9:40 min de juego |
-| Turno noche | 2 | 19 | +0% | +0% | +0% | 23 h fuera = 6:35 → 9:47 min de juego |
-| Descenso rápido | 2 | 15 | +1% | +1% | +0% |  |
-| Mecha guardada | 3 | 30 | +0% | +0% | +0% | 2.ª bajada seguida 11:43 → 11:23 (+3%) |
-| Cuenta regresiva ★ | 3 | 40 | +5% | +8% | +3% | cofres 29.2% → 27.8% del ingreso |
-| Golpe de suerte | 4 | 50 | +9% | +12% | +18% | cofres 29.2% → 37.1% del ingreso · 28.8 → 41.2 cofres cada 10 min · reliquias de cofres/h 7.1 → 10.1 |
-| Mineros con suerte | 4 | 50 | +25% | +27% | +11% | cofres 29.2% → 40.2% del ingreso · 28.8 → 46.8 cofres cada 10 min · reliquias de cofres/h 7.1 → 11.5 |
-| Turnos rotativos | 4 | 50 | +0% | +0% | +0% | 2 h fuera = 1:25 → 2:07 min de juego · 8 h fuera = 5:12 → 7:48 min de juego · 23 h fuera = 7:43 → 11:35 min de juego |
-| Dinamita crítica | 4 | 50 | +19% | +22% | +15% |  |
+| Estrella | Anillo | Costo | 3 g/s | 3 con pausas | 1,5 g/s | 5 g/s | Días hasta árbol completo (sin » con) | Qué más cambia |
+|---|---|---|---|---|---|---|---|---|
+| Corazón del pozo | 0 | 1 | +35% | +35% | +31% | +33% |  | 2 h fuera = 4:13 → 6:19 min de juego · 8 h fuera = 13:48 → 20:42 min de juego · 23 h fuera = 13:48 → 20:42 min de juego |
+| Brazo fuerte | 1 | 13 | +11% | +7% | +4% | +16% |  | cofres 27.8% → 25.3% del ingreso |
+| Pico templado | 1 | 13 | +11% | +10% | +4% | +18% |  | cofres 28.3% → 25.3% del ingreso |
+| Ojo certero | 1 | 13 | -0% | -0% | +3% | +4% |  | cofres 25.9% → 25.3% del ingreso |
+| Golpe brutal | 2 | 35 | +6% | +12% | +7% | +15% |  | cofres 37.3% → 33.8% del ingreso |
+| Eco | 2 | 45 | +6% | +8% | +5% | +10% |  | cofres 36.4% → 33.8% del ingreso |
+| Combo | 3 | 64 | +19% | +17% | +0% | +17% |  | cofres 35.9% → 28.9% del ingreso |
+| Mano rápida | 3 | 15 | +19% | +17% | +0% | +0% |  | cofres 35.9% → 28.9% del ingreso |
+| Furia ciega ★ | 3 | 40 | +20% | +17% | +11% | +26% |  | cofres 28.9% → 22.9% del ingreso |
+| Olfato | 1 | 13 | +15% | +14% | +9% | +14% |  | cofres 14.5% → 25.3% del ingreso · 14.4 → 28.8 cofres cada 10 min · reliquias de cofres/h 0.4 → 0.9 |
+| Botín generoso | 1 | 13 | +16% | +15% | +13% | +15% |  | cofres 13.1% → 25.3% del ingreso |
+| Gemólogo | 1 | 7 | +8% | +5% | +6% | +9% |  | cofres 20.1% → 25.3% del ingreso |
+| Corazón de dragón | 2 | 45 | +7% | +11% | +14% | +10% |  | cofres 26.8% → 33.8% del ingreso |
+| Doble cofre | 2 | 45 | +4% | +10% | +11% | +5% |  | cofres 27.3% → 33.8% del ingreso · reliquias de cofres/h 0.9 → 1.2 |
+| Corona | 3 | 64 | +3% | +3% | +2% | +2% | 31–33 » 28–30 | cofres 27.1% → 28.9% del ingreso · reliquias de cofres/h 2.4 → 7.1 |
+| Reliquia escondida | 3 | 42 | +1% | +0% | -0% | -1% | 30–31 » 28–30 | reliquias de cofres/h 3.5 → 7.1 |
+| Apostador ★ | 3 | 40 | +17% | +23% | +24% | +20% | 29–31 » 28–30 | cofres 28.9% → 42.5% del ingreso · 28.8 → 34.2 cofres cada 10 min · reliquias de cofres/h 7.1 → 14.1 |
+| Reclutas | 1 | 7 | +0% | -0% | -0% | +0% |  |  |
+| Capataz | 1 | 13 | +25% | +23% | +22% | +26% |  |  |
+| Contrato barato | 1 | 13 | +11% | +9% | +7% | +10% |  |  |
+| Bolsa inicial | 1 | 7 | +55% | +57% | +57% | +55% |  |  |
+| Ventaja inicial | 2 | 32 | +0% | +0% | +0% | -0% |  |  |
+| Hitos dorados | 2 | 40 | +31% | +31% | +28% | +26% |  |  |
+| Memoria | 3 | 20 | +1% | +1% | +0% | +1% |  |  |
+| A la par ★ | 3 | 40 | +23% | +19% | +25% | +24% |  | 2 h fuera = 1:11 → 0:50 min de juego · 8 h fuera = 4:21 → 3:03 min de juego · 23 h fuera = 6:28 → 4:32 min de juego |
+| Mecha corta | 1 | 13 | +15% | +13% | +14% | +14% |  | cofres 29.5% → 25.3% del ingreso |
+| Pólvora | 1 | 13 | +22% | +19% | +20% | +17% |  | cofres 31.9% → 25.3% del ingreso |
+| Vigilia | 1 | 7 | +0% | +0% | +0% | +0% |  | 2 h fuera = 1:15 → 2:33 min de juego · 8 h fuera = 4:06 → 9:24 min de juego · 23 h fuera = 4:06 → 9:24 min de juego |
+| Turno noche | 2 | 18 | +0% | +0% | +0% | +0% |  | 23 h fuera = 6:35 → 9:47 min de juego |
+| Descenso rápido | 2 | 12 | -0% | +3% | +1% | +1% |  |  |
+| Racha | 3 | 42 | +13% | +2% | +15% | +7% |  |  |
+| Cuenta regresiva ★ | 3 | 40 | +8% | +12% | +14% | +5% |  | cofres 28.9% → 26.1% del ingreso |
+| Golpe de suerte | 4 | 50 | +13% | +11% | +9% | +13% |  | cofres 28.9% → 36.8% del ingreso · 28.8 → 41.2 cofres cada 10 min · reliquias de cofres/h 7.1 → 10.1 |
+| Mineros con suerte | 4 | 50 | +16% | +18% | +20% | +12% |  | cofres 28.9% → 39.7% del ingreso · 28.8 → 46.8 cofres cada 10 min · reliquias de cofres/h 7.1 → 11.5 |
+| Turnos rotativos | 4 | 50 | +0% | +0% | +0% | +0% |  | 2 h fuera = 1:11 → 1:47 min de juego · 8 h fuera = 4:21 → 6:32 min de juego · 23 h fuera = 6:28 → 9:42 min de juego |
+| Dinamita crítica | 4 | 50 | +18% | +17% | +25% | +11% |  |  |
 
 Lectura:
-- Los porcentajes tienen unos ±3 puntos de ruido.
-- **Combo** y **Mano rápida** no hacen nada por debajo del ritmo de frenesí (y Mano rápida tampoco por encima): es lo esperado de estrellas de frenesí, pero quien golpea a 1,5/s no las nota.
-- **Corona** y **Reliquia escondida** casi no aceleran; triplican y duplican las reliquias de cofres por hora.
-- **Cuenta regresiva** es la piedra angular más floja (3–8% contra 13–27% de las otras). Quedó como la aprobaste.
+- **Bolsa inicial** es la más fuerte del árbol, y agranda todo lo que sube el oro/s (Capataz pasó de 19% a 25%).
+- **No se notan:** Reclutas, Ventaja inicial, Descenso rápido, Memoria y Ojo certero (0–4%). Corona y Reliquia escondida no aceleran la bajada pero sí la campaña; las de AFK solo se ven al volver.
+- **Combo** y **Mano rápida** no hacen nada por debajo del ritmo de frenesí (y Mano rápida tampoco por encima).
+- **Racha** rinde más cuanto más larga la bajada (15% a 1,5 golpes/s) y casi nada con pausas.
 
-## Para decidir antes de programar
-1. **Estrellas que no se notan** (incumple "ninguna estrella inútil"): Reclutas, Bolsa inicial, Ventaja inicial, Descenso rápido, Memoria y Mecha guardada acortan 0–3%. Con metas tan hondas, lo que pasa al arrancar ya no pesa. Propuesta, sin simular: que escalen con la bajada (por ejemplo "Descenso rápido: oro ×3 hasta 100 m antes de la meta", "Ventaja inicial: empezás con una parte de la cuadrilla anterior").
-2. **Los cofres pasan a ser la fuente principal de oro** (41–43% a 3 golpes/s; hoy ~13%). Es la consecuencia de que Fortuna se note. Si es demasiado, bajo Fortuna y vuelvo a calibrar la meta.
-3. **A 5 golpes/s el piso no se cumple** (mediana 9:04–9:40, mínima 6:31). Lo dejé así porque el activo tiene que salir ganando; correr la meta ~10 m más lo arreglaría, y a 1,5 golpes/s las bajadas pasarían de ~16 a ~19 min.
-4. **La 3.ª y la 4.ª bajada** son más largas que hoy: sin contar logros, 14:41 y 13:22 contra 12:36 y 10:34; con logros, medio minuto más.
-5. **A mitad de campaña** (días 13–17) la bajada sube a 14–16 min mientras se junta para el anillo 3.
-6. **Logros:** con 20 fragmentos por reliquia dan 31 reliquias (antes 63). "Mil escaleras" (150 resets) y "Museo ambulante" (20 reliquias en una bajada) no salen antes de completar el árbol: habría que bajarlos (por ejemplo a 90 resets y 14 reliquias).
-7. **El AFK al 5% cambia el balance base** (`data/balance.json`): también lo sienten quienes todavía no compraron nada.
+### Alternativas medidas (no están en la propuesta)
+Acortamiento a 3 golpes/s / con pausas / 1,5 / 5, 15 semillas. Las alternativas se midieron juntas (las otras estrellas de arrastre ya con la Bolsa corta).
+
+| Estrella | Con tus números | Alternativa | Resultado |
+|---|---|---|---|
+| Bolsa inicial | 1 / 3 / 10 min → 55 / 57 / 57 / 55% | 10 / 20 / 40 s | **25 / 25 / 26 / 26%** |
+| Ventaja inicial | 5 / 10 / 15% → 0% | 25 / 50 / 75% (con la Bolsa corta) | **22 / 25 / 23 / 20%** |
+| Reclutas | 5 / 10 / 15% → 0% | 25 / 50 / 75% | 1 / 0 / 1 / -1% |
+| Descenso rápido | oro ×3 hasta 50% de la meta → 0 / 3 / 1 / 1% | hasta 80% | 2 / 7 / 4 / 2% |
+| Descenso rápido | | **hasta 95%** | **27 / 27 / 23 / 21%** |
+| Memoria | → 0–1% | (sin números que cambiar) | — |
+
+Las tres alternativas juntas harían al jugador más fuerte por otro lado: la meta hay que recalibrarla.
 
 ## Logros propuestos
 70 logros, 630 fragmentos = **31 reliquias** en total (20 fragmentos = 1 reliquia). Fácil 2, medio 5, difícil 10, épico 25.
@@ -252,7 +327,7 @@ Lectura:
 | Profundidad | Sin fondo | 450 m | difícil | 10 |
 | Profundidad | Medio kilómetro | 500 m | difícil | 10 |
 | Profundidad | Donde no llega el eco | 550 m | épico | 25 |
-| Profundidad | El corazón del mundo | 600 m | épico | 25 |
+| Profundidad | El corazón del mundo | 575 m | épico | 25 |
 | Cofres | ¿Qué habrá adentro? | Primer cofre | fácil | 2 |
 | Cofres | Algo azul | Primer cofre Raro | fácil | 2 |
 | Cofres | Esto promete | Primer cofre Épico | fácil | 2 |
@@ -282,9 +357,9 @@ Lectura:
 | Resets | Ida y vuelta | 5 veces | medio | 5 |
 | Resets | Rutina | 15 veces | medio | 5 |
 | Resets | Ascensor propio | 50 veces | difícil | 10 |
-| Resets | Mil escaleras | 150 veces | épico | 25 |
+| Resets | Mil escaleras | 90 veces | épico | 25 |
 | Resets | Mochila llena | 10 reliquias en una sola bajada | difícil | 10 |
-| Resets | Museo ambulante | 20 reliquias en una sola bajada | épico | 25 |
+| Resets | Museo ambulante | 14 reliquias en una sola bajada | épico | 25 |
 | Frenesí y dinamita | Se te fue la mano | Encendé el frenesí | fácil | 2 |
 | Frenesí y dinamita | Un minuto sin respirar | 1 min de frenesí seguido | medio | 5 |
 | Frenesí y dinamita | Máquina de picar | 5 min de frenesí seguido | difícil | 10 |
@@ -308,4 +383,4 @@ Lectura:
 | Secretos | Justo a tiempo | Un golpe crítico que suelte un Legendario | épico | 25 |
 | Secretos | Gracias por leer | Abrí los Créditos y llegá hasta el final | fácil | 2 |
 
-Contadores históricos a guardar desde v0.7 (para los Puntos de Leyenda de v0.8): golpes, críticos, oro ganado, profundidad récord, resets, reliquias ganadas, cofres por rareza, usos de dinamita, segundos de frenesí, máximo de cada generador y tiempo jugado.
+Contadores históricos a guardar desde v0.7 (para los Puntos de Leyenda de v0.8): golpes, críticos, oro ganado, profundidad récord, resets, reliquias ganadas, cofres por rareza, usos de dinamita, segundos de frenesí, máximo de cada generador y tiempo jugado. **Nuevos en esta vuelta:** tiempo activo (segundos con algún golpe en los últimos 5 s), tiempo AFK (segundos acreditados como ausencia) y máximo de golpes/s sostenido (mejor promedio en 10 s, contando como mucho 10 por segundo). Las tres definiciones son propuesta mía.
