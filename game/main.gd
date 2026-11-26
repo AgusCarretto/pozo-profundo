@@ -49,6 +49,8 @@ const SPECIAL_FLASH_FADE: float = 0.5
 ## Un logro se festeja parecido: destello dorado y una pausa más corta.
 const ACHIEVEMENT_FLASH: Color = Color(1.0, 0.9, 0.55, 0.7)
 const ACHIEVEMENT_PAUSE: float = 0.25
+## Solo estas dificultades se festejan; el resto sale con el aviso y un sonido corto, sin frenar el juego.
+const CELEBRATED_TIERS: Array[String] = ["dificil", "epico"]
 ## Volver a la superficie: fundido (a blanco; a oscuro con "reducir efectos") y reliquias que vuelan al contador.
 const PRESTIGE_WHITE: Color = Color(1.0, 1.0, 1.0)
 const PRESTIGE_DARK: Color = Color(0.08, 0.07, 0.12)
@@ -668,7 +670,11 @@ func _build_achievements() -> void:
 
 
 func _celebrate_achievements(ids: Array) -> void:
-	_celebration.play(ids.size(), str(Economy.achievements.entry(ids[0]).get("name", "")), Settings.reduce_effects)
+	var big: Array = ids.filter(func(id: String) -> bool: return str(Economy.achievements.entry(id).get("tier", "")) in CELEBRATED_TIERS)
+	if big.is_empty():
+		Audio.play_sfx("milestone")
+		return
+	_celebration.play(ids.size(), str(Economy.achievements.entry(big[0]).get("name", "")), Settings.reduce_effects)
 	Audio.play_sfx("achievement")
 	if Settings.reduce_effects:
 		return

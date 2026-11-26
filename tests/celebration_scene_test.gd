@@ -28,6 +28,7 @@ func _initialize() -> void:
 	_test_pitch_multiplier()
 	var packed: PackedScene = load(MAIN_SCENE) as PackedScene
 	await _mount(packed)
+	await _test_easy_ones_only_get_the_notice()
 	await _test_achievement_is_celebrated()
 	await _test_the_rock_still_works()
 	await _test_reduced_effects()
@@ -92,17 +93,33 @@ func _test_pitch_multiplier() -> void:
 	_check_near(high.pitch_scale, low * 1.5, "el tono se multiplica", 0.001)
 
 
+func _test_easy_ones_only_get_the_notice() -> void:
+	_section("Los fáciles y medios: aviso sin festejo ni pausa")
+	_played.clear()
+	var scale_before: float = Engine.time_scale
+	_flash().color.a = 0.0
+	_economy.unlock_achievement("hits_100")
+	_economy.unlock_achievement("hits_10000")
+	await _frames(1)
+	_check(_find("AchievementToast").visible, "sale el aviso")
+	_check(not _celebration().visible, "sin festejo")
+	_check_eq(_flash().color.a, 0.0, "sin destello")
+	_check_near(Engine.time_scale, scale_before, "sin pausa")
+	_check(_played.has("milestone") and not _played.has("achievement"), "con un sonido corto (%s)" % str(_played))
+	_find("AchievementToast").call("dismiss")
+
+
 func _test_achievement_is_celebrated() -> void:
-	_section("Un logro se festeja")
+	_section("Un logro difícil o épico se festeja")
 	_check(_celebration() != null and not _celebration().visible, "sin logros no hay festejo")
 	_played.clear()
 	var scale_before: float = Engine.time_scale
-	_economy.unlock_achievement("hits_100")
+	_economy.unlock_achievement("hits_100000")
 	await _frames(1)
 	_check(_celebration().visible, "aparece")
 	_check(_played.has("achievement"), "con su sonido (%s)" % str(_played))
 	_check_eq(_text("CelebrationTitle"), "¡LOGRO!", "título")
-	_check_eq(_text("CelebrationName"), "Primeras astillas", "y cuál es")
+	_check_eq(_text("CelebrationName"), "Brazo de hierro", "y cuál es")
 	var game_font: Font = (_scene.get_node("%GoldLabel") as Label).get_theme_font("font")
 	var title: Label = _celebration().find_child("CelebrationTitle", true, false) as Label
 	_check_eq(title.get_theme_font("font"), game_font, "con la fuente del juego")
@@ -117,8 +134,7 @@ func _test_achievement_is_celebrated() -> void:
 		if (node as Control).mouse_filter != Control.MOUSE_FILTER_IGNORE:
 			catches.append(str(node.name))
 	_check(catches.is_empty(), "no come ningún toque (%s)" % str(catches))
-	_economy.achievements.add("hits", 1000.0)
-	_economy.achievements.add("crits", 100.0)
+	_economy.achievements.add("hits", 300000.0)
 	_economy.check_achievements()
 	await _frames(1)
 	_check_eq(_text("CelebrationName"), "3 logros nuevos", "los que llegan mientras dura se suman al mismo festejo (%s)" % _text("CelebrationName"))
@@ -127,7 +143,7 @@ func _test_achievement_is_celebrated() -> void:
 
 func _test_the_rock_still_works() -> void:
 	_section("Se sigue picando durante el festejo")
-	_economy.unlock_achievement("gear_opens_50")
+	_economy.unlock_achievement("resets_50")
 	await _wait(0.5)
 	var rock: Button = _scene.get_node("%TapButton") as Button
 	var before: float = _economy.gold
@@ -152,7 +168,7 @@ func _test_reduced_effects() -> void:
 	await _frames(1)
 	_flash().color.a = 0.0
 	var scale_before: float = Engine.time_scale
-	_economy.unlock_achievement("loot_views_25")
+	_economy.unlock_achievement("chests_1000")
 	await _frames(1)
 	_check(_celebration().visible, "el festejo igual aparece")
 	_check_eq(_flash().color.a, 0.0, "sin destello")
