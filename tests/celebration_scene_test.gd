@@ -103,6 +103,10 @@ func _test_achievement_is_celebrated() -> void:
 	_check(_played.has("achievement"), "con su sonido (%s)" % str(_played))
 	_check_eq(_text("CelebrationTitle"), "¡LOGRO!", "título")
 	_check_eq(_text("CelebrationName"), "Primeras astillas", "y cuál es")
+	var game_font: Font = (_scene.get_node("%GoldLabel") as Label).get_theme_font("font")
+	var title: Label = _celebration().find_child("CelebrationTitle", true, false) as Label
+	_check_eq(title.get_theme_font("font"), game_font, "con la fuente del juego")
+	_check(_celebration().find_child("Medallion", true, false) != null, "y el trofeo sobre un medallón que lo destaca")
 	_check(_flash().color.a > 0.0, "con un destello")
 	_check(Engine.time_scale < scale_before, "y una pausa en cámara lenta")
 	_check(_celebration().find_child("Confetti", true, false) != null, "y papelitos")
@@ -165,6 +169,10 @@ func _test_prestige_opens_the_tree() -> void:
 	_economy.run_gold = 1.0e12
 	_check(_economy.can_prestige(), "(se puede volver)")
 	var tree: Control = _find("TreeView")
+	# El reloj del director queda quieto durante la vuelta; después se adelanta para pasar el tema del prestigio.
+	var director: Node = _scene.get_node("MusicDirector")
+	var now: Array[float] = [Time.get_ticks_usec() / 1000000.0]
+	director.set("clock", func() -> float: return now[0])
 	_scene.call("_confirm_prestige")
 	await _frames(3)
 	_check(not tree.visible, "durante la vuelta todavía no")
@@ -173,5 +181,12 @@ func _test_prestige_opens_the_tree() -> void:
 	await _frames(2)
 	_check(tree.visible, "y el árbol se abre solo")
 	_check(_celebration().visible, "ahí sí se festejan los logros")
+	now[0] += 60.0
+	director.call("update")
+	_check_eq(_audio.current_music_id(), "tree", "después del tema de la vuelta suena el del árbol")
 	(tree.find_child("CloseTree", true, false) as Button).pressed.emit()
+	director.call("update")
+	_check_eq(_audio.current_music_id(), "earth", "y al cerrarlo, el de Tierra")
+	var player: AudioStreamPlayer = _audio.current_music_player()
+	_check(player != null and player.get_playback_position() < 0.5, "desde el principio: es una bajada nueva")
 	_celebration().call("dismiss")

@@ -10,8 +10,9 @@ const SPARK: Texture2D = preload("res://assets/particles/particle_pack/star_06.p
 const SHOW_SECONDS: float = 2.6
 const FADE_SECONDS: float = 0.35
 ## Dónde va el centro, como parte del alto de la pantalla.
-const HEIGHT_RATIO: float = 0.4
-const TROPHY_SIZE: float = 176.0
+const HEIGHT_RATIO: float = 0.36
+const TROPHY_SIZE: float = 156.0
+const MEDALLION_RADIUS: float = 112.0
 const TEXT_WIDTH: float = 660.0
 const RAY_COUNT: int = 14
 const RAY_LENGTH: float = 330.0
@@ -19,6 +20,14 @@ const RAY_SPEED: float = 0.7
 const CONFETTI: int = 110
 const SPARKS: int = 28
 const CONFETTI_COLORS: Array[Color] = [Palette.YELLOW, Palette.GOLD, Palette.CYAN, Palette.PINK, Palette.AQUA, Palette.FROST]
+
+
+## El disco oscuro con borde dorado donde va el trofeo.
+class Medallion extends Control:
+	func _draw() -> void:
+		draw_circle(Vector2.ZERO, MEDALLION_RADIUS, Palette.GOLD)
+		draw_circle(Vector2.ZERO, MEDALLION_RADIUS - 9.0, Palette.YELLOW)
+		draw_circle(Vector2.ZERO, MEDALLION_RADIUS - 15.0, Palette.NAVY)
 
 
 ## Los rayos de atrás del trofeo.
@@ -31,7 +40,8 @@ class Rays extends Control:
 				PackedColorArray([Color(Palette.YELLOW, 0.55), Color(Palette.GOLD, 0.0), Color(Palette.GOLD, 0.0)]))
 
 
-var _stage: Node2D
+## Un Control (no un Node2D): así los textos heredan el tema y la fuente del juego.
+var _stage: Control
 var _rays: Rays
 var _emblem: Node2D
 var _name_label: Label
@@ -48,7 +58,8 @@ func _init() -> void:
 	visible = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_stage = Node2D.new()
+	_stage = Control.new()
+	_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_stage)
 	_stage.add_child(_sprite(GLOW, 760.0, Color(0.05, 0.03, 0.08, 0.85)))
 	_rays = Rays.new()
@@ -56,15 +67,19 @@ func _init() -> void:
 	_stage.add_child(_rays)
 	_emblem = Node2D.new()
 	_stage.add_child(_emblem)
-	_emblem.add_child(_sprite(GLOW, 420.0, Color(Palette.GOLD, 0.8)))
+	_emblem.add_child(_sprite(GLOW, 440.0, Color(Palette.GOLD, 0.8)))
+	var medallion: Medallion = Medallion.new()
+	medallion.name = "Medallion"
+	medallion.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_emblem.add_child(medallion)
 	_emblem.add_child(_sprite(TROPHY, TROPHY_SIZE, Palette.YELLOW))
 	_confetti = _build_confetti()
 	_stage.add_child(_confetti)
 	_sparks = _build_sparks()
 	_stage.add_child(_sparks)
-	var title: Label = _label("CelebrationTitle", 84, Palette.YELLOW, 110.0)
+	var title: Label = _label("CelebrationTitle", 88, Palette.YELLOW, 132.0)
 	title.text = "¡LOGRO!"
-	_name_label = _label("CelebrationName", 40, Palette.FROST, 214.0)
+	_name_label = _label("CelebrationName", 44, Palette.FROST, 240.0)
 	resized.connect(_place)
 
 

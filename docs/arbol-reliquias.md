@@ -113,7 +113,7 @@ La simulación necesitaba menos detalle que el juego:
 - **A la par:** "mientras golpeás" = algún golpe en los últimos 5 s.
 
 ## 5. Piedras angulares y reasignar
-- Ventaja y desventaja. **Máximo 2 activas**; se pueden comprar las 4. Se cambian solo en la superficie, justo después de un reset.
+- Ventaja y desventaja. **Máximo 2 activas**; se pueden comprar las 4. Se prenden y apagan en cualquier momento; el cambio vale desde la próxima bajada (en la superficie sin haber empezado, ya). La estrella muestra el cambio pendiente.
 - Los puentes piden tener **compradas** las dos piedras angulares que unen, no activas.
 - "Reasignar estrellas" (**0.7.1**; la 0.7.0 solo prende y apaga angulares): devuelve todas las reliquias gastadas (salvo el Corazón). Gratis la primera vez; después cuesta 10% de lo devuelto. Solo en la superficie. *(Sin simular.)*
 
@@ -225,7 +225,8 @@ La simulación necesitaba menos detalle que el juego:
 - Zoom con pellizco y arrastre; botón para centrar en el Corazón. Botones de 96 px de diseño o más.
 - Tocar una estrella: panel con nombre, efecto actual → siguiente nivel, costo y botón Comprar.
 - Al comprar: destello, partículas y un sonido "celestial" que sube de tono con el nivel. Al abrirse un anillo: la niebla se barre y sale "¡Nueva zona del cielo!".
-- Acceso por el botón Reliquias. La confirmación de volver muestra cuántas reliquias ganás y un atajo "Ir al árbol".
+- Acceso por el botón Reliquias, y se abre solo al volver a la superficie.
+- Al conseguir un logro: festejo con sonido, destello y pausa, como el del cofre Legendario pero sin monedas.
 - Respetar "reducir efectos".
 
 ## 11. Datos y guardado

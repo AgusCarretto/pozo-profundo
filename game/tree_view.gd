@@ -10,6 +10,9 @@ const Palette := preload("res://game/palette.gd")
 const RelicTree := preload("res://core/relic_tree.gd")
 const TreeStar := preload("res://game/tree_star.gd")
 const Juice := preload("res://game/juice.gd")
+const StarSky := preload("res://game/star_sky.gd")
+const CENTER_ICON: Texture2D = preload("res://assets/ui/game_icons/target.png")
+const SPARK: Texture2D = preload("res://assets/particles/particle_pack/star_06.png")
 
 const SPACING: float = 132.0
 const BUTTON_HEIGHT: float = 104.0
@@ -17,6 +20,14 @@ const PRICE_HEIGHT: float = 40.0
 const TOP_BUTTON_WIDTH: float = 160.0
 ## Cuánto hay que mover el dedo para que sea un arrastre y no un toque (px de diseño).
 const DRAG_THRESHOLD: float = 18.0
+## Aire alrededor del árbol al arrastrar: para ver entero el aviso de la estrella de la punta.
+const PAN_MARGIN: float = 90.0
+## El destello al comprar: cuántas chispas, cuánto duran y cuánto sube el sonido por nivel.
+const BURST_AMOUNT: int = 22
+const BURST_SECONDS: float = 0.7
+const PITCH_PER_LEVEL: float = 0.07
+## Cuánto se ve el aviso de anillo nuevo.
+const BANNER_SECONDS: float = 3.0
 const COLORS: Dictionary = {
 	"frost": Palette.FROST, "clay": Palette.CLAY, "yellow": Palette.YELLOW, "purple": Palette.PURPLE,
 	"blue": Palette.BLUE, "steel_light": Palette.STEEL_LIGHT,
@@ -41,6 +52,10 @@ var _pressing: bool = false
 var _dragged: bool = false
 var _press_at: Vector2 = Vector2.ZERO
 var _dirty: bool = true
+var _banner: Label
+var _banner_left: float = 0.0
+## Los anillos que ya estaban abiertos la última vez que se miró (para avisar solo los nuevos).
+var _open_rings: Array[int] = []
 
 
 func _init() -> void:
@@ -51,11 +66,7 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	var sky: ColorRect = ColorRect.new()
-	sky.color = Palette.OUTLINE.darkened(0.45)
-	sky.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	sky.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(sky)
+	add_child(StarSky.new())
 	var column: VBoxContainer = VBoxContainer.new()
 	column.add_theme_constant_override("separation", 0)
 	column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -75,6 +86,8 @@ func _ready() -> void:
 	_viewport.add_child(_canvas)
 	column.add_child(_build_detail())
 	_build_stars()
+	_build_banner()
+	sync_rings()
 	Economy.tree_changed.connect(_mark_dirty)
 	Economy.gold_changed.connect(_mark_dirty.unbind(1))
 	Economy.prestiged.connect(_mark_dirty.unbind(1))
@@ -97,6 +110,8 @@ func close() -> void:
 	if not visible:
 		return
 	visible = false
+	_banner_left = 0.0
+	_banner.visible = false
 	Audio.play_sfx("close")
 	closed.emit()
 
@@ -112,9 +127,13 @@ func select(id: String) -> void:
 	_refresh()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if visible and _dirty:
 		_refresh()
+	if _banner_left > 0.0:
+		_banner_left -= delta
+		_banner.visible = _banner_left > 0.0
+		_banner.modulate.a = clampf(_banner_left / 0.5, 0.0, 1.0)
 
 
 func _mark_dirty() -> void:
@@ -137,6 +156,8 @@ func _build_top() -> Control:
 	_available_label.add_theme_font_size_override("font_size", 28)
 	row.add_child(_available_label)
 	var center: Button = _button("CenterTree", "Centrar", &"ButtonNeutral", TOP_BUTTON_WIDTH)
+	center.icon = CENTER_ICON
+	center.add_theme_constant_override("icon_max_width", 30)
 	center.pressed.connect(func() -> void:
 		_pan = Vector2.ZERO
 		_place_canvas())
@@ -281,6 +302,7 @@ func _place_canvas() -> void:
 	for star: Control in _stars.values():
 		var rect: Rect2 = Rect2(star.position, star.custom_minimum_size)
 		bounds = rect if bounds.size == Vector2.ZERO else bounds.merge(rect)
+	bounds = bounds.grow(PAN_MARGIN)
 	var half: Vector2 = _viewport.size * 0.5
 	_pan.x = clampf(_pan.x, minf(0.0, half.x - bounds.end.x), maxf(0.0, -half.x - bounds.position.x))
 	_pan.y = clampf(_pan.y, minf(0.0, half.y - bounds.end.y), maxf(0.0, -half.y - bounds.position.y))
@@ -293,6 +315,7 @@ func _refresh() -> void:
 	_dirty = false
 	if not Economy.has_tree():
 		return
+	_announce_new_rings()
 	var available: int = Economy.available_relics()
 	_available_label.text = "1 reliquia para gastar" if available == 1 else "%d reliquias para gastar" % available
 	for id: String in _stars:
@@ -385,9 +408,79 @@ func _on_star_pressed(id: String) -> void:
 func _on_buy() -> void:
 	if not Economy.buy_star(selected):
 		return
-	Audio.play_sfx("relic")
+	# Suena más agudo cuanto más alto el nivel.
+	Audio.play_sfx("star_buy", 1.0 + PITCH_PER_LEVEL * (Economy.relic_tree.level(selected) - 1))
 	Juice.bounce(_stars[selected])
+	_burst(_stars[selected])
 	_refresh()
+
+
+## Chispas del color de la rama que salen de la estrella comprada.
+func _burst(star: TreeStar) -> void:
+	var sparks: CPUParticles2D = CPUParticles2D.new()
+	sparks.name = "Burst"
+	sparks.position = star.position + star.size * 0.5
+	sparks.texture = SPARK
+	sparks.one_shot = true
+	sparks.explosiveness = 1.0
+	sparks.amount = BURST_AMOUNT / 3 if Settings.reduce_effects else BURST_AMOUNT
+	sparks.lifetime = BURST_SECONDS
+	sparks.spread = 180.0
+	sparks.gravity = Vector2.ZERO
+	sparks.initial_velocity_min = 140.0
+	sparks.initial_velocity_max = 300.0
+	sparks.damping_min = 200.0
+	sparks.damping_max = 320.0
+	sparks.scale_amount_min = 24.0 / SPARK.get_width()
+	sparks.scale_amount_max = 64.0 / SPARK.get_width()
+	sparks.color = star.branch_color.lerp(Color.WHITE, 0.35)
+	var fade: Gradient = Gradient.new()
+	fade.colors = PackedColorArray([Color.WHITE, Color(1.0, 1.0, 1.0, 0.0)])
+	sparks.color_ramp = fade
+	_canvas.add_child(sparks, true)
+	sparks.emitting = true
+	get_tree().create_timer(BURST_SECONDS + 0.3).timeout.connect(sparks.queue_free)
+
+
+func _build_banner() -> void:
+	_banner = Label.new()
+	_banner.name = "RingBanner"
+	_banner.text = "¡Nueva zona del cielo!"
+	_banner.visible = false
+	_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_banner.offset_top = 24.0
+	_banner.add_theme_font_size_override("font_size", 44)
+	_banner.add_theme_color_override("font_color", Palette.YELLOW)
+	_banner.add_theme_color_override("font_outline_color", Palette.OUTLINE)
+	_banner.add_theme_constant_override("outline_size", 12)
+	_viewport.add_child(_banner)
+
+
+## Los anillos abiertos ahora, sin avisar (al armar la pantalla o al cambiar de partida).
+func sync_rings() -> void:
+	_open_rings = _rings_open_now()
+
+
+func _rings_open_now() -> Array[int]:
+	var open: Array[int] = []
+	if Economy.has_tree():
+		for ring: int in range(4):
+			if Economy.relic_tree.ring_open(ring, Economy.record_depth_now(), Economy.resets):
+				open.append(ring)
+	return open
+
+
+func _announce_new_rings() -> void:
+	var now: Array[int] = _rings_open_now()
+	if now.any(func(ring: int) -> bool: return not _open_rings.has(ring)):
+		_banner_left = BANNER_SECONDS
+		_banner.visible = true
+		_banner.modulate.a = 1.0
+		Audio.play_sfx("ring_open")
+	_open_rings = now
 
 
 func _on_keystone() -> void:

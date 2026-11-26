@@ -72,6 +72,9 @@ const RUNE_ICONS: Array[String] = [
 ## Cuántas runas se dibujan como máximo en el cartel de reliquias (el contador dice el total real).
 const MAX_RUNES_SHOWN: int = 8
 const RUNE_SIZE: float = 80.0
+## Tamaño de los íconos de los botones del cartel de Reliquias (la runa se agranda por un múltiplo entero de 16).
+const BUTTON_ICON_SIZE: int = 48
+const TROPHY_ICON: Texture2D = preload("res://assets/ui/game_icons/trophy.png")
 ## El oro achica su fuente de a este paso cuando el número no entra en su lugar, sin bajar del mínimo.
 const GOLD_FONT_STEP: int = 4
 const GOLD_FONT_MIN: int = 48
@@ -600,6 +603,8 @@ func _build_tree(debug: Control) -> void:
 	_tree_button.name = "TreeButton"
 	_tree_button.theme_type_variation = &"ButtonNeutral"
 	_tree_button.text = "Árbol de reliquias"
+	_tree_button.icon = _pixel_icon(RUNE_ICONS[0])
+	_tree_button.add_theme_constant_override("h_separation", 16)
 	_tree_button.custom_minimum_size = Vector2(0, TreeView.BUTTON_HEIGHT)
 	_tree_button.focus_mode = Control.FOCUS_NONE
 	_tree_button.visible = Economy.has_tree()
@@ -610,6 +615,15 @@ func _build_tree(debug: Control) -> void:
 	box.add_child(_tree_button)
 	box.move_child(_tree_button, _prestige_button.get_index())
 	_keep_debug_above(debug, _tree_view)
+	_tree_view.opened.connect(_music.set_tree_open.bind(true))
+	_tree_view.closed.connect(_music.set_tree_open.bind(false))
+
+
+## Un sprite de 16x16 agrandado sin suavizar, para usarlo como ícono de un botón.
+func _pixel_icon(path: String) -> Texture2D:
+	var image: Image = (load(path) as Texture2D).get_image()
+	image.resize(BUTTON_ICON_SIZE, BUTTON_ICON_SIZE, Image.INTERPOLATE_NEAREST)
+	return ImageTexture.create_from_image(image)
 
 
 ## El panel de debug (solo en la build de prueba) pasa encima de la pantalla completa mientras está abierta.
@@ -639,6 +653,9 @@ func _build_achievements() -> void:
 	_book_button = Button.new()
 	_book_button.name = "AchievementsButton"
 	_book_button.theme_type_variation = &"ButtonNeutral"
+	_book_button.icon = TROPHY_ICON
+	_book_button.add_theme_constant_override("icon_max_width", BUTTON_ICON_SIZE)
+	_book_button.add_theme_constant_override("h_separation", 16)
 	_book_button.custom_minimum_size = Vector2(0, AchievementBook.BUTTON_HEIGHT)
 	_book_button.focus_mode = Control.FOCUS_NONE
 	_book_button.visible = Economy.has_achievements()
@@ -829,6 +846,7 @@ func _on_save_imported() -> void:
 	_book.close()
 	_toast.dismiss()
 	_celebration.dismiss()
+	_tree_view.sync_rings()
 	_refresh()
 	_show_pending_notice()
 

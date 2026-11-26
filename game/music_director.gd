@@ -1,13 +1,13 @@
 extends Node
 ## Director de la música: decide qué tema suena y le pide a Audio el cambio con un fundido cruzado.
 ##
-## Por prioridad: la vuelta a la superficie ("prestige"), las Opciones ("options"), el frenesí ("frenzy", cuando
+## Por prioridad: la vuelta a la superficie ("prestige"), las Opciones ("options"), el árbol ("tree"), el frenesí ("frenzy", cuando
 ## golpeás rápido un rato) y si no, el tema del bioma (su id del balance). Qué archivo es cada uno lo dice
 ## data/sounds.json; si un tema no está en el catálogo, suena el siguiente de la lista. Los umbrales del frenesí
 ## vienen del balance (Economy.frenzy_settings(), ver core/frenzy_meter.gd); los tiempos de los fundidos son
 ## presentación y viven acá.
 ##
-## main.gd lo crea y le cuenta el bioma (set_biome), las Opciones (set_options_open) y la vuelta a la superficie
+## main.gd lo crea y le cuenta el bioma (set_biome), las Opciones (set_options_open), el árbol (set_tree_open) y la vuelta a la superficie
 ## (begin_prestige / end_prestige). Los golpes los escucha de Economy.hit_landed, y las compras (generadores y pico)
 ## sostienen un frenesí prendido: ir a la tienda no lo corta.
 
@@ -32,6 +32,9 @@ var prestige_running: bool = false
 var _thresholds: Dictionary = {}
 var _biome: String = ""
 var _options_open: bool = false
+var _tree_open: bool = false
+## Después de volver a la superficie, el próximo tema de bioma arranca desde el principio.
+var _fresh_biome: bool = false
 ## Hasta cuándo (según `clock`) sigue el tema del prestigio una vez terminada la secuencia; -1 = no sigue.
 var _prestige_until: float = -1.0
 ## El tema que se pidió por última vez ("" = ninguno todavía).
@@ -68,6 +71,11 @@ func set_options_open(open: bool) -> void:
 	update()
 
 
+func set_tree_open(open: bool) -> void:
+	_tree_open = open
+	update()
+
+
 func begin_prestige() -> void:
 	prestige_running = true
 	_prestige_until = -1.0
@@ -77,6 +85,7 @@ func begin_prestige() -> void:
 
 func end_prestige() -> void:
 	prestige_running = false
+	_fresh_biome = true
 	_prestige_until = clock.call() + PRESTIGE_HOLD
 	update()
 
@@ -89,6 +98,8 @@ func wanted() -> String:
 		candidates.append("prestige")
 	if _options_open:
 		candidates.append("options")
+	if _tree_open:
+		candidates.append("tree")
 	if frenzy.active:
 		candidates.append("frenzy")
 	candidates.append(_biome)
@@ -112,19 +123,21 @@ func update() -> void:
 	match next:
 		"prestige":
 			Audio.play_music(next, PRESTIGE_FADE, true)
-		"options":
+		"options", "tree":
 			Audio.play_music(next, OPTIONS_FADE)
 		"frenzy":
 			# Desde el principio: arranca con su subida.
 			Audio.play_music(next, FRENZY_IN_FADE, true)
 		_:
+			if _fresh_biome:
+				# Una partida nueva: el tema de Tierra desde el principio.
+				_fresh_biome = false
+				Audio.play_music(next, BIOME_FADE, true)
+				return
 			match previous:
-				"prestige":
-					# Una partida nueva: el tema de Tierra desde el principio.
-					Audio.play_music(next, BIOME_FADE, true)
 				"frenzy":
 					Audio.play_music(next, FRENZY_OUT_FADE)
-				"options":
+				"options", "tree":
 					Audio.play_music(next, OPTIONS_FADE)
 				_:
 					Audio.play_music(next, BIOME_FADE)

@@ -27,6 +27,7 @@ func _initialize() -> void:
 	await _test_drag_pans_without_buying()
 	await _test_what_each_state_says()
 	await _test_icons_and_badges()
+	await _test_sky_and_effects()
 	await _test_branches_are_told_apart()
 	await _test_return_target_is_visible()
 	await _test_tap_cap_in_the_game()
@@ -246,7 +247,55 @@ func _test_what_each_state_says() -> void:
 		if id != "f_furia" and star.get_global_rect().intersects(balloon):
 			over.append(id)
 	_check(over.is_empty(), "el aviso no tapa otra estrella (%s)" % str(over))
+	var view: Control = _tree.find_child("Viewport", true, false) as Control
+	for i: int in range(6):
+		await _drag(view.get_global_rect().get_center(), Vector2(0, 500))
+	_check(view.get_global_rect().encloses(pending.get_global_rect()), "y se puede traer a la vista aunque sea la estrella de más arriba (%s en %s)" % [str(pending.get_global_rect()), str(view.get_global_rect())])
+	await _tap(_tree.find_child("CenterTree", true, false) as Button)
 	(_tree.find_child("CloseTree", true, false) as Button).pressed.emit()
+	await _frames()
+
+
+func _test_sky_and_effects() -> void:
+	_section("Cielo, destello al comprar, anillo nuevo y música")
+	_economy.reset()
+	_economy.resets = 1
+	_economy.grant_relics(40)
+	await _frames()
+	var played: Array = []
+	var listen: Callable = func(id: String) -> void: played.append(id)
+	var audio: Node = root.get_node("Audio")
+	var settings: Node = root.get_node("Settings")
+	var muted: bool = settings.muted
+	settings.muted = false
+	audio.sfx_played.connect(listen)
+	await _open_tree()
+	_check(_tree.find_child("StarSky", true, false) != null, "hay un cielo de fondo")
+	var director: Node = _scene.get_node("MusicDirector")
+	_check_eq(director.call("wanted"), "tree", "y su música")
+	var center: Button = _tree.find_child("CenterTree", true, false) as Button
+	_check(center.icon != null and center.icon.resource_path.ends_with("target.png"), "Centrar lleva la mira")
+	var banner: Label = _tree.find_child("RingBanner", true, false) as Label
+	_check(not banner.visible, "sin anillo nuevo no hay cartel")
+	await _tap(_tree.call("star_button", "core"))
+	await _tap(_tree.find_child("BuyButton", true, false) as Button)
+	var bursts: Array[Node] = _tree.find_children("Burst*", "CPUParticles2D", true, false)
+	_check(not bursts.is_empty(), "al comprar salta un destello")
+	_check(played.has("star_buy"), "con su sonido (%s)" % str(played))
+	await _frames()
+	_check(banner.visible and banner.text == "¡Nueva zona del cielo!", "el Corazón abre el anillo 1 y se avisa")
+	_check(played.has("ring_open"), "con sonido")
+	(_tree.find_child("CloseTree", true, false) as Button).pressed.emit()
+	await _frames()
+	_check(director.call("wanted") != "tree", "al cerrarlo vuelve la música de la mina")
+	await _open_tree()
+	_check(not banner.visible, "el aviso no se repite al reabrir")
+	(_tree.find_child("CloseTree", true, false) as Button).pressed.emit()
+	var tree_button: Button = _scene.find_child("TreeButton", true, false) as Button
+	var book_button: Button = _scene.find_child("AchievementsButton", true, false) as Button
+	_check(tree_button.icon != null and book_button.icon != null, "los botones de Reliquias llevan ícono")
+	audio.sfx_played.disconnect(listen)
+	settings.muted = muted
 	await _frames()
 
 

@@ -146,6 +146,7 @@
 		"abyss": "res://assets/music/level_2.ogg",
 		"frenzy": { "file": "res://assets/music/fast_fight.ogg", "loop_offset": 1.54839002 },
 		"prestige": { "file": "res://assets/music/ending.ogg", "loop": false },
-		"options": "res://assets/music/title_screen.ogg"
+		"options": "res://assets/music/title_screen.ogg",
+		"tree": { "file": "res://assets/music/crystal_cave.ogg", "loop_offset": 0.35 }
 	}
 }

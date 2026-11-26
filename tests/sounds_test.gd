@@ -20,6 +20,7 @@ const MUSIC_MAP: Dictionary = {
 	"frenzy": "fast_fight.ogg",
 	"prestige": "ending.ogg",
 	"options": "title_screen.ogg",
+	"tree": "crystal_cave.ogg",
 }
 ## Los temas que tienen intro: el loop vuelve después (segundos mínimos de intro).
 const MUSIC_INTROS: Dictionary = { "earth": 10.0, "frenzy": 1.5 }

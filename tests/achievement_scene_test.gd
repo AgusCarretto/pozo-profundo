@@ -69,6 +69,10 @@ func _texts(node: Node) -> String:
 	return " | ".join(parts)
 
 
+func _mark(id: String) -> String:
+	return (_row(id).find_child("Mark", true, false) as TextureRect).texture.resource_path.get_file()
+
+
 func _row(id: String) -> Control:
 	return _book().find_child("Row_" + id, true, false) as Control
 
@@ -142,6 +146,12 @@ func _test_book() -> void:
 	_economy.unlock_achievement("gear_opens_50")
 	_book().call("refresh")
 	_check(_texts(_row("gear_opens_50")).contains("¿Se rompió?"), "hasta conseguirlo")
+	_check_eq(_mark("hits_100"), "trophy.png", "el conseguido lleva un trofeo")
+	_check_eq(_mark("hits_1000"), "medal1.png", "el pendiente, una medalla")
+	_check_eq(_mark("mute_cycles_10"), "locked.png", "el secreto, un candado")
+	var easy: Color = (_row("hits_1000").find_child("Mark", true, false) as TextureRect).modulate
+	var hard: Color = (_row("hits_100000").find_child("Mark", true, false) as TextureRect).modulate
+	_check(easy != hard, "la medalla cambia con la dificultad")
 	(_find("CloseBook") as Button).pressed.emit()
 	await _frames()
 	_check(not _book().visible, "se cierra")

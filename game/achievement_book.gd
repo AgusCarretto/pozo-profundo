@@ -8,6 +8,13 @@ signal closed
 const Achievements := preload("res://core/achievements.gd")
 const NumberFormat := preload("res://core/number_format.gd")
 const Palette := preload("res://game/palette.gd")
+const TROPHY: Texture2D = preload("res://assets/ui/game_icons/trophy.png")
+const MEDAL: Texture2D = preload("res://assets/ui/game_icons/medal1.png")
+const MEDAL_BIG: Texture2D = preload("res://assets/ui/game_icons/medal2.png")
+const LOCKED: Texture2D = preload("res://assets/ui/game_icons/locked.png")
+const MARK_SIZE: float = 52.0
+## El color de cada dificultad (bronce, plata, oro y la épica).
+const TIER_COLORS: Dictionary = { "facil": Palette.CLAY, "medio": Palette.STEEL_LIGHT, "dificil": Palette.GOLD, "epico": Palette.PINK }
 
 const BUTTON_HEIGHT: float = 104.0
 const CLOSE_WIDTH: float = 160.0
@@ -107,6 +114,19 @@ func _refresh_row(id: String) -> void:
 	title.add_theme_color_override("font_color", Palette.YELLOW if unlocked else Palette.FROST)
 	(row["desc"] as Label).text = "Secreto: se descubre jugando." if hidden else str(data.get("desc", ""))
 	(row["fragments"] as Label).text = "+%d" % achievements.fragments_for(id)
+	# Trofeo si ya está; si no, la medalla de su dificultad apagada, o un candado si es secreto.
+	var tier: String = str(data.get("tier", ""))
+	var color: Color = TIER_COLORS.get(tier, Palette.FROST)
+	var mark: TextureRect = row["mark"]
+	if unlocked:
+		mark.texture = TROPHY
+		mark.modulate = color
+	elif hidden:
+		mark.texture = LOCKED
+		mark.modulate = Color(Palette.STEEL, 0.7)
+	else:
+		mark.texture = MEDAL_BIG if tier == "dificil" or tier == "epico" else MEDAL
+		mark.modulate = Color(color, 0.5)
 	var bar: ProgressBar = row["bar"]
 	var progress: Label = row["progress"]
 	bar.visible = not hidden and not unlocked and float(data["target"]) > 1.0
@@ -233,6 +253,13 @@ func _build_row(list: VBoxContainer, id: String) -> Dictionary:
 	var head: HBoxContainer = HBoxContainer.new()
 	head.add_theme_constant_override("separation", 12)
 	box.add_child(head)
+	var mark: TextureRect = TextureRect.new()
+	mark.name = "Mark"
+	mark.custom_minimum_size = Vector2(MARK_SIZE, MARK_SIZE)
+	mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	head.add_child(mark)
 	var title: Label = _label(head, 28)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var fragments: Label = _label(head, 28)
@@ -247,7 +274,7 @@ func _build_row(list: VBoxContainer, id: String) -> Dictionary:
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(bar)
 	var progress: Label = _label(box, 22)
-	return { "name": title, "desc": desc, "fragments": fragments, "bar": bar, "progress": progress }
+	return { "name": title, "desc": desc, "fragments": fragments, "bar": bar, "progress": progress, "mark": mark }
 
 
 func _label(parent: Node, font_size: int) -> Label:
