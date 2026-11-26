@@ -2,7 +2,8 @@ extends Control
 ## Panel de debug: atajos para probar biomas, prestigio y botín sin jugar horas.
 ##
 ## Con árbol de reliquias suma sus atajos: reliquias, fragmentos, abrir anillos, horas de AFK y borrar todo (la build de
-## prueba publicada en /test/ es de debug y tiene su propia partida).
+## prueba publicada en /test/ es de debug y tiene su propia partida). Con logros suma una pestaña para desbloquearlos y
+## sumar a sus contadores.
 ##
 ## SOLO EXISTE EN BUILDS DE DEBUG: main.gd lo crea con attach_if_debug(OS.is_debug_build()),
 ## que no hace nada en un export de release (el default de tools/export_web.ps1). Con
@@ -27,6 +28,19 @@ const GRANT_RELICS: int = 100
 const GRANT_FRAGMENTS: int = 100
 ## Horas de AFK que se pueden simular de un toque.
 const AFK_HOURS: Array[int] = [1, 8, 23]
+## Atajos de la pestaña de logros: [nodo, texto, contador, cuánto suma].
+const COUNTER_BUTTONS: Array = [
+	["DebugHits", "+1.000 golpes", "hits", 1000.0],
+	["DebugCrits", "+100 críticos", "crits", 100.0],
+	["DebugChests", "+100 cofres", "chests", 100.0],
+	["DebugLegendaries", "+10 Legendarios", "chest_legendary", 10.0],
+	["DebugDynamite", "+100 dinamitas", "dynamite", 100.0],
+	["DebugPlayTime", "+1 h jugada", "play_seconds", 3600.0],
+]
+const GRANT_RESETS: int = 5
+## Las pestañas van en la fila del botón DBG, a su derecha: así no le quitan alto al panel.
+const TAB_WIDTH: float = 171.0
+const TOGGLE_WIDTH: float = 110.0
 
 var toggle_button: Button
 var body: PanelContainer
@@ -35,6 +49,11 @@ var time_button: Button
 ## Un botón por rareza del botín (en el orden de Economy.loot_table()); vacío si no hay botín.
 var chest_buttons: Array[Button] = []
 var wipe_button: Button
+
+## La fila de pestañas y la grilla de cada una (solo con logros).
+var _tabs: HBoxContainer
+var _game_grid: GridContainer
+var _achievement_grid: GridContainer
 
 
 ## Crea el panel como hijo de `parent` si `is_debug`; si no, no hace nada y devuelve null.
@@ -56,7 +75,7 @@ func _init() -> void:
 func _ready() -> void:
 	toggle_button = _make_button("DBG", 22)
 	toggle_button.position = TOGGLE_POSITION
-	toggle_button.custom_minimum_size = Vector2(110, BUTTON_HEIGHT)
+	toggle_button.custom_minimum_size = Vector2(TOGGLE_WIDTH, BUTTON_HEIGHT)
 	toggle_button.pressed.connect(_on_toggle_pressed)
 	add_child(toggle_button)
 
@@ -82,12 +101,8 @@ func _ready() -> void:
 	title.add_theme_color_override("font_color", Color(1.0, 0.55, 0.45))
 	box.add_child(title)
 
-	# Todo en dos columnas: así entra en la pantalla de un celular.
-	var grid: GridContainer = GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 8)
-	grid.add_theme_constant_override("v_separation", 8)
-	box.add_child(grid)
+	var grid: GridContainer = _make_grid(box)
+	_game_grid = grid
 
 	gold_button = _grid_button(grid, "DebugGold", "Oro ×%d" % int(GOLD_FACTOR), _on_gold_pressed)
 	time_button = _grid_button(grid, "DebugAdvance", "Adelantar %s" % NumberFormat.format_duration(ADVANCE_SECONDS), _on_time_pressed)
@@ -103,6 +118,60 @@ func _ready() -> void:
 	var table: Array[Dictionary] = Economy.loot_table()
 	for index: int in range(table.size()):
 		chest_buttons.append(_grid_button(grid, "DebugChest%d" % index, str(table[index]["name"]), _on_chest_pressed.bind(index)))
+
+	if Economy.has_achievements():
+		_build_achievement_tab(box)
+
+
+## Todo en dos columnas: así entra en la pantalla de un celular.
+func _make_grid(box: VBoxContainer) -> GridContainer:
+	var grid: GridContainer = GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	box.add_child(grid)
+	return grid
+
+
+func _build_achievement_tab(box: VBoxContainer) -> void:
+	_achievement_grid = _make_grid(box)
+	_achievement_grid.visible = false
+	_grid_button(_achievement_grid, "DebugUnlock", "Desbloquear uno", _on_unlock_pressed)
+	for entry: Array in COUNTER_BUTTONS:
+		_grid_button(_achievement_grid, entry[0], entry[1], _on_counter_pressed.bind(entry[2], entry[3]))
+	_grid_button(_achievement_grid, "DebugResets", "+%d vueltas" % GRANT_RESETS, _on_resets_pressed)
+
+	_tabs = HBoxContainer.new()
+	_tabs.add_theme_constant_override("separation", 8)
+	_tabs.position = TOGGLE_POSITION + Vector2(TOGGLE_WIDTH + HUD_GAP, 0)
+	_tabs.visible = false
+	add_child(_tabs)
+	for tab: Array in [["DebugTabGame", "Partida", false], ["DebugTabAchievements", "Logros", true]]:
+		var button: Button = _make_button(tab[1], 24)
+		button.name = tab[0]
+		button.custom_minimum_size.x = TAB_WIDTH
+		button.pressed.connect(_show_tab.bind(tab[2]))
+		_tabs.add_child(button)
+
+
+func _show_tab(achievements_tab: bool) -> void:
+	_game_grid.visible = not achievements_tab
+	_achievement_grid.visible = achievements_tab
+	body.reset_size()
+
+
+func _on_unlock_pressed() -> void:
+	Economy.unlock_achievement(Economy.achievements.next_locked())
+
+
+func _on_counter_pressed(stat_name: String, amount: float) -> void:
+	Economy.count(stat_name, amount)
+	Economy.check_achievements()
+
+
+func _on_resets_pressed() -> void:
+	Economy.resets += GRANT_RESETS
+	Economy.check_achievements()
 
 
 func _grid_button(grid: GridContainer, node_name: String, text: String, action: Callable) -> Button:
@@ -143,10 +212,14 @@ func _place_below(hud: Control) -> void:
 	var top: float = hud.get_global_rect().end.y + HUD_GAP
 	toggle_button.position.y = top
 	body.position.y = top + BUTTON_HEIGHT + HUD_GAP
+	if _tabs != null:
+		_tabs.position.y = top
 
 
 func _on_toggle_pressed() -> void:
 	body.visible = not body.visible
+	if _tabs != null:
+		_tabs.visible = body.visible
 
 
 func _on_gold_pressed() -> void:
