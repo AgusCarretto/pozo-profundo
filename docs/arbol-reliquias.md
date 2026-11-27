@@ -133,7 +133,7 @@ La simulación necesitaba menos detalle que el juego:
 - Los primeros 2 min siguen pagando completo. El AFK no abre cofres.
 
 ## 8. Tope de golpes y frenesí
-- **Máximo 6 golpes en el último segundo** (ventana deslizante). No pedir 1/6 s entre golpes: quien golpea a 4,5/s perdería golpes y casi un quinto del frenesí.
+- **Máximo 20 golpes en el último segundo** (ventana deslizante; solo para frenar autoclickers). Era 6 hasta la 0.7.1: jugando se sentía trabado al spamear la roca. La simulación y la meta se calcularon con hasta 6/s, así que quien golpea mucho avanza antes (primera bajada: 24 min a 6/s, 19 a 10/s, 15 a 15/s).
 - Un golpe que pasa el tope no cuenta para nada (oro, cofres, frenesí, logros).
 - El frenesí sigue en 4 golpes/s (3 con Mano rápida). Hoy solo cambia la música; con Combo y Mano rápida también da oro, así que su medición pasa a ser parte de las reglas.
 
