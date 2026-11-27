@@ -22,3 +22,8 @@
 - **Logros retroactivos:** al entrar se te reconocen los que ya cumplías por tu profundidad récord, tu cuadrilla y tus vueltas a la superficie, con sus fragmentos. Los de golpes, cofres, dinamita y tiempo empiezan a contar desde esta versión, porque antes no se anotaban.
 
 Antes de convertir tu partida, el juego guarda una copia de la anterior en tu navegador.
+
+## 0.7.1: arreglos
+
+- Ya se puede comprar en el árbol en cualquier momento de la partida (antes, con la cuadrilla trabajando, el botón no respondía).
+- En iPhone, el juego agregado a la pantalla de inicio ahora se actualiza solo.
