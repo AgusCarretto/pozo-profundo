@@ -32,6 +32,7 @@ func _initialize() -> void:
 	await _test_return_target_is_visible()
 	await _test_tap_cap_in_the_game()
 	await _test_debug_panel()
+	await _test_buy_while_the_crew_works()
 	await _unmount()
 	await _test_testers_card(packed)
 	_economy.reset()
@@ -172,6 +173,48 @@ func _test_tap_selects_and_buys() -> void:
 	await _tap(buy)
 	await _tap(buy)
 	_check_eq(_economy.relic_tree.level("f_brazo"), 2, "dos toques, dos niveles")
+
+
+## Con la cuadrilla produciendo la pantalla se refresca todo el tiempo: un toque de verdad (que dura varios cuadros)
+## igual tiene que comprar. Antes solo se podía recién vuelto a la superficie.
+func _test_buy_while_the_crew_works() -> void:
+	_section("Comprar en plena bajada, con la cuadrilla trabajando")
+	_economy.reset()
+	_economy.resets = 1
+	_economy.grant_relics(400)
+	_economy.open_rings()
+	for id: String in ["core", "f_brazo", "f_templado", "f_eco", "f_combo", "f_umbral", "f_furia"]:
+		while _economy.buy_star(id):
+			pass
+	_economy.owned[0] = 60
+	_economy.run_gold = 1.0e12
+	_economy.at_surface = false
+	_check(_economy.gold_per_second() > 0.0 and _economy.can_prestige(), "(produciendo, y ya se puede volver)")
+	await _frames()
+	await _open_tree()
+	_tree.call("select", "o_olfato")
+	await _frames()
+	var buy: Button = _tree.find_child("BuyButton", true, false) as Button
+	await _slow_tap(buy)
+	_check_eq(_economy.relic_tree.level("o_olfato"), 1, "el toque compra")
+	await _slow_tap(buy)
+	_check_eq(_economy.relic_tree.level("o_olfato"), 2, "y el siguiente también")
+	_tree.call("select", "f_furia")
+	await _frames()
+	var keystone: Button = _tree.find_child("KeystoneButton", true, false) as Button
+	await _slow_tap(keystone)
+	_check_eq(_economy.keystone_pending("f_furia"), -1, "el botón de la piedra angular también responde")
+	(_tree.find_child("CloseTree", true, false) as Button).pressed.emit()
+	await _frames()
+
+
+## Un toque como el de un dedo: se apoya, pasan unos cuadros y se levanta.
+func _slow_tap(control: Control) -> void:
+	var at: Vector2 = control.get_global_rect().get_center()
+	await _touch(at, true)
+	await _frames(6)
+	await _touch(at, false)
+	await _frames(1)
 
 
 func _test_drag_pans_without_buying() -> void:

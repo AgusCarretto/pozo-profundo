@@ -329,8 +329,11 @@ func _refresh_detail() -> void:
 	var tree: RelicTree = Economy.relic_tree
 	var data: Dictionary = tree.star(selected)
 	var state: int = Economy.star_state(selected)
-	_keystone_button.visible = false
-	_buy_button.visible = false
+	# La visibilidad de los botones se fija una sola vez: esto corre en cada cuadro mientras la cuadrilla produce, y
+	# ocultar un botón un instante cancela el toque que lo esté apretando (no se podía comprar en plena bajada).
+	var known: bool = state != RelicTree.State.HIDDEN and state != RelicTree.State.SEALED
+	_buy_button.visible = known
+	_keystone_button.visible = known and tree.is_keystone(selected) and tree.level(selected) > 0
 	if state == RelicTree.State.HIDDEN:
 		_name_label.text = "???"
 		if data.has("requires_max"):
@@ -354,7 +357,6 @@ func _refresh_detail() -> void:
 	var top: int = tree.max_level(selected)
 	_name_label.text = str(data["name"])
 	var lines: Array[String] = ["%s%s · Nivel %d de %d" % [str(tree.branch(selected).get("name", "")), " · piedra angular" if tree.is_keystone(selected) else "", level, top], str(data["description"])]
-	_buy_button.visible = true
 	if level >= top:
 		_show_price("Al máximo", "—", false)
 	else:
@@ -363,7 +365,6 @@ func _refresh_detail() -> void:
 	if tree.is_keystone(selected) and level > 0:
 		var chosen: bool = tree.planned_keystones.has(selected)
 		var pending: int = Economy.keystone_pending(selected)
-		_keystone_button.visible = true
 		if pending != 0:
 			_keystone_button.text = "Cambio anotado\ntocá para cancelar"
 			lines.append("Activa desde la próxima bajada." if pending > 0 else "Se apaga en la próxima bajada.")
