@@ -254,7 +254,7 @@ func _test_web_options(packed: PackedScene) -> void:
 	if version == null or full == null or feedback == null:
 		await _free(scene)
 		return
-	_check_eq(version.text, "Versión 0.7.0", "muestra la versión")
+	_check_eq(version.text, "Versión 0.7.1", "muestra la versión")
 	_check(version.is_visible_in_tree(), "a la vista")
 	_check(not full.visible, "si el navegador no permite pantalla completa, no hay botón")
 	_check(not feedback.visible, "sin link no hay Opinar")
