@@ -1,6 +1,6 @@
 extends SceneTree
 ## Genera las imágenes de la página de itch.io: la portada (630x500, pixel art compuesto con los sprites del juego)
-## y cuatro capturas verticales de 720x1280 sacadas del juego de verdad.
+## y siete capturas verticales de 720x1280 sacadas del juego de verdad (la mina, el árbol, un logro y el librito).
 ##
 ## Uso (desde la raíz del proyecto; abre una ventana, así que no sirve --headless):
 ##   godot --path . --script res://tools/itch_art.gd                  # todo, en docs/itch/
@@ -25,6 +25,14 @@ const SHOTS: Array[Dictionary] = [
 	{ "name": "3_cofre_legendario", "gold": 5.6e6, "run_gold": 9.0e6, "pick": 7, "owned": [30, 26, 12, 4, 1], "relics": 3, "dynamite": 4, "chest": 3, "wait": 1.15 },
 	{ "name": "4_abismo_cuadrilla", "gold": 9.4e8, "run_gold": 2.0e9, "pick": 9, "owned": [100, 55, 52, 26, 6, 2], "relics": 8, "dynamite": 6, "wait": 1.5 },
 ]
+
+## El árbol de la captura: [estrella, niveles]. Deja algunas a medias y otras sin comprar, para que se vea de todo.
+const TREE_STARS: Array = [["core", 1], ["f_brazo", 5], ["f_templado", 5], ["f_ojo", 5], ["f_eco", 6], ["f_brutal", 3], ["f_combo", 8], ["f_umbral", 1],
+	["f_furia", 1], ["o_olfato", 5], ["o_botin", 3], ["o_gemologo", 2], ["c_capataz", 4], ["c_contrato", 2], ["c_bolsa", 1], ["t_mecha", 3], ["t_polvora", 2], ["t_vigilia", 1]]
+## El logro que se festeja en la captura (uno épico) y los que ya figuran conseguidos en la del librito.
+const CELEBRATED: String = "hits_300000"
+const IN_THE_BOOK: Array[String] = ["hits_100", "hits_1000", "crits_100", "record_depth_100", "record_depth_200", "record_depth_300",
+	"chests_1", "chest_rare_1", "chest_epic_1", "max_miner_25", "resets_1", "frenzy_starts_1", "dynamite_10", "star_core_1"]
 
 ## Letras del título (5x7). Solo las que usa "POZO PROFUNDO".
 const LETTERS: Dictionary = {
@@ -54,6 +62,8 @@ func _initialize() -> void:
 
 func _run() -> void:
 	await process_frame
+	# Sin sonido mientras saca las capturas. Se calla la salida y no las opciones, para que el botón no salga tachado.
+	AudioServer.set_bus_mute(0, true)
 	_save(_cover(), "portada")
 	await _screenshots()
 	root.get_node("Audio").call("silence")
@@ -69,10 +79,13 @@ func _save(image: Image, file_name: String) -> void:
 
 # --- Capturas ----------------------------------------------------------------
 
-## Sin cofres al azar: uno que caiga mientras se espera pisa el aviso que se quería mostrar (el "legendario"
-## salía como "Común") y las imágenes cambian en cada corrida. El de la captura se pide a mano con drop_loot().
+## El balance completo (árbol y logros incluidos) pero sin cofres al azar: uno que caiga mientras se espera pisa el
+## aviso que se quería mostrar (el "legendario" salía como "Común") y las imágenes cambian en cada corrida. El de la
+## captura se pide a mano con drop_loot().
 func _stop_random_chests() -> void:
 	var balance: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/balance.json"))
+	balance["tree"] = JSON.parse_string(FileAccess.get_file_as_string(balance["tree_file"]))
+	balance["achievements"] = JSON.parse_string(FileAccess.get_file_as_string(balance["achievements_file"]))
 	balance["loot"]["chance_per_hit"] = 0.0
 	balance["loot"]["chance_per_second"] = 0.0
 	root.get_node("Economy").load_balance(balance)
@@ -87,11 +100,13 @@ func _screenshots() -> void:
 	root.add_child(viewport)
 	var scene: Control = (load("res://game/main.tscn") as PackedScene).instantiate() as Control
 	viewport.add_child(scene)
+	# El panel de debug se oculta (no se borra: la escena lo sigue acomodando al abrir pantallas).
 	if scene.has_node("DebugPanel"):
-		scene.get_node("DebugPanel").free()
+		(scene.get_node("DebugPanel") as Control).visible = false
 	var economy: Node = root.get_node("Economy")
 	for shot: Dictionary in SHOTS:
 		_apply(economy, shot)
+		_already_unlocked(economy, economy.achievements.ids())
 		await _settle()
 		# Que terminen el fundido de bioma y la cuadrilla que crece; después se limpia lo que quedó en el aire.
 		await create_timer(1.2).timeout
@@ -104,6 +119,9 @@ func _screenshots() -> void:
 		await create_timer(float(shot.get("wait", 0.0))).timeout
 		await _settle()
 		_save(viewport.get_texture().get_image(), shot["name"])
+	await _tree_shot(viewport, scene, economy)
+	await _achievement_shot(viewport, scene, economy)
+	await _book_shot(viewport, scene, economy)
 	economy.reset()
 	viewport.queue_free()
 	await process_frame
@@ -120,6 +138,69 @@ func _apply(economy: Node, shot: Dictionary) -> void:
 	for index: int in range(owned.size()):
 		economy.owned[index] = owned[index]
 	economy.gold_changed.emit(economy.gold)
+
+
+## Da logros por conseguidos sin avisos ni premio, para que no salten encima de la captura.
+func _already_unlocked(economy: Node, ids: Array) -> void:
+	for id: String in ids:
+		economy.achievements.unlock(id)
+
+
+func _quiet(scene: Control) -> void:
+	scene.find_child("AchievementToast", true, false).call("dismiss")
+	scene.find_child("AchievementCelebration", true, false).call("dismiss")
+	scene.get_node("%MineView").call("clear_effects")
+
+
+func _tree_shot(viewport: SubViewport, scene: Control, economy: Node) -> void:
+	economy.reset()
+	_already_unlocked(economy, economy.achievements.ids())
+	economy.resets = 1
+	economy.grant_relics(1000)
+	economy.open_rings()
+	for entry: Array in TREE_STARS:
+		for level: int in range(int(entry[1])):
+			economy.buy_star(entry[0])
+	_quiet(scene)
+	var tree: Control = scene.find_child("TreeView", true, false)
+	tree.call("sync_rings")
+	tree.call("open")
+	tree.call("select", "f_furia")
+	# Corrido hacia abajo para que se vea la rama de Fuerza hasta su piedra angular.
+	tree.set("_pan", Vector2(0.0, 190.0))
+	tree.call("_place_canvas")
+	await create_timer(0.6).timeout
+	await _settle()
+	_save(viewport.get_texture().get_image(), "5_arbol")
+	tree.call("close")
+
+
+func _achievement_shot(viewport: SubViewport, scene: Control, economy: Node) -> void:
+	var shot: Dictionary = SHOTS[SHOTS.size() - 1]
+	_apply(economy, shot)
+	_already_unlocked(economy, economy.achievements.ids().filter(func(id: String) -> bool: return id != CELEBRATED))
+	await create_timer(1.2).timeout
+	_quiet(scene)
+	economy.unlock_achievement(CELEBRATED)
+	await create_timer(0.9, true, false, true).timeout
+	await _settle()
+	_save(viewport.get_texture().get_image(), "6_logro")
+	_quiet(scene)
+
+
+func _book_shot(viewport: SubViewport, scene: Control, economy: Node) -> void:
+	economy.reset()
+	_already_unlocked(economy, IN_THE_BOOK)
+	economy.count("hits", 3420.0)
+	economy.count("crits", 268.0)
+	_quiet(scene)
+	var book: Control = scene.find_child("AchievementBook", true, false)
+	book.call("open")
+	await create_timer(0.6).timeout
+	_quiet(scene)
+	await _settle()
+	_save(viewport.get_texture().get_image(), "7_librito")
+	book.call("close")
 
 
 func _settle() -> void:
