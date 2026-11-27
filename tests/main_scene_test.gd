@@ -280,10 +280,26 @@ func _test_dynamite() -> void:
 	_check(_economy.gold >= before + reward, "tocarlo da el golpe enorme (%s)" % str(reward))
 	await process_frame
 	_check(button.disabled and _card_text(button).begins_with("1:00"), "y queda recargando con la cuenta (%s)" % _card_text(button))
-	_economy.advance_ability(60.0)
-	await process_frame
+	_economy.advance_ability(30.0)
+	# Que termine el rebote del toque: escalado, las medidas del botón no se pueden comparar.
+	await create_timer(0.5).timeout
+	# El relleno de la recarga va por dentro del borde y con las mismas puntas redondeadas que el botón.
+	var frame: StyleBoxFlat = button.get_theme_stylebox("normal") as StyleBoxFlat
+	var inside: Rect2 = button.get_global_rect().grow(-frame.border_width_left)
+	var fill: Control = button.get_node("Fill") as Control
+	_check(fill.clip_contents and inside.encloses(fill.get_global_rect()), "a media recarga el relleno queda dentro del borde (%s en %s)" % [str(fill.get_global_rect()), str(inside)])
+	_check_near(fill.size.y, inside.size.y * 0.5, "hasta la mitad", 2.0)
+	var shape: StyleBoxFlat = (fill.get_child(0) as Control).get_theme_stylebox("panel") as StyleBoxFlat
+	_check_eq(shape.corner_radius_bottom_left, frame.corner_radius_bottom_left - frame.border_width_left, "con las puntas redondeadas como el botón")
+	_check((fill.get_child(0) as Control).get_global_rect().is_equal_approx(inside), "la forma es la del interior entero, recortada desde arriba")
+	_economy.advance_ability(30.0)
+	await create_timer(0.5).timeout
+	inside = button.get_global_rect().grow(-frame.border_width_left)
 	_check(not button.disabled, "a los 60 s vuelve")
+	_check(inside.encloses(fill.get_global_rect()), "lista, el relleno tampoco se sale")
 	_economy.reset()
+	# Dos cuadros: el temporizador de arriba vence después del _process, así que el primero todavía no refrescó.
+	await process_frame
 	await process_frame
 	_check(not button.visible, "al empezar de nuevo se va")
 

@@ -104,8 +104,11 @@ var _toast: AchievementToast
 var _celebration: AchievementCelebration
 var _pick_card: PickCard
 var _ability_card: AbilityCard
-## El relleno del botón de la Dinamita: sube a medida que recarga.
-var _ability_fill: ColorRect
+## El relleno del botón de la Dinamita: sube a medida que recarga. Es una ventana (recorta) sobre una forma igual a la
+## del interior del botón, así las puntas quedan redondeadas y nada se sale del borde.
+var _ability_fill: Control
+var _ability_shape: Panel
+var _ability_border: float = 0.0
 var _ability_was_ready: bool = false
 var _shown_runes: int = -1
 ## El último cofre que salió en esta partida ({rarity, amount}); vacío si todavía no salió ninguno.
@@ -308,11 +311,20 @@ func _on_milestone_reached(index: int, threshold: int) -> void:
 func _build_ability_button() -> void:
 	_ability_button.build(GeneratorArt.ability_icon(), "Dinamita")
 	_ability_button.pressed.connect(func() -> void: Economy.use_ability())
-	_ability_fill = ColorRect.new()
+	var frame: StyleBoxFlat = _ability_button.get_theme_stylebox("normal") as StyleBoxFlat
+	_ability_border = 0.0 if frame == null else float(frame.border_width_left)
+	var inner: StyleBoxFlat = StyleBoxFlat.new()
+	inner.bg_color = Color(Palette.GOLD, 0.35)
+	inner.set_corner_radius_all(0 if frame == null else maxi(frame.corner_radius_bottom_left - frame.border_width_left, 0))
+	_ability_fill = Control.new()
 	_ability_fill.name = "Fill"
-	_ability_fill.color = Color(Palette.GOLD, 0.35)
+	_ability_fill.clip_contents = true
 	_ability_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_ability_button.add_child(_ability_fill)
+	_ability_shape = Panel.new()
+	_ability_shape.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ability_shape.add_theme_stylebox_override("panel", inner)
+	_ability_fill.add_child(_ability_shape)
 
 
 ## El botón aparece al comprar el nivel 1: lleno y con "¡Ya!" cuando está lista; si no, los segundos que faltan.
@@ -324,8 +336,12 @@ func _refresh_ability_button() -> void:
 	var ready: bool = Economy.ability_ready()
 	var left: float = Economy.ability_cooldown_left
 	var done: float = 1.0 if ready else clampf(1.0 - left / Economy.ability_cooldown(), 0.0, 1.0)
-	_ability_fill.size = Vector2(_ability_button.size.x, _ability_button.size.y * done)
-	_ability_fill.position = Vector2(0.0, _ability_button.size.y - _ability_fill.size.y)
+	var inside: Vector2 = _ability_button.size - Vector2.ONE * _ability_border * 2.0
+	var height: float = inside.y * done
+	_ability_fill.position = Vector2(_ability_border, _ability_border + inside.y - height)
+	_ability_fill.size = Vector2(inside.x, height)
+	_ability_shape.position = Vector2(0.0, height - inside.y)
+	_ability_shape.size = inside
 	_ability_button.disabled = not ready
 	var seconds: int = ceili(left)
 	_ability_button.set_caption("¡Ya!" if ready else "%d:%02d" % [seconds / 60, seconds % 60])
