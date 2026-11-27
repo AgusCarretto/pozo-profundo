@@ -208,6 +208,16 @@ func _test_buy_while_the_crew_works() -> void:
 	await _frames()
 
 
+func _finger(index: int, at: Vector2, down: bool) -> void:
+	var touch: InputEventScreenTouch = InputEventScreenTouch.new()
+	touch.index = index
+	touch.position = root.get_final_transform() * at
+	touch.pressed = down
+	Input.parse_input_event(touch)
+	Input.flush_buffered_events()
+	await process_frame
+
+
 ## Un toque como el de un dedo: se apoya, pasan unos cuadros y se levanta.
 func _slow_tap(control: Control) -> void:
 	var at: Vector2 = control.get_global_rect().get_center()
@@ -418,9 +428,45 @@ func _test_tap_cap_in_the_game() -> void:
 	_section("Tope de golpes en la pantalla")
 	_economy.reset()
 	await _frames()
-	for i: int in range(30):
+	var landed: Array[int] = [0]
+	var count: Callable = func(_amount: float) -> void: landed[0] += 1
+	_economy.hit_landed.connect(count)
+	for i: int in range(15):
 		_scene.call("_on_tap")
-	_check(_economy.gold > 0.0 and _economy.gold < _economy.hit_value() * 13.0, "30 toques juntos cuentan como 6 (%s)" % str(_economy.gold))
+	_check_eq(landed[0], 15, "una ráfaga fuerte cuenta entera: spamear la roca no se traba")
+	for i: int in range(60):
+		_scene.call("_on_tap")
+	_check_eq(landed[0], 20, "el tope queda solo para autoclickers: 20 por segundo")
+
+	# Dos dedos que se pisan: Godot solo emula el mouse con el primero; los demás también tienen que picar.
+	_economy.reset()
+	await _frames()
+	var rock: Control = _scene.get_node("%TapButton") as Control
+	var at: Vector2 = rock.get_global_rect().get_center()
+	landed[0] = 0
+	await _finger(0, at, true)
+	for i: int in range(3):
+		await _finger(1, at + Vector2(40, 0), true)
+		await _finger(1, at + Vector2(40, 0), false)
+	await _finger(0, at, false)
+	_check_eq(landed[0], 4, "con dos dedos cuentan todos los toques, una vez cada uno")
+	# Se levanta el primero y el segundo sigue apoyado: el que llega después también cuenta.
+	landed[0] = 0
+	await _finger(0, at, true)
+	await _finger(1, at, true)
+	await _finger(0, at, false)
+	await _finger(0, at, true)
+	await _finger(0, at, false)
+	await _finger(1, at, false)
+	_check_eq(landed[0], 3, "alternando sin levantar el otro")
+	landed[0] = 0
+	var elsewhere: Vector2 = (_scene.get_node("%HudPanel") as Control).get_global_rect().position + Vector2(40, 40)
+	await _finger(0, at, true)
+	await _finger(1, elsewhere, true)
+	await _finger(1, elsewhere, false)
+	await _finger(0, at, false)
+	_check_eq(landed[0], 1, "un segundo dedo fuera de la roca no pica")
+	_economy.hit_landed.disconnect(count)
 
 
 func _test_debug_panel() -> void:

@@ -123,6 +123,8 @@ var _prestiging: bool = false
 var _relics_shown: int = -1
 ## Tamaño de fuente del oro según el tema (el que se usa cuando el número entra).
 var _gold_font_size: int = 0
+## El dedo que Godot está convirtiendo en mouse (-1 = ninguno). Ese pica con button_down; los demás, por su toque.
+var _mouse_finger: int = -1
 
 @onready var _gold_label: Label = %GoldLabel
 @onready var _rate_label: Label = %RateLabel
@@ -186,6 +188,7 @@ func _ready() -> void:
 	# Reaccionan al apretar (no al soltar): un clicker tiene que responder al toque.
 	_tap_button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
 	_tap_button.button_down.connect(_on_tap)
+	_tap_button.gui_input.connect(_on_rock_input)
 	_prestige_button.pressed.connect(_on_prestige_pressed)
 
 	_build_loot_panel()
@@ -265,6 +268,23 @@ func _mark_dirty() -> void:
 
 func _on_tap() -> void:
 	Economy.tap()
+
+
+## Sigue qué dedo está haciendo de mouse, con la misma regla que Godot: el primero que se apoya cuando no hay otro.
+func _input(event: InputEvent) -> void:
+	if not event is InputEventScreenTouch:
+		return
+	var touch: InputEventScreenTouch = event
+	if touch.pressed and _mouse_finger == -1:
+		_mouse_finger = touch.index
+	elif not touch.pressed and touch.index == _mouse_finger:
+		_mouse_finger = -1
+
+
+## Quien pica con dos dedos: los que no hacen de mouse no apretarían el botón y sus golpes se perdían.
+func _on_rock_input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed and (event as InputEventScreenTouch).index != _mouse_finger:
+		_on_tap()
 
 
 ## Cada golpe se ve: la roca se aplasta, la mina se sacude y sale el oro que dio flotando.
