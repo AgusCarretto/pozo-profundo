@@ -24,7 +24,7 @@ concurrency:
 env:
   # La misma versión con la que se desarrolla el juego.
   GODOT_VERSION: 4.7.2
-  PUBLISHED_REF: v0.7.2
+  PUBLISHED_REF: v0.7.3
   TEST_REF: 176f246a14f9f54fef6b81ba7c098b69a31458f6
 
 jobs:
