@@ -13,7 +13,6 @@
 - **Cada reliquia da menos oro por sí sola:** antes +25%, ahora +6% (y +0,5% a partir de la número 60). El resto de tu poder lo ponen las estrellas. Por ejemplo, con 14 reliquias antes tenías ×4,5 de oro; ahora arrancás con ×1,84 y 14 reliquias para gastar.
 - **El AFK rinde menos:** pasados los primeros 2 minutos, la cuadrilla junta el 5% (antes el 25%). El juego premia jugar activo. Hay estrellas que lo suben y que alargan las horas que cuenta.
 - **Volver a la superficie pide bajar cada vez más.** La meta se muestra arriba. La bajada que tenés en curso conserva la meta de siempre.
-- **Hay un tope de 6 golpes por segundo.**
 
 ## Qué recibís a cambio
 
@@ -27,3 +26,8 @@ Antes de convertir tu partida, el juego guarda una copia de la anterior en tu na
 
 - Ya se puede comprar en el árbol en cualquier momento de la partida (antes, con la cuadrilla trabajando, el botón no respondía).
 - En iPhone, el juego agregado a la pantalla de inicio ahora se actualiza solo.
+
+## 0.7.2
+
+- Podés golpear la roca tan rápido como quieras: el tope de golpes subió de 6 a 20 por segundo.
+- Ahora se puede picar con dos dedos (antes, el segundo toque se perdía).
