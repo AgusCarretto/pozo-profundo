@@ -24,7 +24,7 @@ concurrency:
 env:
   # La misma versión con la que se desarrolla el juego.
   GODOT_VERSION: 4.7.2
-  PUBLISHED_REF: v0.7.0
+  PUBLISHED_REF: v0.7.1
   TEST_REF: 176f246a14f9f54fef6b81ba7c098b69a31458f6
 
 jobs:
@@ -45,11 +45,14 @@ jobs:
           ref: ${{ env.TEST_REF }}
           path: prueba
 
-      # La página para restaurar la copia de una partida sale de main: así está sea cual sea la etiqueta publicada.
+      # Salen de main, así valen sea cual sea la etiqueta publicada: la página para restaurar la copia de una partida y
+      # el arreglo para que la app instalada se actualice enseguida.
       - uses: actions/checkout@v7
         with:
           path: principal
-          sparse-checkout: web/restaurar.html
+          sparse-checkout: |
+            web/restaurar.html
+            tools/patch_service_worker.mjs
           sparse-checkout-cone-mode: false
 
       # Antes de bajar nada: si faltan los secretos, que falle enseguida. Solo la versión publicada los usa.
@@ -86,6 +89,7 @@ jobs:
           "$GODOT" --headless --path . --export-release "Pages" "$site/index.html"
           test -f "$site/index.pck"
           test -f "$site/index.service.worker.js"
+          node "$GITHUB_WORKSPACE/principal/tools/patch_service_worker.mjs" "$site/index.service.worker.js"
           # Lo que usa la pantalla de carga (igual que tools/export_web.ps1), cada fuente con su licencia.
           cp assets/fonts/PixelifySans.ttf assets/fonts/OFL.txt assets/fonts/VT323Digits.ttf assets/fonts/VT323-OFL.txt "$site/"
           cp assets/sprites/generated/rock_earth.png "$site/loading_rock.png"

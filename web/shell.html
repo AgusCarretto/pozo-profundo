@@ -170,6 +170,18 @@ const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
 		}
 	}
 
+	// La app instalada puede quedar abierta días sin volver a pedir la página: cada vez que se la vuelve a ver, se busca
+	// una versión nueva (el service worker la instala y recarga solo; ver tools/patch_service_worker.mjs).
+	if ('serviceWorker' in navigator) {
+		document.addEventListener('visibilitychange', () => {
+			if (document.visibilityState === 'visible') {
+				navigator.serviceWorker.getRegistration()
+					.then((registration) => registration && registration.update())
+					.catch(() => {});
+			}
+		});
+	}
+
 	try {
 		const missing = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED });
 		if (missing.length !== 0) {
